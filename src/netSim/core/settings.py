@@ -9,6 +9,7 @@ class SolverSettings:
     laminar_iterations_with_fittings: int = 7
     turbulent_iterations: int = 60
     pressure_relaxation: float = 1.0
+    colebrook_friction_strategy: str = "transformed"
     friction_factor_method: str = "newton"
     friction_factor_max_iterations: int = 50
     velocity_loop_method: str = "fixed_point"

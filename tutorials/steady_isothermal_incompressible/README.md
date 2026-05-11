@@ -11,3 +11,4 @@ The available cases are:
 - `04_inlet_flow`
 - `05_outlet_flow`
 - `06_inlet_and_outlet_flow`
+- `07_hanoi_epanet_darcy_benchmark`

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from netSim.closures import ColebrookPipeCorrelation, LaminarPipeCorrelation, MinorLossModel
+from netSim.closures.pressure_drop import PressureDropCorrelation
 from netSim.core.components import Fitting, Pipe
 from netSim.core.network import build_network_state
 from netSim.core.results import ComponentFlowResult, IterationMetrics, SolveResult
@@ -15,7 +16,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         self,
         settings: SolverSettings | None = None,
         laminar_pipe_correlation: LaminarPipeCorrelation | None = None,
-        turbulent_pipe_correlation: ColebrookPipeCorrelation | None = None,
+        turbulent_pipe_correlation: PressureDropCorrelation | None = None,
         fitting_correlation: MinorLossModel | None = None,
     ):
         self.settings = settings or SolverSettings()
@@ -257,6 +258,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
                         density,
                         viscosity,
                         self.settings.colebrook_residual_tolerance,
+                        self.settings.colebrook_friction_strategy,
                         self.settings.friction_factor_method,
                         self.settings.friction_factor_max_iterations,
                         self.settings.velocity_loop_method,

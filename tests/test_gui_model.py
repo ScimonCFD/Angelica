@@ -66,6 +66,7 @@ class GuiModelTests(unittest.TestCase):
             {
                 "laminar_iterations": 12,
                 "pressure_relaxation": 0.5,
+                "colebrook_friction_strategy": "direct",
                 "friction_factor_method": "newton",
                 "friction_factor_max_iterations": 80,
                 "velocity_loop_method": "secant",
@@ -76,6 +77,7 @@ class GuiModelTests(unittest.TestCase):
         self.assertEqual(scene.solver_settings["laminar_iterations"], 12)
         self.assertEqual(scene.solver_settings["turbulent_iterations"], 80)
         self.assertEqual(scene.solver_settings["pressure_relaxation"], 0.5)
+        self.assertEqual(scene.solver_settings["colebrook_friction_strategy"], "direct")
         self.assertEqual(scene.solver_settings["friction_factor_method"], "newton")
         self.assertEqual(scene.solver_settings["friction_factor_max_iterations"], 80)
         self.assertEqual(scene.solver_settings["velocity_loop_method"], "secant")

@@ -4,6 +4,8 @@ import math
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from netSim.io import export_solve_result_workbook
+
 from .io import build_network_case_from_scene, build_solver_from_scene, load_scene_from_file
 from .model import (
     CanvasLink,
@@ -64,6 +66,9 @@ class NetSimGui:
     PRESSURE_DROP_MODEL_LIBRARY = {
         "colebrook_white": {
             "name": "Colebrook-White",
+        },
+        "hazen_williams": {
+            "name": "Hazen-Williams",
         }
     }
     VELOCITY_LOOP_METHOD_LIBRARY = {
@@ -79,6 +84,14 @@ class NetSimGui:
             "name": "Newton",
         },
     }
+    COLEBROOK_FRICTION_STRATEGY_LIBRARY = {
+        "transformed": {
+            "name": "Protected (log f)",
+        },
+        "direct": {
+            "name": "Direct f",
+        },
+    }
     METRIC_OPTIONS = (
         ("Max abs pressure correction (Pa)", "pressure_correction_abs_pa"),
         ("Mean abs pressure correction (Pa)", "pressure_correction_mean_abs_pa"),
@@ -92,6 +105,9 @@ class NetSimGui:
         self.drag_source_node_id: int | None = None
         self.drag_line_id: int | None = None
         self.moving_node_id: int | None = None
+        self.middle_pan_anchor: tuple[float, float] | None = None
+        self.view_offset_x = 0.0
+        self.view_offset_y = 0.0
         self.latest_result = None
         self.latest_boundary_results: dict[int, dict[str, float]] = {}
         self.convergence_window: tk.Toplevel | None = None
@@ -122,6 +138,7 @@ class NetSimGui:
         file_menu = tk.Menu(menu_bar, tearoff=False)
         file_menu.add_command(label="New", command=self._new_scene)
         file_menu.add_command(label="Open", command=self._open_scene)
+        file_menu.add_command(label="Export Results Report", command=self._export_results_report)
         file_menu.add_separator()
         file_menu.add_command(label="Close", command=self.root.destroy)
         menu_bar.add_cascade(label="File", menu=file_menu)
@@ -252,6 +269,9 @@ class NetSimGui:
         self.canvas.bind("<ButtonPress-3>", self._on_canvas_right_press)
         self.canvas.bind("<B3-Motion>", self._on_canvas_right_drag)
         self.canvas.bind("<ButtonRelease-3>", self._on_canvas_right_release)
+        self.canvas.bind("<ButtonPress-2>", self._on_canvas_middle_press)
+        self.canvas.bind("<B2-Motion>", self._on_canvas_middle_drag)
+        self.canvas.bind("<ButtonRelease-2>", self._on_canvas_middle_release)
         self.canvas.bind("<Double-Button-1>", self._on_canvas_double_click)
 
         status = ttk.Label(
@@ -274,6 +294,9 @@ class NetSimGui:
         self.drag_source_node_id = None
         self.drag_line_id = None
         self.moving_node_id = None
+        self.middle_pan_anchor = None
+        self.view_offset_x = 0.0
+        self.view_offset_y = 0.0
         self.latest_result = None
         self.latest_boundary_results = {}
         self.tool_var.set("No tool selected")
@@ -302,6 +325,9 @@ class NetSimGui:
         self.drag_source_node_id = None
         self.drag_line_id = None
         self.moving_node_id = None
+        self.middle_pan_anchor = None
+        self.view_offset_x = 0.0
+        self.view_offset_y = 0.0
         self.latest_result = None
         self.latest_boundary_results = {}
         self.tool_var.set("No tool selected")
@@ -494,6 +520,9 @@ class NetSimGui:
         current_friction_max_iterations = str(
             self.scene.solver_settings.get("friction_factor_max_iterations", "50")
         )
+        current_colebrook_strategy = str(
+            self.scene.solver_settings.get("colebrook_friction_strategy", "transformed")
+        )
         current_velocity_method = str(
             self.scene.solver_settings.get("velocity_loop_method", "fixed_point")
         )
@@ -508,6 +537,10 @@ class NetSimGui:
         friction_max_iterations_var = tk.StringVar(
             master=dialog,
             value=current_friction_max_iterations,
+        )
+        colebrook_strategy_var = tk.StringVar(
+            master=dialog,
+            value=current_colebrook_strategy,
         )
         velocity_method_var = tk.StringVar(master=dialog, value=current_velocity_method)
         velocity_max_iterations_var = tk.StringVar(
@@ -587,8 +620,35 @@ class NetSimGui:
         )
         velocity_max_iterations_entry.grid(row=5, column=1, sticky="ew", pady=4)
 
-        ttk.Label(frame, text="Friction Factor").grid(
+        ttk.Label(frame, text="Colebrook Strategy").grid(
             row=6, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        colebrook_strategy_box = ttk.Combobox(
+            frame,
+            textvariable=colebrook_strategy_var,
+            state="readonly",
+            values=tuple(self.COLEBROOK_FRICTION_STRATEGY_LIBRARY.keys()),
+            width=24,
+        )
+        colebrook_strategy_box.grid(row=6, column=1, sticky="ew", pady=4)
+
+        colebrook_strategy_name_var = tk.StringVar(
+            master=dialog,
+            value=self.COLEBROOK_FRICTION_STRATEGY_LIBRARY[colebrook_strategy_var.get()]["name"],
+        )
+        ttk.Label(frame, text="Selected Colebrook Strategy").grid(
+            row=7, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Label(
+            frame,
+            textvariable=colebrook_strategy_name_var,
+            relief="groove",
+            padding=6,
+            width=24,
+        ).grid(row=7, column=1, sticky="ew", pady=4)
+
+        ttk.Label(frame, text="Friction Factor").grid(
+            row=8, column=0, sticky="w", padx=(0, 8), pady=4
         )
         friction_method_box = ttk.Combobox(
             frame,
@@ -597,14 +657,14 @@ class NetSimGui:
             values=tuple(self.FRICTION_FACTOR_METHOD_LIBRARY.keys()),
             width=24,
         )
-        friction_method_box.grid(row=6, column=1, sticky="ew", pady=4)
+        friction_method_box.grid(row=8, column=1, sticky="ew", pady=4)
 
         friction_name_var = tk.StringVar(
             master=dialog,
             value=self.FRICTION_FACTOR_METHOD_LIBRARY[friction_method_var.get()]["name"],
         )
         ttk.Label(frame, text="Selected Friction Method").grid(
-            row=7, column=0, sticky="w", padx=(0, 8), pady=4
+            row=9, column=0, sticky="w", padx=(0, 8), pady=4
         )
         ttk.Label(
             frame,
@@ -612,21 +672,26 @@ class NetSimGui:
             relief="groove",
             padding=6,
             width=24,
-        ).grid(row=7, column=1, sticky="ew", pady=4)
+        ).grid(row=9, column=1, sticky="ew", pady=4)
 
         ttk.Label(frame, text="Friction Max Iterations").grid(
-            row=8, column=0, sticky="w", padx=(0, 8), pady=4
+            row=10, column=0, sticky="w", padx=(0, 8), pady=4
         )
         friction_max_iterations_entry = ttk.Entry(
             frame,
             textvariable=friction_max_iterations_var,
             width=26,
         )
-        friction_max_iterations_entry.grid(row=8, column=1, sticky="ew", pady=4)
+        friction_max_iterations_entry.grid(row=10, column=1, sticky="ew", pady=4)
 
         def apply_velocity_method_selection(_event: tk.Event | None = None) -> None:
             velocity_name_var.set(
                 self.VELOCITY_LOOP_METHOD_LIBRARY[velocity_method_var.get()]["name"]
+            )
+
+        def apply_colebrook_strategy_selection(_event: tk.Event | None = None) -> None:
+            colebrook_strategy_name_var.set(
+                self.COLEBROOK_FRICTION_STRATEGY_LIBRARY[colebrook_strategy_var.get()]["name"]
             )
 
         def apply_friction_method_selection(_event: tk.Event | None = None) -> None:
@@ -635,10 +700,11 @@ class NetSimGui:
             )
 
         velocity_method_box.bind("<<ComboboxSelected>>", apply_velocity_method_selection)
+        colebrook_strategy_box.bind("<<ComboboxSelected>>", apply_colebrook_strategy_selection)
         friction_method_box.bind("<<ComboboxSelected>>", apply_friction_method_selection)
 
         button_row = ttk.Frame(frame)
-        button_row.grid(row=9, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=11, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
         ttk.Button(
             button_row,
@@ -648,6 +714,7 @@ class NetSimGui:
                 laminar_iterations_var,
                 turbulent_iterations_var,
                 alpha_var,
+                colebrook_strategy_var,
                 friction_method_var,
                 friction_max_iterations_var,
                 velocity_method_var,
@@ -737,6 +804,7 @@ class NetSimGui:
         laminar_iterations_var: tk.StringVar,
         turbulent_iterations_var: tk.StringVar,
         alpha_var: tk.StringVar,
+        colebrook_strategy_var: tk.StringVar,
         friction_method_var: tk.StringVar,
         friction_max_iterations_var: tk.StringVar,
         velocity_method_var: tk.StringVar,
@@ -845,6 +913,15 @@ class NetSimGui:
             )
             return
 
+        colebrook_strategy = colebrook_strategy_var.get().strip()
+        if colebrook_strategy not in self.COLEBROOK_FRICTION_STRATEGY_LIBRARY:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Select a valid Colebrook friction strategy.",
+                parent=dialog,
+            )
+            return
+
         friction_method = friction_method_var.get().strip()
         if friction_method not in self.FRICTION_FACTOR_METHOD_LIBRARY:
             messagebox.showerror(
@@ -859,6 +936,7 @@ class NetSimGui:
                 "laminar_iterations": laminar_iterations,
                 "turbulent_iterations": turbulent_iterations,
                 "pressure_relaxation": alpha,
+                "colebrook_friction_strategy": colebrook_strategy,
                 "friction_factor_method": friction_method,
                 "friction_factor_max_iterations": friction_max_iterations,
                 "velocity_loop_method": velocity_method,
@@ -871,6 +949,7 @@ class NetSimGui:
             f"laminar={'auto' if laminar_iterations is None else laminar_iterations}, "
             f"turbulent={turbulent_iterations}, "
             f"Explicit relaxation (alpha={alpha:g}), "
+            f"Colebrook={self.COLEBROOK_FRICTION_STRATEGY_LIBRARY[colebrook_strategy]['name']}, "
             f"{self.FRICTION_FACTOR_METHOD_LIBRARY[friction_method]['name']} "
             f"(max={friction_max_iterations}) for friction, "
             f"{self.VELOCITY_LOOP_METHOD_LIBRARY[velocity_method]['name']} "
@@ -910,6 +989,9 @@ class NetSimGui:
         velocity_method = str(
             self.scene.solver_settings.get("velocity_loop_method", "fixed_point")
         )
+        colebrook_strategy = str(
+            self.scene.solver_settings.get("colebrook_friction_strategy", "transformed")
+        )
         friction_method = str(
             self.scene.solver_settings.get("friction_factor_method", "newton")
         )
@@ -921,6 +1003,10 @@ class NetSimGui:
             friction_method,
             {},
         ).get("name", friction_method)
+        colebrook_strategy_name = self.COLEBROOK_FRICTION_STRATEGY_LIBRARY.get(
+            colebrook_strategy,
+            {},
+        ).get("name", colebrook_strategy)
         velocity_method_name = self.VELOCITY_LOOP_METHOD_LIBRARY.get(
             velocity_method,
             {},
@@ -933,6 +1019,7 @@ class NetSimGui:
             f"laminar={'auto' if laminar_iterations is None else laminar_iterations}\n"
             f"turbulent={turbulent_iterations}\n"
             f"Explicit\nalpha={alpha}\n"
+            f"colebrook={colebrook_strategy_name}\n"
             f"friction={friction_method_name} ({friction_max_iterations})\n"
             f"velocity={velocity_method_name} ({velocity_max_iterations})"
         )
@@ -960,6 +1047,33 @@ class NetSimGui:
             self.status_var.set(f"Simulation converged for case '{case.name}'.")
         else:
             self.status_var.set(f"Simulation did not converge for case '{case.name}'.")
+
+    def _export_results_report(self) -> None:
+        if self.latest_result is None:
+            messagebox.showerror(
+                "Export failed",
+                "Run a simulation before exporting a results report.",
+            )
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            title="Export Results Report",
+            defaultextension=".xlsx",
+            filetypes=(
+                ("Excel workbook", "*.xlsx"),
+                ("All files", "*.*"),
+            ),
+        )
+        if not file_path:
+            return
+
+        try:
+            export_solve_result_workbook(self.latest_result, file_path)
+        except Exception as exc:  # pragma: no cover - UI feedback path
+            messagebox.showerror("Export failed", f"Could not export report:\n{exc}")
+            return
+
+        self.status_var.set(f"Results report exported to {file_path}.")
 
     def _on_canvas_press(self, event: tk.Event) -> None:
         node_id = self._node_id_at(event.x, event.y)
@@ -992,9 +1106,10 @@ class NetSimGui:
             return
 
         self.drag_source_node_id = node_id
+        source_x, source_y = self._scene_to_canvas(node.x, node.y)
         self.drag_line_id = self.canvas.create_line(
-            node.x,
-            node.y,
+            source_x,
+            source_y,
             event.x,
             event.y,
             fill="#6c757d",
@@ -1012,7 +1127,8 @@ class NetSimGui:
         if self.moving_node_id is None:
             return
 
-        updated_node = self.scene.move_node(self.moving_node_id, event.x, event.y)
+        scene_x, scene_y = self._canvas_to_scene(event.x, event.y)
+        updated_node = self.scene.move_node(self.moving_node_id, scene_x, scene_y)
         self._redraw_scene()
         self.status_var.set(
             f"Moving {updated_node.node_type} #{updated_node.node_id} to "
@@ -1027,10 +1143,29 @@ class NetSimGui:
         if source is None:
             return
 
-        self.canvas.coords(self.drag_line_id, source.x, source.y, event.x, event.y)
+        source_x, source_y = self._scene_to_canvas(source.x, source.y)
+        self.canvas.coords(self.drag_line_id, source_x, source_y, event.x, event.y)
 
     def _on_canvas_shift_drag(self, event: tk.Event) -> None:
         self._on_canvas_right_drag(event)
+
+    def _on_canvas_middle_press(self, event: tk.Event) -> None:
+        self.middle_pan_anchor = (float(event.x), float(event.y))
+        self.status_var.set("Panning view. Drag with middle mouse button.")
+
+    def _on_canvas_middle_drag(self, event: tk.Event) -> None:
+        if self.middle_pan_anchor is None:
+            return
+
+        anchor_x, anchor_y = self.middle_pan_anchor
+        self.view_offset_x += float(event.x) - anchor_x
+        self.view_offset_y += float(event.y) - anchor_y
+        self.middle_pan_anchor = (float(event.x), float(event.y))
+        self._redraw_scene()
+
+    def _on_canvas_middle_release(self, _event: tk.Event) -> None:
+        self.middle_pan_anchor = None
+        self.status_var.set("View panned.")
 
     def _on_canvas_release(self, event: tk.Event) -> None:
         if self.moving_node_id is not None:
@@ -1051,7 +1186,8 @@ class NetSimGui:
             self.status_var.set("Release on empty canvas space to place a new node.")
             return
 
-        node = self.scene.add_node(event.x, event.y)
+        scene_x, scene_y = self._canvas_to_scene(event.x, event.y)
+        node = self.scene.add_node(scene_x, scene_y)
         self._draw_node(node)
         placed_tool = node.node_type
         self.scene.set_active_tool(None)
@@ -1119,10 +1255,11 @@ class NetSimGui:
 
     def _draw_node(self, node: CanvasNode) -> None:
         radius = 24
-        x0 = node.x - radius
-        y0 = node.y - radius
-        x1 = node.x + radius
-        y1 = node.y + radius
+        canvas_x, canvas_y = self._scene_to_canvas(node.x, node.y)
+        x0 = canvas_x - radius
+        y0 = canvas_y - radius
+        x1 = canvas_x + radius
+        y1 = canvas_y + radius
 
         fill_color = self._node_fill(node.node_type)
         label = self._node_label(node)
@@ -1140,15 +1277,15 @@ class NetSimGui:
             tags=(node_tag, "node"),
         )
         self.canvas.create_text(
-            node.x,
-            node.y - 2,
+            canvas_x,
+            canvas_y - 2,
             text=label,
             font=("TkDefaultFont", 9, "bold"),
             tags=(node_tag, "node"),
         )
         self.canvas.create_text(
-            node.x,
-            node.y + 12,
+            canvas_x,
+            canvas_y + 12,
             text=str(node.node_id),
             font=("TkDefaultFont", 8),
             tags=(node_tag, "node"),
@@ -1157,8 +1294,8 @@ class NetSimGui:
         summary = self._node_summary_text(node)
         if summary:
             self.canvas.create_text(
-                node.x,
-                node.y + 40,
+                canvas_x,
+                canvas_y + 40,
                 text=summary,
                 font=("TkDefaultFont", 8),
                 fill="#3d3a35",
@@ -1171,12 +1308,14 @@ class NetSimGui:
         end = self.scene.get_node(link.end_node_id)
         if start is None or end is None:
             return
+        start_x, start_y = self._scene_to_canvas(start.x, start.y)
+        end_x, end_y = self._scene_to_canvas(end.x, end.y)
 
         self.canvas.create_line(
-            start.x,
-            start.y,
-            end.x,
-            end.y,
+            start_x,
+            start_y,
+            end_x,
+            end_y,
             fill="#4f5d75",
             width=3,
             tags=("link", f"link_{link.link_id}"),
@@ -1211,6 +1350,12 @@ class NetSimGui:
             self.canvas.delete(self.drag_line_id)
         self.drag_line_id = None
         self.drag_source_node_id = None
+
+    def _scene_to_canvas(self, x: float, y: float) -> tuple[float, float]:
+        return x + self.view_offset_x, y + self.view_offset_y
+
+    def _canvas_to_scene(self, x: float, y: float) -> tuple[float, float]:
+        return x - self.view_offset_x, y - self.view_offset_y
 
     def _open_node_properties_dialog(self, node: CanvasNode) -> None:
         dialog = tk.Toplevel(self.root)

@@ -7,6 +7,7 @@
     "viscosity_pa_s": "0.001"
   },
   "solver_settings": {
+    "colebrook_friction_strategy": "transformed",
     "turbulent_iterations": 60,
     "pressure_relaxation": 1.0,
     "colebrook_residual_tolerance": 0.0001,

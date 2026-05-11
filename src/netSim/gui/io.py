@@ -6,7 +6,7 @@ from pathlib import Path
 from netSim.core.case import FlowBoundary, NetworkCase, PressureBoundary
 from netSim.core.components import Fitting, Pipe
 from netSim.core.settings import SolverSettings
-from netSim.closures import ColebrookPipeCorrelation
+from netSim.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
 from netSim.properties.single_component import SingleComponentFluid
 from netSim.solvers import SteadyIsothermalIncompressibleSolver
 
@@ -150,6 +150,11 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 diameter = _required_float(component, "diameter_m", link.link_id)
                 length = _required_float(component, "length_m", link.link_id)
                 roughness = _optional_float(component, "roughness_m", default=0.000045)
+                hazen_williams_c = _optional_float(
+                    component,
+                    "hazen_williams_c",
+                    default=130.0,
+                )
                 height_change = _optional_float(component, "height_change_m", default=0.0)
                 components.append(
                     Pipe(
@@ -158,6 +163,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         diameter_m=diameter,
                         length_m=length,
                         absolute_roughness_m=roughness,
+                        hazen_williams_c=hazen_williams_c,
                         height_change_m=height_change,
                         component_id=f"link_{link.link_id}_pipe_{component.component_id}",
                     )
@@ -202,13 +208,16 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
 
 def build_solver_from_scene(scene: CanvasScene) -> SteadyIsothermalIncompressibleSolver:
     pressure_drop_model_key = scene.pressure_drop_model.get("library_key", "")
-    if pressure_drop_model_key != "colebrook_white":
+    if pressure_drop_model_key == "colebrook_white":
+        turbulent_pipe_correlation = ColebrookPipeCorrelation()
+    elif pressure_drop_model_key == "hazen_williams":
+        turbulent_pipe_correlation = HazenWilliamsPipeCorrelation()
+    else:
         raise ValueError(
             f"Unsupported pipe pressure-drop model '{pressure_drop_model_key}'."
         )
 
     settings = SolverSettings(**scene.solver_settings) if scene.solver_settings else SolverSettings()
-    turbulent_pipe_correlation = ColebrookPipeCorrelation()
 
     if scene.solver_settings:
         return SteadyIsothermalIncompressibleSolver(

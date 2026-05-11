@@ -20,6 +20,7 @@ class PressureChanger:
 class Pipe(PressureChanger):
     length_m: float = 0.0
     absolute_roughness_m: float = 0.0
+    hazen_williams_c: float = 130.0
     height_change_m: float = 0.0
 
 

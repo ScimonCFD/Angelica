@@ -3,6 +3,35 @@ from __future__ import annotations
 from pathlib import Path
 
 
+def export_solve_result_workbook(result, output_path: str) -> None:
+    from openpyxl import Workbook
+
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    workbook = Workbook()
+
+    pressures_sheet = workbook.active
+    pressures_sheet.title = "Pressures"
+    pressures_sheet.append(["Node", "Pressure (Pa)", "Pressure (kPa)"])
+    for node_id in sorted(result.node_pressures_pa):
+        pressure_pa = result.node_pressures_pa[node_id]
+        pressures_sheet.append([node_id, pressure_pa, pressure_pa / 1000.0])
+
+    flows_sheet = workbook.create_sheet("Flows")
+    flows_sheet.append(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"])
+    for component in result.component_flows:
+        flows_sheet.append(
+            [
+                component.label,
+                component.mass_flow_kg_per_s,
+                component.volumetric_flow_m3_per_h,
+            ]
+        )
+
+    workbook.save(output)
+
+
 def print_solve_result(result, detailed: bool = False) -> None:
     print(f"Case: {result.case_name}")
     print(f"Converged: {result.converged}")
