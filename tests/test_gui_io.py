@@ -90,6 +90,7 @@ class GuiIoTests(unittest.TestCase):
         self.assertEqual(type(solver.turbulent_pipe_correlation).__name__, "ColebrookPipeCorrelation")
         self.assertIsNone(solver.settings.laminar_iterations)
         self.assertEqual(solver.settings.turbulent_iterations, 60)
+        self.assertEqual(solver.settings.colebrook_friction_strategy, "transformed")
         self.assertEqual(solver.settings.friction_factor_method, "newton")
         self.assertEqual(solver.settings.friction_factor_max_iterations, 50)
         self.assertEqual(solver.settings.velocity_loop_method, "fixed_point")
@@ -102,6 +103,7 @@ class GuiIoTests(unittest.TestCase):
                 "laminar_iterations": 14,
                 "turbulent_iterations": 140,
                 "pressure_relaxation": 0.5,
+                "colebrook_friction_strategy": "direct",
                 "friction_factor_method": "newton",
                 "friction_factor_max_iterations": 80,
                 "velocity_loop_method": "secant",
@@ -114,7 +116,22 @@ class GuiIoTests(unittest.TestCase):
         self.assertEqual(solver.settings.laminar_iterations, 14)
         self.assertEqual(solver.settings.turbulent_iterations, 140)
         self.assertEqual(solver.settings.pressure_relaxation, 0.5)
+        self.assertEqual(solver.settings.colebrook_friction_strategy, "direct")
         self.assertEqual(solver.settings.friction_factor_method, "newton")
         self.assertEqual(solver.settings.friction_factor_max_iterations, 80)
         self.assertEqual(solver.settings.velocity_loop_method, "secant")
         self.assertEqual(solver.settings.velocity_loop_max_iterations, 120)
+
+    def test_build_solver_supports_hazen_williams_pressure_drop_model(self) -> None:
+        scene = load_scene_from_file(self._pipe_only_case_path())
+        scene.update_pressure_drop_model(
+            {
+                "library_key": "hazen_williams",
+                "name": "Hazen-Williams",
+            }
+        )
+
+        solver = build_solver_from_scene(scene)
+
+        self.assertEqual(scene.pressure_drop_model["library_key"], "hazen_williams")
+        self.assertEqual(type(solver.turbulent_pipe_correlation).__name__, "HazenWilliamsPipeCorrelation")

@@ -243,6 +243,7 @@ class CanvasScene:
                 "diameter_m": "",
                 "height_change_m": "0.0",
                 "roughness_m": "0.000045",
+                "hazen_williams_c": "130.0",
                 "num_segments": "1",
             }
         return {
