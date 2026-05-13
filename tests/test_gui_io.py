@@ -64,6 +64,33 @@ class GuiIoTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_network_case_from_scene(scene)
 
+    def test_build_network_case_uses_fitting_preset_loss_coefficient(self) -> None:
+        scene = load_scene_from_file(
+            Path(__file__).resolve().parents[1]
+            / "tutorials"
+            / "steady_isothermal_incompressible"
+            / "02_fittings_no_elevation"
+            / "fittings_no_elevation.gui.json"
+        )
+        first_link = scene.get_link(1)
+        assert first_link is not None
+        fitting_component = first_link.components[1]
+        scene.update_link_component_properties(
+            first_link.link_id,
+            fitting_component.component_id,
+            {
+                "diameter_m": "0.05",
+                "fitting_mode": "preset",
+                "fitting_preset": "globe_valve_fully_open",
+                "loss_coefficient": "10.0",
+            },
+        )
+
+        case = build_network_case_from_scene(scene)
+        fitting = next(component for component in case.components if type(component).__name__ == "Fitting")
+
+        self.assertEqual(fitting.loss_coefficient, 10.0)
+
     def test_all_gui_tutorial_scenes_build_and_converge(self) -> None:
         tutorial_root = (
             Path(__file__).resolve().parents[1]

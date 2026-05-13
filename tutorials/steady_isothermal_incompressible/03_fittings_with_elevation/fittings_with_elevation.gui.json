@@ -93,6 +93,8 @@
           "component_type": "fitting",
           "properties": {
             "diameter_m": "0.05",
+            "fitting_mode": "preset",
+            "fitting_preset": "regular_90_threaded",
             "loss_coefficient": "1.5"
           }
         },
@@ -130,6 +132,8 @@
           "component_type": "fitting",
           "properties": {
             "diameter_m": "0.025",
+            "fitting_mode": "preset",
+            "fitting_preset": "regular_90_threaded",
             "loss_coefficient": "1.5"
           }
         },

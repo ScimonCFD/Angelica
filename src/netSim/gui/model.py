@@ -248,6 +248,8 @@ class CanvasScene:
             }
         return {
             "diameter_m": "",
+            "fitting_mode": "manual",
+            "fitting_preset": "regular_90_flanged",
             "loss_coefficient": "1.5",
         }
 

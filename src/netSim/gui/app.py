@@ -4,6 +4,7 @@ import math
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from netSim.core.components import FITTING_PRESET_LIBRARY
 from netSim.io import export_solve_result_workbook
 
 from .io import build_network_case_from_scene, build_solver_from_scene, load_scene_from_file
@@ -55,6 +56,11 @@ class ToolTip:
 
 
 class NetSimGui:
+    FITTING_MODE_LIBRARY = {
+        "manual": {"name": "Manual K"},
+        "preset": {"name": "Preset from table"},
+    }
+    FITTING_PRESET_LIBRARY = FITTING_PRESET_LIBRARY
     MATERIAL_LIBRARY = {
         "water_liquid": {
             "definition_mode": "library",
@@ -1055,6 +1061,12 @@ class NetSimGui:
                 "Run a simulation before exporting a results report.",
             )
             return
+        if not self.latest_result.converged:
+            messagebox.showerror(
+                "Export failed",
+                "Only converged simulations can be exported to a results report.",
+            )
+            return
 
         file_path = filedialog.asksaveasfilename(
             title="Export Results Report",
@@ -1466,8 +1478,8 @@ class NetSimGui:
         properties_frame = ttk.LabelFrame(container, text="Selected Component", padding=10)
         properties_frame.grid(row=1, column=2, sticky="nsew", padx=(12, 0))
 
-        for component in link.components:
-            components_list.insert("end", self._component_list_label(component))
+        for component_index, component in enumerate(link.components, start=1):
+            components_list.insert("end", self._component_list_label(component, component_index))
 
         ttk.Button(
             palette,
@@ -1518,8 +1530,8 @@ class NetSimGui:
     ) -> None:
         updated_link = self.scene.add_link_component(link_id, component_type)
         components_list.delete(0, "end")
-        for component in updated_link.components:
-            components_list.insert("end", self._component_list_label(component))
+        for component_index, component in enumerate(updated_link.components, start=1):
+            components_list.insert("end", self._component_list_label(component, component_index))
         components_list.selection_clear(0, "end")
         components_list.selection_set("end")
         self._render_link_component_properties(link_id, components_list, properties_frame)
@@ -1548,12 +1560,23 @@ class NetSimGui:
             return
 
         component = link.components[selected[0]]
+        component_index = selected[0] + 1
         entries: dict[str, tk.StringVar] = {}
 
         ttk.Label(
             properties_frame,
-            text=f"{component.component_type.capitalize()} #{component.component_id}",
+            text=self._component_list_label(component, component_index),
         ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
+
+        if component.component_type == "fitting":
+            self._render_fitting_component_properties(
+                component,
+                entries,
+                properties_frame,
+                link_id,
+                components_list,
+            )
+            return
 
         row = 1
         for key, value in component.properties.items():
@@ -1569,6 +1592,124 @@ class NetSimGui:
 
         button_row = ttk.Frame(properties_frame)
         button_row.grid(row=row, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        ttk.Button(
+            button_row,
+            text="Save",
+            command=lambda: self._save_link_component_properties(
+                link_id,
+                component.component_id,
+                entries,
+                components_list,
+                properties_frame,
+            ),
+        ).pack(side="right")
+
+    def _render_fitting_component_properties(
+        self,
+        component: CanvasLinkComponent,
+        entries: dict[str, tk.StringVar],
+        properties_frame: ttk.LabelFrame,
+        link_id: int,
+        components_list: tk.Listbox,
+    ) -> None:
+        diameter_var = tk.StringVar(value=component.properties.get("diameter_m", ""))
+        mode_var = tk.StringVar(value=component.properties.get("fitting_mode", "manual"))
+        preset_var = tk.StringVar(
+            value=component.properties.get("fitting_preset", "regular_90_flanged")
+        )
+        loss_var = tk.StringVar(value=component.properties.get("loss_coefficient", "1.5"))
+
+        entries["diameter_m"] = diameter_var
+        entries["fitting_mode"] = mode_var
+        entries["fitting_preset"] = preset_var
+        entries["loss_coefficient"] = loss_var
+
+        ttk.Label(properties_frame, text="Diameter (m)").grid(
+            row=1, column=0, sticky="w", pady=4
+        )
+        ttk.Entry(properties_frame, textvariable=diameter_var, width=18).grid(
+            row=1, column=1, sticky="ew", pady=4
+        )
+
+        ttk.Label(properties_frame, text="Fitting Mode").grid(
+            row=2, column=0, sticky="w", pady=4
+        )
+        mode_box = ttk.Combobox(
+            properties_frame,
+            textvariable=mode_var,
+            state="readonly",
+            values=tuple(self.FITTING_MODE_LIBRARY.keys()),
+            width=18,
+        )
+        mode_box.grid(row=2, column=1, sticky="ew", pady=4)
+
+        mode_name_var = tk.StringVar(
+            value=self.FITTING_MODE_LIBRARY[mode_var.get()]["name"]
+        )
+        ttk.Label(properties_frame, text="Selected Mode").grid(
+            row=3, column=0, sticky="w", pady=4
+        )
+        ttk.Label(
+            properties_frame,
+            textvariable=mode_name_var,
+            relief="groove",
+            padding=6,
+            width=20,
+        ).grid(row=3, column=1, sticky="ew", pady=4)
+
+        ttk.Label(properties_frame, text="Fitting Preset").grid(
+            row=4, column=0, sticky="w", pady=4
+        )
+        preset_box = ttk.Combobox(
+            properties_frame,
+            textvariable=preset_var,
+            state="readonly",
+            values=tuple(self.FITTING_PRESET_LIBRARY.keys()),
+            width=18,
+        )
+        preset_box.grid(row=4, column=1, sticky="ew", pady=4)
+
+        preset_name_var = tk.StringVar(
+            value=self.FITTING_PRESET_LIBRARY[preset_var.get()]["name"]
+        )
+        ttk.Label(properties_frame, text="Selected Preset").grid(
+            row=5, column=0, sticky="w", pady=4
+        )
+        ttk.Label(
+            properties_frame,
+            textvariable=preset_name_var,
+            relief="groove",
+            padding=6,
+            width=20,
+        ).grid(row=5, column=1, sticky="ew", pady=4)
+
+        ttk.Label(properties_frame, text="Loss Coefficient K").grid(
+            row=6, column=0, sticky="w", pady=4
+        )
+        loss_entry = ttk.Entry(properties_frame, textvariable=loss_var, width=18)
+        loss_entry.grid(row=6, column=1, sticky="ew", pady=4)
+
+        def sync_fitting_controls(*_args: object) -> None:
+            mode_name_var.set(self.FITTING_MODE_LIBRARY[mode_var.get()]["name"])
+            preset_name_var.set(self.FITTING_PRESET_LIBRARY[preset_var.get()]["name"])
+            if mode_var.get() == "preset":
+                preset_box.configure(state="readonly")
+                loss_entry.configure(state="disabled")
+                preset_loss = self.FITTING_PRESET_LIBRARY[preset_var.get()]["loss_coefficient"]
+                if math.isinf(preset_loss):
+                    loss_var.set("inf")
+                else:
+                    loss_var.set(f"{preset_loss:g}")
+            else:
+                preset_box.configure(state="disabled")
+                loss_entry.configure(state="normal")
+
+        mode_var.trace_add("write", sync_fitting_controls)
+        preset_var.trace_add("write", sync_fitting_controls)
+        sync_fitting_controls()
+
+        button_row = ttk.Frame(properties_frame)
+        button_row.grid(row=7, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(
             button_row,
             text="Save",
@@ -1597,8 +1738,8 @@ class NetSimGui:
         )
         selection = components_list.curselection()
         components_list.delete(0, "end")
-        for component in updated_link.components:
-            components_list.insert("end", self._component_list_label(component))
+        for component_index, component in enumerate(updated_link.components, start=1):
+            components_list.insert("end", self._component_list_label(component, component_index))
         if selection:
             components_list.selection_set(selection[0])
         self._render_link_component_properties(link_id, components_list, properties_frame)
@@ -1650,8 +1791,16 @@ class NetSimGui:
         return labels[node.node_type]
 
     @staticmethod
-    def _component_list_label(component: CanvasLinkComponent) -> str:
-        return f"{component.component_type.capitalize()} #{component.component_id}"
+    def _component_list_label(component: CanvasLinkComponent, display_index: int) -> str:
+        if component.component_type == "fitting":
+            fitting_mode = component.properties.get("fitting_mode", "manual")
+            if fitting_mode == "preset":
+                preset_key = component.properties.get("fitting_preset", "")
+                preset = FITTING_PRESET_LIBRARY.get(preset_key)
+                if preset is not None:
+                    return f"{preset['name']} #{display_index}"
+            return f"Manual fitting #{display_index}"
+        return f"{component.component_type.capitalize()} #{display_index}"
 
     @staticmethod
     def _pretty_field_name(field_name: str) -> str:

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 from netSim.core.case import FlowBoundary, NetworkCase, PressureBoundary
-from netSim.core.components import Fitting, Pipe
+from netSim.core.components import FITTING_PRESET_LIBRARY, Fitting, Pipe
 from netSim.core.settings import SolverSettings
 from netSim.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
 from netSim.properties.single_component import SingleComponentFluid
@@ -170,7 +171,16 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 )
             elif component.component_type == "fitting":
                 diameter = _required_float(component, "diameter_m", link.link_id)
-                loss_coefficient = _required_float(component, "loss_coefficient", link.link_id)
+                fitting_mode = component.properties.get("fitting_mode", "manual").strip() or "manual"
+                if fitting_mode == "preset":
+                    preset_key = component.properties.get("fitting_preset", "").strip()
+                    if preset_key not in FITTING_PRESET_LIBRARY:
+                        raise ValueError(
+                            f"Fitting in connection #{link.link_id} has unsupported preset '{preset_key}'."
+                        )
+                    loss_coefficient = float(FITTING_PRESET_LIBRARY[preset_key]["loss_coefficient"])
+                else:
+                    loss_coefficient = _required_float(component, "loss_coefficient", link.link_id)
                 components.append(
                     Fitting(
                         start_node=current_start,
@@ -240,7 +250,7 @@ def _required_float(
         raise ValueError(
             f"{component.component_type.capitalize()} in connection #{link_id} is missing '{field_name}'."
         )
-    return float(value_text)
+    return _parse_float(value_text)
 
 
 def _optional_float(
@@ -251,4 +261,13 @@ def _optional_float(
     value_text = component.properties.get(field_name, "").strip()
     if not value_text:
         return default
+    return _parse_float(value_text)
+
+
+def _parse_float(value_text: str) -> float:
+    lowered = value_text.strip().lower()
+    if lowered in {"inf", "+inf", "infinity", "+infinity"}:
+        return math.inf
+    if lowered in {"-inf", "-infinity"}:
+        return -math.inf
     return float(value_text)

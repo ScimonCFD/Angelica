@@ -151,6 +151,21 @@ class GuiModelTests(unittest.TestCase):
 
         self.assertEqual(updated_link.components[0].properties["loss_coefficient"], "2.0")
 
+    def test_fitting_component_defaults_include_manual_and_preset_fields(self) -> None:
+        scene = CanvasScene()
+        scene.set_active_tool("source")
+        node_1 = scene.add_node(10, 20)
+        scene.set_active_tool("sink")
+        node_2 = scene.add_node(100, 120)
+        link = scene.add_link(node_1.node_id, node_2.node_id)
+
+        updated_link = scene.add_link_component(link.link_id, "fitting")
+        properties = updated_link.components[0].properties
+
+        self.assertEqual(properties["fitting_mode"], "manual")
+        self.assertEqual(properties["fitting_preset"], "regular_90_flanged")
+        self.assertEqual(properties["loss_coefficient"], "1.5")
+
     def test_source_cannot_have_more_than_two_connections(self) -> None:
         scene = CanvasScene()
         scene.set_active_tool("source")
