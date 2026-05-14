@@ -114,6 +114,7 @@ class NetSimGui:
         self.middle_pan_anchor: tuple[float, float] | None = None
         self.view_offset_x = 0.0
         self.view_offset_y = 0.0
+        self.view_scale = 1.0
         self.latest_result = None
         self.latest_boundary_results: dict[int, dict[str, float]] = {}
         self.convergence_window: tk.Toplevel | None = None
@@ -279,6 +280,9 @@ class NetSimGui:
         self.canvas.bind("<B2-Motion>", self._on_canvas_middle_drag)
         self.canvas.bind("<ButtonRelease-2>", self._on_canvas_middle_release)
         self.canvas.bind("<Double-Button-1>", self._on_canvas_double_click)
+        self.canvas.bind("<MouseWheel>", self._on_canvas_scroll)
+        self.canvas.bind("<Button-4>", self._on_canvas_scroll)
+        self.canvas.bind("<Button-5>", self._on_canvas_scroll)
 
         status = ttk.Label(
             self.root,
@@ -303,6 +307,7 @@ class NetSimGui:
         self.middle_pan_anchor = None
         self.view_offset_x = 0.0
         self.view_offset_y = 0.0
+        self.view_scale = 1.0
         self.latest_result = None
         self.latest_boundary_results = {}
         self.tool_var.set("No tool selected")
@@ -334,6 +339,7 @@ class NetSimGui:
         self.middle_pan_anchor = None
         self.view_offset_x = 0.0
         self.view_offset_y = 0.0
+        self.view_scale = 1.0
         self.latest_result = None
         self.latest_boundary_results = {}
         self.tool_var.set("No tool selected")
@@ -1179,6 +1185,19 @@ class NetSimGui:
         self.middle_pan_anchor = None
         self.status_var.set("View panned.")
 
+    def _on_canvas_scroll(self, event: tk.Event) -> None:
+        if event.num == 4 or (hasattr(event, "delta") and event.delta > 0):
+            factor = 1.1
+        elif event.num == 5 or (hasattr(event, "delta") and event.delta < 0):
+            factor = 1.0 / 1.1
+        else:
+            return
+        cx, cy = float(event.x), float(event.y)
+        self.view_offset_x = cx - (cx - self.view_offset_x) * factor
+        self.view_offset_y = cy - (cy - self.view_offset_y) * factor
+        self.view_scale *= factor
+        self._redraw_scene()
+
     def _on_canvas_release(self, event: tk.Event) -> None:
         if self.moving_node_id is not None:
             moved_node = self.scene.get_node(self.moving_node_id)
@@ -1364,10 +1383,10 @@ class NetSimGui:
         self.drag_source_node_id = None
 
     def _scene_to_canvas(self, x: float, y: float) -> tuple[float, float]:
-        return x + self.view_offset_x, y + self.view_offset_y
+        return x * self.view_scale + self.view_offset_x, y * self.view_scale + self.view_offset_y
 
     def _canvas_to_scene(self, x: float, y: float) -> tuple[float, float]:
-        return x - self.view_offset_x, y - self.view_offset_y
+        return (x - self.view_offset_x) / self.view_scale, (y - self.view_offset_y) / self.view_scale
 
     def _open_node_properties_dialog(self, node: CanvasNode) -> None:
         dialog = tk.Toplevel(self.root)
