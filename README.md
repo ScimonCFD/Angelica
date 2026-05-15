@@ -2,9 +2,7 @@
 
 **netSim** is an open-source hydraulic network simulator for **steady-state, incompressible, single-phase flow**.
 
-Its current release focuses on a narrow but useful core: solving network pressures and flow rates in pipes, fittings, and pumps, with a GUI-first workflow and a codebase designed to grow toward more general pipeline simulation.
-
-The long-term direction is broader than water networks alone. The project is being built as a modular foundation for future extensions toward **oil, gas, natural gas, and black-oil systems**, while keeping the current solver lightweight, inspectable, and easy to extend.
+It computes nodal pressures and component flow rates in pipe networks with support for pipes, fittings, pumps, elevation changes, and pressure or mass-flow boundary conditions.
 
 ## Current Scope
 
@@ -26,24 +24,9 @@ Today, `netSim` supports:
 
 The numerical core uses a **segregated pressure-correction method** with adaptive laminar initialisation and explicit pressure relaxation.
 
-## Why This Project Exists
-
-Many established tools are strong inside their original domain, but harder to extend when you want to move beyond a classical water-network workflow.
-
-`netSim` is meant to be different:
-
-- transparent enough to study and modify
-- structured enough to validate and maintain
-- flexible enough to evolve toward richer physics over time
-
-That makes it useful both as:
-
-- a small but real hydraulic network solver
-- and a foundation for future research and development
-
 ## Validation
 
-The current solver is not just running toy cases. It has already been checked against recognized benchmark-style references, including:
+The current solver has been checked against benchmark-style reference cases, including:
 
 - the **Hanoi** EPANET/Darcy benchmark network
 - an **EPANET pump tutorial benchmark** with published reference node pressures, heads, and link flows
@@ -113,8 +96,7 @@ The GUI currently supports:
 
 ## Tutorials
 
-Validated examples are available under
-`tutorials/steady_isothermal_incompressible/`.
+Validated examples are available under `tutorials/steady_isothermal_incompressible/`.
 
 | # | Case |
 |---|------|
@@ -150,8 +132,6 @@ src/netSim/
 
 ## Roadmap
 
-This version is the **foundation release**, not the final target.
-
 Planned next steps include:
 
 - richer liquid-property modes, including oil-oriented workflows
@@ -160,7 +140,7 @@ Planned next steps include:
 - more active devices and operating logic
 - black-oil and broader hydrocarbon-network support
 
-The goal is for those future capabilities to build on the same network core rather than replace it.
+These future capabilities are intended to build on the same network core.
 
 ## Technical Notes
 
