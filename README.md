@@ -41,38 +41,30 @@ From the repository root:
 pip install -e .
 ```
 
-Then define and solve a minimal case:
+Launch the GUI:
 
-```python
-from netSim.core.case import NetworkCase, PressureBoundary
-from netSim.core.components import Pipe
-from netSim.properties.single_component import SingleComponentFluid
-from netSim.solvers.steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
+```bash
+python -m netSim.gui.app
+```
 
-fluid = SingleComponentFluid(
-    density_kg_per_m3=998.25,
-    viscosity_pa_s=0.001,
-)
+Then:
 
-pipe = Pipe(
-    start_node=1,
-    end_node=2,
-    length_m=100.0,
-    diameter_m=0.1,
-    absolute_roughness_m=0.000046,
-)
+1. place `source`, `sink`, and `junction` nodes
+2. connect them with links
+3. add `pipe`, `fitting`, or `pump` components to each link
+4. define the material
+5. choose the pipe pressure-drop model and numerics
+6. press `Run`
 
-case = NetworkCase(
-    name="example",
-    fluid_model=fluid,
-    components=[pipe],
-    pressure_inlets=[PressureBoundary(node_id=1, pressure_pa=200_000.0)],
-    pressure_outlets=[PressureBoundary(node_id=2, pressure_pa=100_000.0)],
-)
+To start from a validated example, open one of the tutorial cases from:
 
-solver = SteadyIsothermalIncompressibleSolver()
-result = solver.solve(case)
-print(result)
+- [tutorials/steady_isothermal_incompressible](/home/simon/Documents/netSim/tesisIca/ClasesTesis/netSim/netSim/tutorials/steady_isothermal_incompressible)
+
+For example:
+
+```bash
+python tutorials/steady_isothermal_incompressible/07_hanoi_epanet_darcy_benchmark/run.py
+python tutorials/steady_isothermal_incompressible/08_epanet_pump_benchmark/run.py
 ```
 
 ## GUI
