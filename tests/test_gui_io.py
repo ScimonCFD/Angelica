@@ -91,6 +91,27 @@ class GuiIoTests(unittest.TestCase):
 
         self.assertEqual(fitting.loss_coefficient, 10.0)
 
+    def test_build_network_case_parses_pump_curve_table(self) -> None:
+        scene = load_scene_from_file(self._pipe_only_case_path())
+        first_link = scene.get_link(1)
+        assert first_link is not None
+        scene.add_link_component(first_link.link_id, "pump")
+        pump_component = scene.get_link(first_link.link_id).components[-1]
+        scene.update_link_component_properties(
+            first_link.link_id,
+            pump_component.component_id,
+            {
+                "diameter_m": "0.15",
+                "curve_points_q_head": "0, 80\n200, 60\n400, 0",
+            },
+        )
+
+        case = build_network_case_from_scene(scene)
+        pump = next(component for component in case.components if type(component).__name__ == "Pump")
+
+        self.assertEqual(pump.diameter_m, 0.15)
+        self.assertEqual(pump.curve_points_q_head, ((0.0, 80.0), (200.0, 60.0), (400.0, 0.0)))
+
     def test_all_gui_tutorial_scenes_build_and_converge(self) -> None:
         tutorial_root = (
             Path(__file__).resolve().parents[1]
@@ -99,7 +120,7 @@ class GuiIoTests(unittest.TestCase):
         )
         gui_paths = sorted(tutorial_root.glob("*/*.gui.json"))
 
-        self.assertGreaterEqual(len(gui_paths), 6)
+        self.assertGreaterEqual(len(gui_paths), 7)
 
         for gui_path in gui_paths:
             with self.subTest(gui_path=gui_path.name):

@@ -6,6 +6,7 @@ from .friction import (
 )
 from .gravity import elevation_pressure_term
 from .minor_losses import MinorLossModel
+from .pump import PumpCurveModel
 from .pressure_drop import PressureDropCorrelation
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "HazenWilliamsPipeCorrelation",
     "LaminarPipeCorrelation",
     "MinorLossModel",
+    "PumpCurveModel",
     "PressureDropCorrelation",
     "elevation_pressure_term",
 ]

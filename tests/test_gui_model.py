@@ -166,6 +166,20 @@ class GuiModelTests(unittest.TestCase):
         self.assertEqual(properties["fitting_preset"], "regular_90_flanged")
         self.assertEqual(properties["loss_coefficient"], "1.5")
 
+    def test_pump_component_defaults_include_curve_table_field(self) -> None:
+        scene = CanvasScene()
+        scene.set_active_tool("source")
+        node_1 = scene.add_node(10, 20)
+        scene.set_active_tool("sink")
+        node_2 = scene.add_node(100, 120)
+        link = scene.add_link(node_1.node_id, node_2.node_id)
+
+        updated_link = scene.add_link_component(link.link_id, "pump")
+        properties = updated_link.components[0].properties
+
+        self.assertEqual(properties["diameter_m"], "")
+        self.assertEqual(properties["curve_points_q_head"], "")
+
     def test_source_cannot_have_more_than_two_connections(self) -> None:
         scene = CanvasScene()
         scene.set_active_tool("source")

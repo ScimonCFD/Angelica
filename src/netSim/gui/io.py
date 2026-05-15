@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 
 from netSim.core.case import FlowBoundary, NetworkCase, PressureBoundary
-from netSim.core.components import FITTING_PRESET_LIBRARY, Fitting, Pipe
+from netSim.core.components import FITTING_PRESET_LIBRARY, Fitting, Pipe, Pump
 from netSim.core.settings import SolverSettings
 from netSim.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
 from netSim.properties.single_component import SingleComponentFluid
@@ -190,6 +190,17 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         component_id=f"link_{link.link_id}_fitting_{component.component_id}",
                     )
                 )
+            elif component.component_type == "pump":
+                diameter = _required_float(component, "diameter_m", link.link_id)
+                components.append(
+                    Pump(
+                        start_node=current_start,
+                        end_node=current_end,
+                        diameter_m=diameter,
+                        curve_points_q_head=_parse_pump_curve_points(component, link.link_id),
+                        component_id=f"link_{link.link_id}_pump_{component.component_id}",
+                    )
+                )
             else:
                 raise ValueError(
                     f"Unsupported component type '{component.component_type}' in connection #{link.link_id}."
@@ -271,3 +282,33 @@ def _parse_float(value_text: str) -> float:
     if lowered in {"-inf", "-infinity"}:
         return -math.inf
     return float(value_text)
+
+
+def _parse_pump_curve_points(
+    component: CanvasLinkComponent,
+    link_id: int,
+) -> tuple[tuple[float, float], ...]:
+    raw_table = component.properties.get("curve_points_q_head", "").strip()
+    if not raw_table:
+        raise ValueError(
+            f"Pump in connection #{link_id} is missing its Q-Head curve table."
+        )
+
+    points: list[tuple[float, float]] = []
+    for line_number, raw_line in enumerate(raw_table.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        tokens = [token for token in line.replace(",", " ").split() if token]
+        if len(tokens) != 2:
+            raise ValueError(
+                f"Pump in connection #{link_id} has invalid Q-Head pair on line {line_number}: '{raw_line}'."
+            )
+        points.append((_parse_float(tokens[0]), _parse_float(tokens[1])))
+
+    if not points:
+        raise ValueError(
+            f"Pump in connection #{link_id} must define at least one Q-Head pair."
+        )
+
+    return tuple(points)

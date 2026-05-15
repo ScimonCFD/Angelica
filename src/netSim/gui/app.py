@@ -1522,6 +1522,17 @@ class NetSimGui:
             ),
             width=12,
         ).pack(anchor="w", pady=4)
+        ttk.Button(
+            palette,
+            text="Pump",
+            command=lambda: self._add_component_to_link(
+                link.link_id,
+                "pump",
+                components_list,
+                properties_frame,
+            ),
+            width=12,
+        ).pack(anchor="w", pady=4)
 
         components_list.bind(
             "<<ListboxSelect>>",
@@ -1591,6 +1602,14 @@ class NetSimGui:
             self._render_fitting_component_properties(
                 component,
                 entries,
+                properties_frame,
+                link_id,
+                components_list,
+            )
+            return
+        if component.component_type == "pump":
+            self._render_pump_component_properties(
+                component,
                 properties_frame,
                 link_id,
                 components_list,
@@ -1741,6 +1760,52 @@ class NetSimGui:
             ),
         ).pack(side="right")
 
+    def _render_pump_component_properties(
+        self,
+        component: CanvasLinkComponent,
+        properties_frame: ttk.LabelFrame,
+        link_id: int,
+        components_list: tk.Listbox,
+    ) -> None:
+        diameter_var = tk.StringVar(value=component.properties.get("diameter_m", ""))
+
+        ttk.Label(properties_frame, text="Diameter (m)").grid(
+            row=1, column=0, sticky="w", pady=4
+        )
+        ttk.Entry(properties_frame, textvariable=diameter_var, width=18).grid(
+            row=1, column=1, sticky="ew", pady=4
+        )
+
+        ttk.Label(properties_frame, text="Q-Head Table").grid(
+            row=2, column=0, sticky="nw", pady=4
+        )
+        curve_text = tk.Text(properties_frame, width=24, height=7, wrap="none")
+        curve_text.grid(row=2, column=1, sticky="ew", pady=4)
+        existing_curve_text = component.properties.get("curve_points_q_head", "").strip()
+        if existing_curve_text:
+            curve_text.insert("1.0", existing_curve_text)
+
+        ttk.Label(
+            properties_frame,
+            text="One pair per line: Q (m^3/h), Head (m)",
+            foreground="#555555",
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(0, 6))
+
+        button_row = ttk.Frame(properties_frame)
+        button_row.grid(row=4, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        ttk.Button(
+            button_row,
+            text="Save",
+            command=lambda: self._save_pump_component_properties(
+                link_id,
+                component.component_id,
+                diameter_var,
+                curve_text,
+                components_list,
+                properties_frame,
+            ),
+        ).pack(side="right")
+
     def _save_link_component_properties(
         self,
         link_id: int,
@@ -1750,6 +1815,33 @@ class NetSimGui:
         properties_frame: ttk.LabelFrame,
     ) -> None:
         properties = {key: value.get().strip() for key, value in entries.items()}
+        updated_link = self.scene.update_link_component_properties(
+            link_id,
+            component_id,
+            properties,
+        )
+        selection = components_list.curselection()
+        components_list.delete(0, "end")
+        for component_index, component in enumerate(updated_link.components, start=1):
+            components_list.insert("end", self._component_list_label(component, component_index))
+        if selection:
+            components_list.selection_set(selection[0])
+        self._render_link_component_properties(link_id, components_list, properties_frame)
+        self.status_var.set(f"Updated component #{component_id} in connection #{link_id}.")
+
+    def _save_pump_component_properties(
+        self,
+        link_id: int,
+        component_id: int,
+        diameter_var: tk.StringVar,
+        curve_text: tk.Text,
+        components_list: tk.Listbox,
+        properties_frame: ttk.LabelFrame,
+    ) -> None:
+        properties = {
+            "diameter_m": diameter_var.get().strip(),
+            "curve_points_q_head": curve_text.get("1.0", "end").strip(),
+        }
         updated_link = self.scene.update_link_component_properties(
             link_id,
             component_id,
@@ -1819,6 +1911,8 @@ class NetSimGui:
                 if preset is not None:
                     return f"{preset['name']} #{display_index}"
             return f"Manual fitting #{display_index}"
+        if component.component_type == "pump":
+            return f"Pump #{display_index}"
         return f"{component.component_type.capitalize()} #{display_index}"
 
     @staticmethod

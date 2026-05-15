@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .components import Fitting, Pipe, PressureChanger
+from .components import Fitting, Pipe, PressureChanger, Pump
 
 
 @dataclass
@@ -43,6 +43,12 @@ class PipeState(PressureChangerState):
 @dataclass
 class FittingState(PressureChangerState):
     component: Fitting
+    reynolds: float = 0.0
+
+
+@dataclass
+class PumpState(PressureChangerState):
+    component: Pump
     reynolds: float = 0.0
 
 

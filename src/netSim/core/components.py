@@ -61,3 +61,8 @@ class Pipe(PressureChanger):
 @dataclass(frozen=True)
 class Fitting(PressureChanger):
     loss_coefficient: float = 0.0
+
+
+@dataclass(frozen=True)
+class Pump(PressureChanger):
+    curve_points_q_head: tuple[tuple[float, float], ...] = ()

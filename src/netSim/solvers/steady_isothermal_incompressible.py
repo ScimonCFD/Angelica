@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-from netSim.closures import ColebrookPipeCorrelation, LaminarPipeCorrelation, MinorLossModel
+from netSim.closures import (
+    ColebrookPipeCorrelation,
+    LaminarPipeCorrelation,
+    MinorLossModel,
+    PumpCurveModel,
+)
 from netSim.closures.pressure_drop import PressureDropCorrelation
-from netSim.core.components import Fitting, Pipe
+from netSim.core.components import Fitting, Pipe, Pump
 from netSim.core.network import build_network_state
 from netSim.core.results import ComponentFlowResult, IterationMetrics, SolveResult
 from netSim.core.settings import SolverSettings
-from netSim.core.state import FittingState, PipeState
+from netSim.core.state import FittingState, PipeState, PumpState
 from netSim.numerics import assemble_pressure_system, max_abs_value, solve_linear_system
 from .base import BaseSolver
 
@@ -18,11 +23,13 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         laminar_pipe_correlation: LaminarPipeCorrelation | None = None,
         turbulent_pipe_correlation: PressureDropCorrelation | None = None,
         fitting_correlation: MinorLossModel | None = None,
+        pump_correlation: PumpCurveModel | None = None,
     ):
         self.settings = settings or SolverSettings()
         self.laminar_pipe_correlation = laminar_pipe_correlation or LaminarPipeCorrelation()
         self.turbulent_pipe_correlation = turbulent_pipe_correlation or ColebrookPipeCorrelation()
         self.fitting_correlation = fitting_correlation or MinorLossModel()
+        self.pump_correlation = pump_correlation or PumpCurveModel()
 
     def solve(self, case, progress_callback=None) -> SolveResult:
         network_state = build_network_state(case)
@@ -154,8 +161,11 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         if self.settings.laminar_iterations is not None:
             return self.settings.laminar_iterations
 
-        has_fittings = any(isinstance(link_state, FittingState) for link_state in network_state.components)
-        if has_fittings:
+        has_special_components = any(
+            isinstance(link_state, (FittingState, PumpState))
+            for link_state in network_state.components
+        )
+        if has_special_components:
             return self.settings.laminar_iterations_with_fittings
         return self.settings.laminar_iterations_without_fittings
 
@@ -272,6 +282,14 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
                     viscosity,
                 )
                 self._update_reynolds(link_state, density, viscosity)
+            elif isinstance(link_state, PumpState):
+                link_state.velocity_m_per_s = correlation.calculate_velocity(
+                    link_state,
+                    delta_p,
+                    density,
+                    viscosity,
+                )
+                self._update_reynolds(link_state, density, viscosity)
             else:
                 raise TypeError(f"Unsupported state type: {type(link_state).__name__}")
 
@@ -300,6 +318,8 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             return self.turbulent_pipe_correlation
         if isinstance(link_state, FittingState):
             return self.fitting_correlation
+        if isinstance(link_state, PumpState):
+            return self.pump_correlation
         raise TypeError(f"Unsupported state type: {type(link_state).__name__}")
 
     def _apply_pressure_correction(self, network_state, correction) -> tuple[float, float, float]:

@@ -1,0 +1,336 @@
+{
+  "material": {
+    "definition_mode": "library",
+    "library_key": "water_liquid",
+    "name": "Water",
+    "density_kg_per_m3": "998.25",
+    "viscosity_pa_s": "0.001"
+  },
+  "pressure_drop_model": {
+    "library_key": "hazen_williams",
+    "name": "Hazen-Williams"
+  },
+  "solver_settings": {
+    "colebrook_friction_strategy": "transformed"
+  },
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 80,
+      "y": 200,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "2089398.7422",
+        "flow": ""
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "junction",
+      "x": 230,
+      "y": 200,
+      "properties": {
+        "label": "2"
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "junction",
+      "x": 410,
+      "y": 120,
+      "properties": {
+        "label": "3"
+      }
+    },
+    {
+      "node_id": 4,
+      "node_type": "junction",
+      "x": 560,
+      "y": 120,
+      "properties": {
+        "label": "4"
+      }
+    },
+    {
+      "node_id": 5,
+      "node_type": "junction",
+      "x": 560,
+      "y": 280,
+      "properties": {
+        "label": "5"
+      }
+    },
+    {
+      "node_id": 6,
+      "node_type": "junction",
+      "x": 410,
+      "y": 280,
+      "properties": {
+        "label": "6"
+      }
+    },
+    {
+      "node_id": 7,
+      "node_type": "sink",
+      "x": 760,
+      "y": 280,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "14924.27673",
+        "flow": ""
+      }
+    },
+    {
+      "node_id": 101,
+      "node_type": "sink",
+      "x": 410,
+      "y": 30,
+      "properties": {
+        "condition_type": "flow",
+        "pressure": "",
+        "flow": "20.4684312808"
+      }
+    },
+    {
+      "node_id": 102,
+      "node_type": "sink",
+      "x": 690,
+      "y": 120,
+      "properties": {
+        "condition_type": "flow",
+        "pressure": "",
+        "flow": "4.72348414172"
+      }
+    },
+    {
+      "node_id": 103,
+      "node_type": "sink",
+      "x": 690,
+      "y": 280,
+      "properties": {
+        "condition_type": "flow",
+        "pressure": "",
+        "flow": "6.29797885563"
+      }
+    },
+    {
+      "node_id": 104,
+      "node_type": "sink",
+      "x": 410,
+      "y": 390,
+      "properties": {
+        "condition_type": "flow",
+        "pressure": "",
+        "flow": "4.72348414172"
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 7,
+      "start_node_id": 1,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": 7,
+          "component_type": "pump",
+          "properties": {
+            "diameter_m": "0.3048",
+            "curve_points_q_head": "227.12470704, 60.96"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 1,
+      "start_node_id": 2,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "914.4",
+            "diameter_m": "0.3048",
+            "height_change_m": "216.408",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "100.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 3,
+      "end_node_id": 6,
+      "components": [
+        {
+          "component_id": 2,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "1524.0",
+            "diameter_m": "0.3048",
+            "height_change_m": "-3.048",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "100.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 3,
+      "start_node_id": 3,
+      "end_node_id": 4,
+      "components": [
+        {
+          "component_id": 3,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "1524.0",
+            "diameter_m": "0.2032",
+            "height_change_m": "-3.048",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "100.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 4,
+      "start_node_id": 4,
+      "end_node_id": 5,
+      "components": [
+        {
+          "component_id": 4,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "1524.0",
+            "diameter_m": "0.2032",
+            "height_change_m": "-1.524",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "100.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 5,
+      "start_node_id": 5,
+      "end_node_id": 6,
+      "components": [
+        {
+          "component_id": 5,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "1524.0",
+            "diameter_m": "0.2032",
+            "height_change_m": "1.524",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "100.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 6,
+      "start_node_id": 6,
+      "end_node_id": 7,
+      "components": [
+        {
+          "component_id": 6,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "2133.6",
+            "diameter_m": "0.254",
+            "height_change_m": "45.72",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "100.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 8,
+      "start_node_id": 3,
+      "end_node_id": 101,
+      "components": [
+        {
+          "component_id": 8,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "0.01",
+            "diameter_m": "0.3048",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 9,
+      "start_node_id": 4,
+      "end_node_id": 102,
+      "components": [
+        {
+          "component_id": 9,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "0.01",
+            "diameter_m": "0.3048",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 10,
+      "start_node_id": 5,
+      "end_node_id": 103,
+      "components": [
+        {
+          "component_id": 10,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "0.01",
+            "diameter_m": "0.3048",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 11,
+      "start_node_id": 6,
+      "end_node_id": 104,
+      "components": [
+        {
+          "component_id": 11,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "0.01",
+            "diameter_m": "0.3048",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    }
+  ]
+}

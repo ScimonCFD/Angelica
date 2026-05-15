@@ -6,7 +6,7 @@ from typing import List, Optional
 
 
 NODE_TYPES = ("source", "sink", "junction")
-LINK_COMPONENT_TYPES = ("pipe", "fitting")
+LINK_COMPONENT_TYPES = ("pipe", "fitting", "pump")
 DEFAULT_LIBRARY_MATERIAL = {
     "library_key": "water_liquid",
     "definition_mode": "library",
@@ -245,6 +245,11 @@ class CanvasScene:
                 "roughness_m": "0.000045",
                 "hazen_williams_c": "130.0",
                 "num_segments": "1",
+            }
+        if component_type == "pump":
+            return {
+                "diameter_m": "",
+                "curve_points_q_head": "",
             }
         return {
             "diameter_m": "",

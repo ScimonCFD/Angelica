@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from .case import NetworkCase
-from .components import Fitting, Pipe
-from .state import FittingState, NetworkState, NodeState, PipeState
+from .components import Fitting, Pipe, Pump
+from .state import FittingState, NetworkState, NodeState, PipeState, PumpState
 
 
 def build_network_state(case: NetworkCase) -> NetworkState:
@@ -46,6 +46,8 @@ def build_network_state(case: NetworkCase) -> NetworkState:
             components.append(PipeState(component=component, start_node=start_node, end_node=end_node))
         elif isinstance(component, Fitting):
             components.append(FittingState(component=component, start_node=start_node, end_node=end_node))
+        elif isinstance(component, Pump):
+            components.append(PumpState(component=component, start_node=start_node, end_node=end_node))
         else:
             raise TypeError(f"Unsupported component type: {type(component).__name__}")
 
