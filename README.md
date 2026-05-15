@@ -1,129 +1,169 @@
 # netSim
 
-`netSim` is a clean hydraulic-network solver project built from the recovered
-core of an earlier thesis prototype.
+**netSim** is an open-source hydraulic network simulator for **steady-state, incompressible, single-phase flow**.
 
-The current version focuses on a deliberately narrow but useful scope:
+Its current release focuses on a narrow but useful core: solving network pressures and flow rates in pipes, fittings, and pumps, with a GUI-first workflow and a codebase designed to grow toward more general pipeline simulation.
 
-- steady
-- incompressible
-- isothermal
-- single-component
-- pipes and fittings
-- pressure and mass-flow boundary conditions
+The long-term direction is broader than water networks alone. The project is being built as a modular foundation for future extensions toward **oil, gas, natural gas, and black-oil systems**, while keeping the current solver lightweight, inspectable, and easy to extend.
 
-This folder is the master project for the new codebase. It is intended to be
-worked on independently from the older thesis files outside `netSim/`.
+## Current Scope
 
-## What It Does Today
+Today, `netSim` supports:
 
-The current solver can compute nodal pressures and component flow rates for
-small steady pipe networks with:
-
+- steady-state, incompressible, isothermal flow
 - laminar and turbulent pipe flow
-- fittings represented through local-loss coefficients
-- optional elevation changes in pipes
-- pressure boundaries
-- inlet and outlet mass-flow boundaries
+- pipe pressure-drop models:
+  - Darcy-Weisbach with Colebrook-White
+  - Hazen-Williams
+- fittings via local-loss coefficients
+  - including a library of named preset components
+  - plus manual user-defined `K`
+- pumps defined by `Q-Head` tables
+- elevation changes through a gravitational pressure term
+- pressure boundaries and mass-flow boundaries
+- a graphical editor for building and running cases
+- export of converged results to spreadsheet report files
 
-The present implementation uses:
+The numerical core uses a **segregated pressure-correction method** with adaptive laminar initialisation and explicit pressure relaxation.
 
-- adaptive laminar initialisation
-- a segregated pressure-correction workflow
-- explicit pressure under-relaxation
-- interchangeable pressure-drop models for pipes and fittings
+## Why This Project Exists
 
-## Repository Layout
+Many established tools are strong inside their original domain, but harder to extend when you want to move beyond a classical water-network workflow.
 
-The project is organised around a simple split between engine code,
-tutorials, and technical notes:
+`netSim` is meant to be different:
 
-- `src/netSim/`: solver engine
-- `tutorials/`: runnable example cases grouped by solver family
-- `docs/`: design and equation notes
-- `tests/`: smoke tests for the validated tutorial suite
+- transparent enough to study and modify
+- structured enough to validate and maintain
+- flexible enough to evolve toward richer physics over time
 
-Inside `src/netSim/`, the main folders are:
+That makes it useful both as:
 
-- `core/`: network topology, components, state, settings, results
-- `properties/`: fluid-property models
-- `closures/`: pressure-drop and related closure models
-- `numerics/`: assembly, convergence, and linear algebra helpers
-- `solvers/`: solver implementations
-- `cases/`: reusable case definitions
-- `io/`: reporting helpers
+- a small but real hydraulic network solver
+- and a foundation for future research and development
+
+## Validation
+
+The current solver is not just running toy cases. It has already been checked against recognized benchmark-style references, including:
+
+- the **Hanoi** EPANET/Darcy benchmark network
+- an **EPANET pump tutorial benchmark** with published reference node pressures, heads, and link flows
+
+These cases live in the tutorial suite and can be run directly from the repository.
 
 ## Quick Start
 
-Run the default example:
+From the repository root:
 
 ```bash
-PYTHONPATH=src python3 -m netSim.main
+pip install -e .
 ```
 
-Launch the first GUI prototype:
+Then define and solve a minimal case:
+
+```python
+from netSim.core.case import NetworkCase, PressureBoundary
+from netSim.core.components import Pipe
+from netSim.properties.single_component import SingleComponentFluid
+from netSim.solvers.steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
+
+fluid = SingleComponentFluid(
+    density_kg_per_m3=998.25,
+    viscosity_pa_s=0.001,
+)
+
+pipe = Pipe(
+    start_node=1,
+    end_node=2,
+    length_m=100.0,
+    diameter_m=0.1,
+    absolute_roughness_m=0.000046,
+)
+
+case = NetworkCase(
+    name="example",
+    fluid_model=fluid,
+    components=[pipe],
+    pressure_inlets=[PressureBoundary(node_id=1, pressure_pa=200_000.0)],
+    pressure_outlets=[PressureBoundary(node_id=2, pressure_pa=100_000.0)],
+)
+
+solver = SteadyIsothermalIncompressibleSolver()
+result = solver.solve(case)
+print(result)
+```
+
+## GUI
+
+A graphical network editor is included.
+
+Launch it with:
 
 ```bash
-PYTHONPATH=src python3 -m netSim.gui.app
+python -m netSim.gui.app
 ```
 
-Run the smoke-test suite:
+The GUI currently supports:
 
-```bash
-python3 -m unittest discover -s tests
-```
+- visual network construction
+- source, sink, and junction placement
+- pipe, fitting, and pump definition
+- solver and correlation configuration
+- convergence inspection
+- report export for converged runs
 
 ## Tutorials
 
-The validated tutorial suite currently contains six cases:
+Validated examples are available under
+`tutorials/steady_isothermal_incompressible/`.
 
-For the current solver family, they live under:
+| # | Case |
+|---|------|
+| 01 | Pipe-only base case |
+| 02 | Network with fittings |
+| 03 | Network with fittings and elevation changes |
+| 04 | Inlet mass-flow boundary |
+| 05 | Outlet mass-flow boundary |
+| 06 | Combined inlet and outlet mass-flow boundaries |
+| 07 | Hanoi benchmark (EPANET reference) |
+| 08 | EPANET pump benchmark |
 
-- `tutorials/steady_isothermal_incompressible/`
+Run a case, for example:
 
-The six validated cases are:
+```bash
+python tutorials/steady_isothermal_incompressible/07_hanoi_epanet_darcy_benchmark/run.py
+python tutorials/steady_isothermal_incompressible/08_epanet_pump_benchmark/run.py
+```
 
-1. Pipe-only base case
-   `python3 tutorials/steady_isothermal_incompressible/01_pipe_only/run.py`
-2. Base case with fittings
-   `python3 tutorials/steady_isothermal_incompressible/02_fittings_no_elevation/run.py`
-3. Base case with fittings and elevation changes
-   `python3 tutorials/steady_isothermal_incompressible/03_fittings_with_elevation/run.py`
-4. Elevation case with an inlet mass-flow boundary
-   `python3 tutorials/steady_isothermal_incompressible/04_inlet_flow/run.py`
-5. Elevation case with an outlet mass-flow boundary
-   `python3 tutorials/steady_isothermal_incompressible/05_outlet_flow/run.py`
-6. Case with both inlet and outlet mass-flow boundaries
-   `python3 tutorials/steady_isothermal_incompressible/06_inlet_and_outlet_flow/run.py`
+## Repository Layout
 
-These tutorials are intended both as examples for users and as a lightweight
-validation suite for the current solver.
+```text
+src/netSim/
+├── core/        # Network topology, components, state, settings, results
+├── properties/  # Fluid-property models
+├── closures/    # Pressure-drop and device models
+├── numerics/    # Assembly, convergence, and linear algebra helpers
+├── solvers/     # Solver implementations
+├── cases/       # Reusable case definitions
+├── io/          # Reporting helpers
+└── gui/         # Graphical network editor
+```
 
-## Current Limits
+## Roadmap
 
-This is still an early foundation, not yet a full industrial simulator.
+This version is the **foundation release**, not the final target.
 
-Some important limits of the current branch are:
+Planned next steps include:
 
-- no energy equation yet
-- no transient solving yet
-- no multicomponent or multiphase models yet
-- only a very early GUI prototype
-- explicit, not implicit, pressure relaxation
-
-## Near-Term Direction
-
-The current branch is meant to serve as the numerical base for future work,
-including:
-
+- richer liquid-property modes, including oil-oriented workflows
 - non-isothermal solving through an energy equation
-- richer property models
-- additional pressure-drop correlations
-- coupled versus segregated solver families
-- a future GUI that writes inputs for the same calculation engine
+- compressible single-phase flow
+- more active devices and operating logic
+- black-oil and broader hydrocarbon-network support
 
-## Additional Notes
+The goal is for those future capabilities to build on the same network core rather than replace it.
 
-The longer workflow and governing-equation note is available in:
+## Technical Notes
 
-- `docs/WORKFLOW_AND_EQUATIONS.md`
+The solver workflow and governing-equation notes are documented in:
+
+[`docs/WORKFLOW_AND_EQUATIONS.md`](/home/simon/Documents/netSim/tesisIca/ClasesTesis/netSim/netSim/docs/WORKFLOW_AND_EQUATIONS.md)
