@@ -1,94 +1,33 @@
 # netSim
 
-**netSim** is an open-source hydraulic network simulator for **steady-state, incompressible, single-phase flow**.
+`netSim` is a simulator for steady-state pipe networks with pipes, fittings, and pumps.
 
-It computes nodal pressures and component flow rates in pipe networks with support for pipes, fittings, pumps, elevation changes, and pressure or mass-flow boundary conditions.
-
-## Current Scope
-
-Today, `netSim` supports:
-
-- steady-state, incompressible, isothermal flow
-- laminar and turbulent pipe flow
-- pipe pressure-drop models:
-  - Darcy-Weisbach with Colebrook-White
-  - Hazen-Williams
-- fittings via local-loss coefficients
-  - including a library of named preset components
-  - plus manual user-defined `K`
-- pumps defined by `Q-Head` tables
-- elevation changes through a gravitational pressure term
-- pressure boundaries and mass-flow boundaries
-- a graphical editor for building and running cases
-- export of converged results to spreadsheet report files
-
-The numerical core uses a **segregated pressure-correction method** with adaptive laminar initialisation and explicit pressure relaxation.
-
-## Validation
-
-The current solver has been checked against benchmark-style reference cases, including:
-
-- the **Hanoi** EPANET/Darcy benchmark network
-- an **EPANET pump tutorial benchmark** with published reference node pressures, heads, and link flows
-
-These cases live in the tutorial suite and can be run directly from the repository.
+It computes nodal pressures and component flow rates for incompressible, isothermal, single-phase systems.
 
 ## Quick Start
 
-From the repository root:
+`netSim` comes with a graphical user interface.
 
-```bash
-pip install -e .
-```
-
-Launch the GUI:
+Launch it from the repository root with:
 
 ```bash
 python -m netSim.gui.app
 ```
 
-Then:
+The workflow follows the traditional style used in pipe-network simulators:
 
-1. place `source`, `sink`, and `junction` nodes
-2. connect them with links
-3. add `pipe`, `fitting`, or `pump` components to each link
-4. define the material
-5. choose the pipe pressure-drop model and numerics
-6. press `Run`
+1. define sources and sinks
+2. connect them through internal junctions as needed
+3. assign pipes, fittings, and pumps to the links
+4. define the material and numerical settings
+5. run the case from the GUI
 
-To start from a validated example, open one of the tutorial cases from:
-
-- [tutorials/steady_isothermal_incompressible](/home/simon/Documents/netSim/tesisIca/ClasesTesis/netSim/netSim/tutorials/steady_isothermal_incompressible)
-
-For example:
-
-```bash
-python tutorials/steady_isothermal_incompressible/07_hanoi_epanet_darcy_benchmark/run.py
-python tutorials/steady_isothermal_incompressible/08_epanet_pump_benchmark/run.py
-```
-
-## GUI
-
-A graphical network editor is included.
-
-Launch it with:
-
-```bash
-python -m netSim.gui.app
-```
-
-The GUI currently supports:
-
-- visual network construction
-- source, sink, and junction placement
-- pipe, fitting, and pump definition
-- solver and correlation configuration
-- convergence inspection
-- report export for converged runs
+The intended entry point for most users is the GUI and the user manual.
 
 ## Tutorials
 
-Validated examples are available under `tutorials/steady_isothermal_incompressible/`.
+Example and benchmark cases are available under
+[tutorials/steady_isothermal_incompressible](/home/simon/Documents/netSim/tesisIca/ClasesTesis/netSim/netSim/tutorials/steady_isothermal_incompressible).
 
 | # | Case |
 |---|------|
@@ -101,12 +40,7 @@ Validated examples are available under `tutorials/steady_isothermal_incompressib
 | 07 | Hanoi benchmark (EPANET reference) |
 | 08 | EPANET pump benchmark |
 
-Run a case, for example:
-
-```bash
-python tutorials/steady_isothermal_incompressible/07_hanoi_epanet_darcy_benchmark/run.py
-python tutorials/steady_isothermal_incompressible/08_epanet_pump_benchmark/run.py
-```
+These cases are useful both as examples and as validation references for the current solver.
 
 ## Repository Layout
 
@@ -122,17 +56,22 @@ src/netSim/
 └── gui/         # Graphical network editor
 ```
 
-## Roadmap
+## Long-Term Objective
 
 Planned next steps include:
 
-- richer liquid-property modes, including oil-oriented workflows
-- non-isothermal solving through an energy equation
-- compressible single-phase flow
-- more active devices and operating logic
-- black-oil and broader hydrocarbon-network support
+- steady, non-isothermal flow
+- multiphase flow
+- multicomponent flow
+- broader hydrocarbon-network support
 
-These future capabilities are intended to build on the same network core.
+## Publications
+
+To be defined.
+
+## Contact
+
+Simon Rodriguez
 
 ## Technical Notes
 
