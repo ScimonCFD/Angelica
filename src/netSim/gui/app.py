@@ -120,7 +120,7 @@ class NetSimGui:
         self.convergence_window: tk.Toplevel | None = None
         self.convergence_canvas: tk.Canvas | None = None
         self.root = tk.Tk()
-        self.root.title("netSim GUI Prototype")
+        self.root.title("netSim GUI")
         self.root.geometry("1100x700")
         self.root.minsize(900, 600)
 
@@ -182,7 +182,7 @@ class NetSimGui:
 
         ttk.Button(
             palette,
-            text="Run",
+            text="▶ Run",
             command=self._run_simulation,
             width=12,
         ).pack(anchor="w", pady=(0, 10))
