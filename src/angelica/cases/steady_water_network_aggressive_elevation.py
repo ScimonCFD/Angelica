@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from netSim.core.case import NetworkCase
-from netSim.core.components import Pipe
+from angelica.core.case import NetworkCase
+from angelica.core.components import Pipe
 
 from .steady_water_network import build_steady_water_network_case
 

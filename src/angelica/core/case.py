@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .components import PressureChanger
-from netSim.properties.base import FluidModel
+from angelica.properties.base import FluidModel
 
 
 @dataclass(frozen=True)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from netSim.numerics import NonlinearProblem, build_nonlinear_solver
+from angelica.numerics import NonlinearProblem, build_nonlinear_solver
 
 from .gravity import elevation_pressure_term
 from .pressure_drop import PressureDropCorrelation

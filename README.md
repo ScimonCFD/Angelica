@@ -1,17 +1,17 @@
-# netSim
+# Angelica
 
-`netSim` is a simulator for steady-state pipe networks with pipes, fittings, and pumps.
+`Angelica` is a simulator for steady-state pipe networks with pipes, fittings, and pumps.
 
 It computes nodal pressures and component flow rates for incompressible, isothermal, single-phase systems.
 
 ## Quick Start
 
-`netSim` comes with a graphical user interface.
+`Angelica` comes with a graphical user interface.
 
 Launch it from the repository root with:
 
 ```bash
-python -m netSim.gui.app
+python -m angelica.gui.app
 ```
 
 The workflow follows the traditional style used in pipe-network simulators:
@@ -27,7 +27,7 @@ The intended entry point for most users is the GUI and the user manual.
 ## Tutorials
 
 Example and benchmark cases are available under
-[tutorials/steady_isothermal_incompressible](/home/simon/Documents/netSim/tesisIca/ClasesTesis/netSim/netSim/tutorials/steady_isothermal_incompressible).
+[tutorials/steady_isothermal_incompressible](/home/simon/Documents/Angelica/tesisIca/ClasesTesis/Angelica/Angelica/tutorials/steady_isothermal_incompressible).
 
 | # | Case |
 |---|------|
@@ -45,7 +45,7 @@ These cases are useful both as examples and as validation references for the cur
 ## Repository Layout
 
 ```text
-src/netSim/
+src/Angelica/
 ├── core/        # Network topology, components, state, settings, results
 ├── properties/  # Fluid-property models
 ├── closures/    # Pressure-drop and device models
@@ -77,4 +77,4 @@ Simon Rodriguez
 
 The solver workflow and governing-equation notes are documented in:
 
-[`docs/WORKFLOW_AND_EQUATIONS.md`](/home/simon/Documents/netSim/tesisIca/ClasesTesis/netSim/netSim/docs/WORKFLOW_AND_EQUATIONS.md)
+[`docs/WORKFLOW_AND_EQUATIONS.md`](/home/simon/Documents/Angelica/tesisIca/ClasesTesis/Angelica/Angelica/docs/WORKFLOW_AND_EQUATIONS.md)

@@ -7,7 +7,7 @@ SRC_ROOT = Path(__file__).resolve().parents[3] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from netSim.gui.io import (
+from angelica.gui.io import (
     build_network_case_from_scene,
     build_solver_from_scene,
     load_scene_from_file,
@@ -106,7 +106,7 @@ def main() -> None:
     print(f"Converged: {result.converged}")
     print()
     print("Trunk Node Heads (m)")
-    print("node   expected   netSim    delta")
+    print("node   expected   Angelica    delta")
     for benchmark_node_id in range(1, 33):
         result_node_id = TERMINAL_NODE_MAP.get(benchmark_node_id, benchmark_node_id)
         head_m = result.node_pressures_pa[result_node_id] / (rho * gravity)
@@ -119,7 +119,7 @@ def main() -> None:
 
     print()
     print("Trunk Link Flows (m^3/h)")
-    print("link   expected   netSim    delta")
+    print("link   expected   Angelica    delta")
     for component, flow_result in zip(case.components[:34], result.component_flows[:34]):
         link_id = int(component.component_id.split("_")[1])
         expected_flow_m3_per_h = EXPECTED_LINK_FLOWS_M3_PER_H[link_id]

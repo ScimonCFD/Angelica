@@ -4,8 +4,8 @@ import math
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from netSim.core.components import FITTING_PRESET_LIBRARY
-from netSim.io import export_solve_result_workbook
+from angelica.core.components import FITTING_PRESET_LIBRARY
+from angelica.io import export_solve_result_workbook
 
 from .io import build_network_case_from_scene, build_solver_from_scene, load_scene_from_file
 from .model import (
@@ -120,7 +120,7 @@ class NetSimGui:
         self.convergence_window: tk.Toplevel | None = None
         self.convergence_canvas: tk.Canvas | None = None
         self.root = tk.Tk()
-        self.root.title("netSim GUI")
+        self.root.title("Angelica GUI")
         self.root.geometry("1100x700")
         self.root.minsize(900, 600)
 
@@ -316,9 +316,9 @@ class NetSimGui:
 
     def _open_scene(self) -> None:
         file_path = filedialog.askopenfilename(
-            title="Open netSim GUI case",
+            title="Open Angelica GUI case",
             filetypes=(
-                ("netSim GUI case", "*.gui.json"),
+                ("Angelica GUI case", "*.gui.json"),
                 ("JSON files", "*.json"),
                 ("All files", "*.*"),
             ),

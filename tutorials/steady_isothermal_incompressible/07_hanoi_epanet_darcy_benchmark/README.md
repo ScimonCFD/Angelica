@@ -1,6 +1,6 @@
 # Hanoi EPANET/Darcy Benchmark
 
-This folder contains a `netSim` benchmark case for the classical Hanoi water
+This folder contains a `Angelica` benchmark case for the classical Hanoi water
 distribution network, configured to match a published EPANET/Darcy-style
 reference as closely as possible.
 
@@ -45,9 +45,9 @@ In that reference:
 - the hydraulic comparison is given in Darcy/EPANET style
 - published tables include expected pipe flows and nodal heads
 
-## Benchmark Definition Used in `netSim`
+## Benchmark Definition Used in `Angelica`
 
-This `netSim` version of the benchmark uses:
+This `Angelica` version of the benchmark uses:
 
 - a single `100 m` fixed-head source
 - Darcy-Weisbach / Colebrook-White hydraulic closure
@@ -56,11 +56,11 @@ This `netSim` version of the benchmark uses:
 - trunk pipe diameters from the published table
 - nodal demands from the published table
 
-## Adaptation to the `netSim` Node Model
+## Adaptation to the `Angelica` Node Model
 
 The classical Hanoi benchmark places demands directly on network nodes.
 
-The current `netSim` core uses a stricter node model:
+The current `Angelica` core uses a stricter node model:
 
 - `junction` nodes are conservative by construction
 - net inflow/outflow is imposed only through `source` and `sink` nodes
@@ -86,27 +86,27 @@ The benchmark comparison is performed on the **trunk network only**:
 
 This is important:
 
-- the lateral `sink` nodes are part of the `netSim` adaptation
+- the lateral `sink` nodes are part of the `Angelica` adaptation
 - they are not benchmark nodes from the published Hanoi reference
 - their displayed pressures are therefore not the validation target
 
 ## Expected vs Calculated Tables
 
 The script
-[benchmark_tables.py](/home/simon/Documents/netSim/tesisIca/ClasesTesis/netSim/netSim/tutorials/steady_isothermal_incompressible/07_hanoi_epanet_darcy_benchmark/benchmark_tables.py)
+[benchmark_tables.py](/home/simon/Documents/Angelica/tesisIca/ClasesTesis/Angelica/Angelica/tutorials/steady_isothermal_incompressible/07_hanoi_epanet_darcy_benchmark/benchmark_tables.py)
 prints:
 
 - expected trunk-node heads from the published reference
-- calculated trunk-node heads from `netSim`
-- the difference `delta = netSim - expected`
+- calculated trunk-node heads from `Angelica`
+- the difference `delta = Angelica - expected`
 - expected trunk-link flows from the published reference
-- calculated trunk-link flows from `netSim`
-- the difference `delta = netSim - expected`
+- calculated trunk-link flows from `Angelica`
+- the difference `delta = Angelica - expected`
 
 One subtle point:
 
 - some published pipe flows are reported with a direction convention that may
-  differ from the internal link orientation used in `netSim`
+  differ from the internal link orientation used in `Angelica`
 - therefore a few links can appear with opposite sign while still matching in
   magnitude
 - in those cases, the hydraulic interpretation is still consistent; only the
@@ -120,7 +120,7 @@ For this benchmark, a good result means:
 - trunk-node heads are close to the published values
 - trunk-link flows are close to the published values
 
-In the current validated setup, `netSim` reproduces the reference very closely:
+In the current validated setup, `Angelica` reproduces the reference very closely:
 
 - trunk heads typically differ by only a few tenths of a meter
 - trunk flows typically differ by only tiny fractions of `m^3/h`
@@ -145,12 +145,12 @@ python3 tutorials/steady_isothermal_incompressible/07_hanoi_epanet_darcy_benchma
 Open the case in the GUI:
 
 ```bash
-PYTHONPATH=src python3 -m netSim.gui.app
+PYTHONPATH=src python3 -m angelica.gui.app
 ```
 
 then use:
 
 - `File -> Open`
 - open
-  [hanoi_epanet_darcy_benchmark.gui.json](/home/simon/Documents/netSim/tesisIca/ClasesTesis/netSim/netSim/tutorials/steady_isothermal_incompressible/07_hanoi_epanet_darcy_benchmark/hanoi_epanet_darcy_benchmark.gui.json)
+  [hanoi_epanet_darcy_benchmark.gui.json](/home/simon/Documents/Angelica/tesisIca/ClasesTesis/Angelica/Angelica/tutorials/steady_isothermal_incompressible/07_hanoi_epanet_darcy_benchmark/hanoi_epanet_darcy_benchmark.gui.json)
 - press `Run`

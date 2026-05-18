@@ -8,7 +8,7 @@ SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from netSim.gui.model import CanvasScene
+from angelica.gui.model import CanvasScene
 
 
 class GuiModelTests(unittest.TestCase):

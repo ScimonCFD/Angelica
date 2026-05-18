@@ -8,7 +8,7 @@ SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from netSim.gui.io import build_network_case_from_scene, build_solver_from_scene, load_scene_from_file
+from angelica.gui.io import build_network_case_from_scene, build_solver_from_scene, load_scene_from_file
 
 
 class GuiIoTests(unittest.TestCase):

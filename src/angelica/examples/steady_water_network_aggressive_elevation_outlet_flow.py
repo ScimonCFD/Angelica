@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from netSim.cases import build_steady_water_network_aggressive_elevation_outlet_flow_case
-from netSim.core.settings import SolverSettings
-from netSim.io.reporting import print_solve_result
-from netSim.solvers import SteadyIsothermalIncompressibleSolver
+from angelica.cases import build_steady_water_network_aggressive_elevation_outlet_flow_case
+from angelica.core.settings import SolverSettings
+from angelica.io.reporting import print_solve_result
+from angelica.solvers import SteadyIsothermalIncompressibleSolver
 
 
 def main() -> None:

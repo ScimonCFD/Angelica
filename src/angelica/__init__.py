@@ -1,4 +1,4 @@
-"""netSim: provisional steady network flow solver."""
+"""Angelica: provisional steady network flow solver."""
 
 from .core.case import FlowBoundary, NetworkCase, PressureBoundary
 from .core.components import Fitting, Pipe, PressureChanger

@@ -8,7 +8,7 @@ SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from netSim.cases import (
+from angelica.cases import (
     build_steady_water_network_aggressive_elevation_case,
     build_steady_water_network_aggressive_elevation_outlet_flow_case,
     build_steady_water_network_case,
@@ -16,8 +16,8 @@ from netSim.cases import (
     build_steady_water_network_no_fittings_case,
     build_steady_water_network_two_flow_boundaries_case,
 )
-from netSim.core.settings import SolverSettings
-from netSim.solvers import SteadyIsothermalIncompressibleSolver
+from angelica.core.settings import SolverSettings
+from angelica.solvers import SteadyIsothermalIncompressibleSolver
 
 
 def solve(case, settings: SolverSettings):

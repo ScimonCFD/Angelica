@@ -8,9 +8,9 @@ SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from netSim.closures.pump import PumpCurveModel
-from netSim.core.components import Pump
-from netSim.core.state import NodeState, PumpState
+from angelica.closures.pump import PumpCurveModel
+from angelica.core.components import Pump
+from angelica.core.state import NodeState, PumpState
 
 
 class PumpCurveModelTests(unittest.TestCase):

@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "netSim"
+name = "angelica"
 version = "0.1.0"
 description = "Steady incompressible network-flow solver prototype."
 readme = "README.md"

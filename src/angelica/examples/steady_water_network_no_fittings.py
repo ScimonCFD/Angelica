@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from netSim.cases.steady_water_network_no_fittings import build_steady_water_network_no_fittings_case
-from netSim.core.settings import SolverSettings
-from netSim.io.reporting import print_solve_result
-from netSim.solvers import SteadyIsothermalIncompressibleSolver
+from angelica.cases.steady_water_network_no_fittings import build_steady_water_network_no_fittings_case
+from angelica.core.settings import SolverSettings
+from angelica.io.reporting import print_solve_result
+from angelica.solvers import SteadyIsothermalIncompressibleSolver
 
 
 def build_example_case():

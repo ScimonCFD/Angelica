@@ -3,7 +3,7 @@
 This folder contains a pump-bearing validation case derived from the official
 EPANET 2.2 tutorial network.
 
-It is useful for `netSim` because it exercises two things at once:
+It is useful for `Angelica` because it exercises two things at once:
 
 - looped-network hydraulics with elevation changes
 - a pump represented through a head-versus-flow curve
@@ -42,9 +42,9 @@ The EPANET tutorial input used here uses:
 
 EPANET expands that one-point curve internally into a complete pump curve.
 
-## How It Is Represented in `netSim`
+## How It Is Represented in `Angelica`
 
-The current `netSim` node model keeps junctions conservative, so the four
+The current `Angelica` node model keeps junctions conservative, so the four
 published nodal demands are represented as side branches to dedicated `sink`
 nodes, just as in the validated Hanoi adaptation.
 
@@ -55,19 +55,19 @@ The benchmark comparison is performed on the original trunk network only:
 - trunk-link flows
 
 The side-branch demand sinks are only a modeling device used to fit the EPANET
-tutorial into the current `netSim` node model. They are not themselves part of
+tutorial into the current `Angelica` node model. They are not themselves part of
 the published benchmark tables.
 
 ## Pump Modeling
 
-In this case, the pump is entered as a `Q-Head` table and solved in `netSim`
+In this case, the pump is entered as a `Q-Head` table and solved in `Angelica`
 as another pressure-changing component:
 
 - the current pressure field implies a pump differential head
 - the pump curve is inverted locally to obtain `Q`
 - the local derivative of the curve supplies the pressure-correction coupling
 
-For the official EPANET one-point curve, `netSim` uses the same EPANET
+For the official EPANET one-point curve, `Angelica` uses the same EPANET
 completion rule:
 
 - shutoff head at zero flow = `133%` of the design head
@@ -81,12 +81,12 @@ The published EPANET report at `0:00` provides:
 - link flows
 
 The script
-[benchmark_tables.py](/home/simon/Documents/netSim/tesisIca/ClasesTesis/netSim/netSim/tutorials/steady_isothermal_incompressible/08_epanet_pump_benchmark/benchmark_tables.py)
+[benchmark_tables.py](/home/simon/Documents/Angelica/tesisIca/ClasesTesis/Angelica/Angelica/tutorials/steady_isothermal_incompressible/08_epanet_pump_benchmark/benchmark_tables.py)
 prints:
 
-- expected node pressures vs `netSim`
-- expected node total heads vs `netSim`
-- expected trunk-link flows vs `netSim`
+- expected node pressures vs `Angelica`
+- expected node total heads vs `Angelica`
+- expected trunk-link flows vs `Angelica`
 
 ## Useful Commands
 
@@ -105,12 +105,12 @@ python3 tutorials/steady_isothermal_incompressible/08_epanet_pump_benchmark/benc
 Open the case in the GUI:
 
 ```bash
-PYTHONPATH=src python3 -m netSim.gui.app
+PYTHONPATH=src python3 -m angelica.gui.app
 ```
 
 then use:
 
 - `File -> Open`
 - open
-  [epanet_pump_benchmark.gui.json](/home/simon/Documents/netSim/tesisIca/ClasesTesis/netSim/netSim/tutorials/steady_isothermal_incompressible/08_epanet_pump_benchmark/epanet_pump_benchmark.gui.json)
+  [epanet_pump_benchmark.gui.json](/home/simon/Documents/Angelica/tesisIca/ClasesTesis/Angelica/Angelica/tutorials/steady_isothermal_incompressible/08_epanet_pump_benchmark/epanet_pump_benchmark.gui.json)
 - press `Run`

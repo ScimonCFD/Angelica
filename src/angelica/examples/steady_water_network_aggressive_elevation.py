@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from netSim.cases import build_steady_water_network_aggressive_elevation_case
-from netSim.io.reporting import print_solve_result
-from netSim.main import build_default_solver
+from angelica.cases import build_steady_water_network_aggressive_elevation_case
+from angelica.io.reporting import print_solve_result
+from angelica.main import build_default_solver
 
 
 def main() -> None:

@@ -11,8 +11,8 @@ SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from netSim.core.results import ComponentFlowResult, SolveResult
-from netSim.io.reporting import export_solve_result_workbook
+from angelica.core.results import ComponentFlowResult, SolveResult
+from angelica.io.reporting import export_solve_result_workbook
 
 
 class ReportingTests(unittest.TestCase):

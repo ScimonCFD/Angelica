@@ -4,12 +4,12 @@ import json
 import math
 from pathlib import Path
 
-from netSim.core.case import FlowBoundary, NetworkCase, PressureBoundary
-from netSim.core.components import FITTING_PRESET_LIBRARY, Fitting, Pipe, Pump
-from netSim.core.settings import SolverSettings
-from netSim.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
-from netSim.properties.single_component import SingleComponentFluid
-from netSim.solvers import SteadyIsothermalIncompressibleSolver
+from angelica.core.case import FlowBoundary, NetworkCase, PressureBoundary
+from angelica.core.components import FITTING_PRESET_LIBRARY, Fitting, Pipe, Pump
+from angelica.core.settings import SolverSettings
+from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
+from angelica.properties.single_component import SingleComponentFluid
+from angelica.solvers import SteadyIsothermalIncompressibleSolver
 
 from .model import (
     CanvasLink,

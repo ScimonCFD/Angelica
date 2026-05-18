@@ -7,7 +7,7 @@ SRC_ROOT = Path(__file__).resolve().parents[3] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from netSim.examples.steady_water_network_inlet_flow_boundary import main
+from angelica.examples.steady_water_network_inlet_flow_boundary import main
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Minimal GUI tools for netSim."""
+"""Minimal GUI tools for Angelica."""
 
 
 def main() -> None:

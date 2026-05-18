@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from netSim.core.case import FlowBoundary, NetworkCase, PressureBoundary
+from angelica.core.case import FlowBoundary, NetworkCase, PressureBoundary
 
 from .steady_water_network_aggressive_elevation import (
     build_steady_water_network_aggressive_elevation_case,

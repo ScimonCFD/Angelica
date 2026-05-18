@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from netSim.closures import (
+from angelica.closures import (
     ColebrookPipeCorrelation,
     LaminarPipeCorrelation,
     MinorLossModel,
     PumpCurveModel,
 )
-from netSim.closures.pressure_drop import PressureDropCorrelation
-from netSim.core.components import Fitting, Pipe, Pump
-from netSim.core.network import build_network_state
-from netSim.core.results import ComponentFlowResult, IterationMetrics, SolveResult
-from netSim.core.settings import SolverSettings
-from netSim.core.state import FittingState, PipeState, PumpState
-from netSim.numerics import assemble_pressure_system, max_abs_value, solve_linear_system
+from angelica.closures.pressure_drop import PressureDropCorrelation
+from angelica.core.components import Fitting, Pipe, Pump
+from angelica.core.network import build_network_state
+from angelica.core.results import ComponentFlowResult, IterationMetrics, SolveResult
+from angelica.core.settings import SolverSettings
+from angelica.core.state import FittingState, PipeState, PumpState
+from angelica.numerics import assemble_pressure_system, max_abs_value, solve_linear_system
 from .base import BaseSolver
 
 

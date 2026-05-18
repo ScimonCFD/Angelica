@@ -7,7 +7,7 @@ SRC_ROOT = Path(__file__).resolve().parents[3] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from netSim.gui.io import (
+from angelica.gui.io import (
     build_network_case_from_scene,
     build_solver_from_scene,
     load_scene_from_file,
@@ -70,7 +70,7 @@ def main() -> None:
     print(f"Converged: {result.converged}")
     print()
     print("Node Pressures (psi)")
-    print("node   expected   netSim    delta")
+    print("node   expected   Angelica    delta")
     for node_id in sorted(EXPECTED_NODE_PRESSURES_PSI):
         pressure_head_m = result.node_pressures_pa[node_id] / (rho * gravity)
         pressure_psi = (pressure_head_m / M_PER_FT) * PSI_PER_FT_OF_WATER
@@ -80,7 +80,7 @@ def main() -> None:
 
     print()
     print("Node Total Heads (ft)")
-    print("node   expected   netSim    delta")
+    print("node   expected   Angelica    delta")
     for node_id in sorted(EXPECTED_NODE_HEADS_FT):
         pressure_head_ft = (result.node_pressures_pa[node_id] / (rho * gravity)) / M_PER_FT
         total_head_ft = pressure_head_ft + NODE_ELEVATIONS_FT[node_id]
@@ -90,7 +90,7 @@ def main() -> None:
 
     print()
     print("Trunk Link Flows (gpm)")
-    print("link   expected   netSim    delta")
+    print("link   expected   Angelica    delta")
     trunk_results = {int(component.component_id.split('_')[1]): flow_result for component, flow_result in zip(case.components, result.component_flows) if int(component.component_id.split('_')[1]) in EXPECTED_LINK_FLOWS_GPM}
     for link_id in sorted(EXPECTED_LINK_FLOWS_GPM):
         calc_flow_gpm = trunk_results[link_id].volumetric_flow_m3_per_h / M3H_PER_GPM

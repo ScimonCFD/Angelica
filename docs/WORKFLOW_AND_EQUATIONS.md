@@ -1,6 +1,6 @@
-# netSim v1: High-Level Workflow and Governing Equations
+# Angelica v1: High-Level Workflow and Governing Equations
 
-This note summarises what the current `netSim` implementation is doing at a
+This note summarises what the current `Angelica` implementation is doing at a
 high level, which equations it is solving, and where the present numerical
 issue is most likely to be.
 
@@ -14,7 +14,7 @@ The scope of the current solver is:
 
 ## 1. High-Level Workflow
 
-The current workflow in `src/netSim/solvers/steady_isothermal_incompressible.py`
+The current workflow in `src/Angelica/solvers/steady_isothermal_incompressible.py`
 is:
 
 1. Build the network state from the case definition.
@@ -117,7 +117,7 @@ Notation:
 
 ## 2.1 Pipe, laminar
 
-Implemented in `src/netSim/closures/friction.py`.
+Implemented in `src/Angelica/closures/friction.py`.
 
 The current laminar pipe velocity is:
 
@@ -146,7 +146,7 @@ C_lam = -(rho / (32 mu)) * (A D^2 / L)
 
 ## 2.2 Pipe, turbulent
 
-Also implemented in `src/netSim/closures/friction.py`.
+Also implemented in `src/Angelica/closures/friction.py`.
 
 The turbulent pipe update is based on Darcy-Weisbach:
 
@@ -202,7 +202,7 @@ finite-difference updates.
 
 ## 2.4 Fittings
 
-Implemented in `src/netSim/closures/minor_losses.py`.
+Implemented in `src/Angelica/closures/minor_losses.py`.
 
 The fitting velocity is currently computed from:
 
@@ -226,7 +226,7 @@ C_fit = -2 A / (K abs(V))
 
 ## 2.5 Mass conservation and pressure correction
 
-The global system is assembled in `src/netSim/numerics/assembly.py`.
+The global system is assembled in `src/Angelica/numerics/assembly.py`.
 
 For each component:
 
