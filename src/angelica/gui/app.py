@@ -4,6 +4,8 @@ import math
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+import sv_ttk
+
 from angelica.core.components import FITTING_PRESET_LIBRARY
 from angelica.io import export_solve_result_workbook
 
@@ -56,6 +58,51 @@ class ToolTip:
 
 
 class NetSimGui:
+    _THEMES: dict[str, dict[str, str]] = {
+        "light": {
+            "canvas_bg":      "#fbfaf4",
+            "canvas_hl":      "#b8b2a7",
+            "node_source":    "#8ecae6",
+            "node_sink":      "#f28482",
+            "node_junction":  "#d9d9d9",
+            "node_outline":   "#2e2a24",
+            "node_text":      "#000000",
+            "node_summary":   "#3d3a35",
+            "link":           "#4f5d75",
+            "drag_line":      "#6c757d",
+            "plot_bg":        "#ffffff",
+            "plot_axis":      "#333333",
+            "plot_grid":      "#e6e6e6",
+            "plot_text":      "#333333",
+            "plot_muted":     "#555555",
+            "plot_faint":     "#999999",
+            "plot_faint2":    "#666666",
+            "plot_laminar":   "#1d3557",
+            "plot_turbulent": "#c1121f",
+        },
+        "dark": {
+            "canvas_bg":      "#070c17",
+            "canvas_hl":      "#2a3a4a",
+            "node_source":    "#3a9fd4",
+            "node_sink":      "#e8633a",
+            "node_junction":  "#4a6a7a",
+            "node_outline":   "#c8d4dc",
+            "node_text":      "#e8e8e8",
+            "node_summary":   "#9ab0bc",
+            "link":           "#8aaab8",
+            "drag_line":      "#8aaab8",
+            "plot_bg":        "#0d1a24",
+            "plot_axis":      "#c8d4dc",
+            "plot_grid":      "#1e3040",
+            "plot_text":      "#c8d4dc",
+            "plot_muted":     "#7a9aaa",
+            "plot_faint":     "#4a6a7a",
+            "plot_faint2":    "#5a7a8a",
+            "plot_laminar":   "#3a9fd4",
+            "plot_turbulent": "#e8633a",
+        },
+    }
+
     FITTING_MODE_LIBRARY = {
         "manual": {"name": "Manual K"},
         "preset": {"name": "Preset from table"},
@@ -119,7 +166,9 @@ class NetSimGui:
         self.latest_boundary_results: dict[int, dict[str, float]] = {}
         self.convergence_window: tk.Toplevel | None = None
         self.convergence_canvas: tk.Canvas | None = None
+        self._dark = False
         self.root = tk.Tk()
+        sv_ttk.set_theme("light")
         self.root.title("Angelica GUI")
         self.root.geometry("1100x700")
         self.root.minsize(900, 600)
@@ -139,6 +188,25 @@ class NetSimGui:
 
         self._build_menu()
         self._build_layout()
+
+    @property
+    def _t(self) -> dict[str, str]:
+        return self._THEMES["dark" if self._dark else "light"]
+
+    def _toggle_theme(self) -> None:
+        self._dark = not self._dark
+        sv_ttk.set_theme("dark" if self._dark else "light")
+        self.canvas.configure(
+            background=self._t["canvas_bg"],
+            highlightbackground=self._t["canvas_hl"],
+        )
+        if self.convergence_canvas is not None:
+            self.convergence_canvas.configure(
+                background=self._t["plot_bg"],
+                highlightbackground=self._t["canvas_hl"],
+            )
+        self._redraw_scene()
+        self._redraw_convergence_plot()
 
     def _build_menu(self) -> None:
         menu_bar = tk.Menu(self.root)
@@ -167,6 +235,10 @@ class NetSimGui:
             command=self._open_numerics_dialog,
         )
         menu_bar.add_cascade(label="Numerics", menu=numerics_menu)
+
+        view_menu = tk.Menu(menu_bar, tearoff=False)
+        view_menu.add_command(label="Toggle Dark / Light Theme", command=self._toggle_theme)
+        menu_bar.add_cascade(label="View", menu=view_menu)
 
         self.root.config(menu=menu_bar)
 
@@ -262,9 +334,9 @@ class NetSimGui:
 
         self.canvas = tk.Canvas(
             canvas_frame,
-            background="#fbfaf4",
+            background=self._t["canvas_bg"],
             highlightthickness=1,
-            highlightbackground="#b8b2a7",
+            highlightbackground=self._t["canvas_hl"],
         )
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<ButtonPress-1>", self._on_canvas_press)
@@ -1130,7 +1202,7 @@ class NetSimGui:
             source_y,
             event.x,
             event.y,
-            fill="#6c757d",
+            fill=self._t["drag_line"],
             width=2,
             dash=(5, 3),
         )
@@ -1303,7 +1375,7 @@ class NetSimGui:
             x1,
             y1,
             fill=fill_color,
-            outline="#2e2a24",
+            outline=self._t["node_outline"],
             width=2,
             tags=(node_tag, "node"),
         )
@@ -1311,6 +1383,7 @@ class NetSimGui:
             canvas_x,
             canvas_y - 2,
             text=label,
+            fill=self._t["node_text"],
             font=("TkDefaultFont", 9, "bold"),
             tags=(node_tag, "node"),
         )
@@ -1318,6 +1391,7 @@ class NetSimGui:
             canvas_x,
             canvas_y + 12,
             text=str(node.node_id),
+            fill=self._t["node_text"],
             font=("TkDefaultFont", 8),
             tags=(node_tag, "node"),
         )
@@ -1329,7 +1403,7 @@ class NetSimGui:
                 canvas_y + 40,
                 text=summary,
                 font=("TkDefaultFont", 8),
-                fill="#3d3a35",
+                fill=self._t["node_summary"],
                 justify="center",
                 tags=(node_tag, "node"),
             )
@@ -1347,7 +1421,7 @@ class NetSimGui:
             start_y,
             end_x,
             end_y,
-            fill="#4f5d75",
+            fill=self._t["link"],
             width=3,
             tags=("link", f"link_{link.link_id}"),
         )
@@ -1788,7 +1862,6 @@ class NetSimGui:
         ttk.Label(
             properties_frame,
             text="One pair per line: Q (m^3/h), Head (m)",
-            foreground="#555555",
         ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(0, 6))
 
         button_row = ttk.Frame(properties_frame)
@@ -1883,14 +1956,8 @@ class NetSimGui:
         )
         dialog.destroy()
 
-    @staticmethod
-    def _node_fill(node_type: str) -> str:
-        colors = {
-            "source": "#8ecae6",
-            "sink": "#f28482",
-            "junction": "#d9d9d9",
-        }
-        return colors[node_type]
+    def _node_fill(self, node_type: str) -> str:
+        return self._t[f"node_{node_type}"]
 
     @staticmethod
     def _node_label(node: CanvasNode) -> str:
@@ -1986,9 +2053,9 @@ class NetSimGui:
 
             self.convergence_canvas = tk.Canvas(
                 frame,
-                background="white",
+                background=self._t["plot_bg"],
                 highlightthickness=1,
-                highlightbackground="#b8b2a7",
+                highlightbackground=self._t["canvas_hl"],
                 width=760,
                 height=340,
             )
@@ -2000,7 +2067,7 @@ class NetSimGui:
 
             legend = ttk.Frame(frame)
             legend.pack(fill="x", pady=(8, 0))
-            for label, color in (("Laminar", "#1d3557"), ("Turbulent", "#c1121f")):
+            for label, color in (("Laminar", self._t["plot_laminar"]), ("Turbulent", self._t["plot_turbulent"])):
                 swatch = tk.Canvas(legend, width=16, height=10, highlightthickness=0)
                 swatch.create_line(1, 5, 15, 5, fill=color, width=3)
                 swatch.pack(side="left", padx=(0, 4))
@@ -2029,10 +2096,10 @@ class NetSimGui:
         laminar_values = [getattr(metric, metric_name) for metric in self.convergence_history["laminar"]]
         turbulent_values = [getattr(metric, metric_name) for metric in self.convergence_history["turbulent"]]
         if laminar_values:
-            history_series.append(("Laminar", laminar_values, "#1d3557", 0))
+            history_series.append(("Laminar", laminar_values, self._t["plot_laminar"], 0))
         if turbulent_values:
             history_series.append(
-                ("Turbulent", turbulent_values, "#c1121f", len(laminar_values))
+                ("Turbulent", turbulent_values, self._t["plot_turbulent"], len(laminar_values))
             )
         if not history_series:
             self.convergence_canvas.delete("all")
@@ -2041,7 +2108,7 @@ class NetSimGui:
                 20,
                 anchor="nw",
                 text="No convergence data yet.",
-                fill="#555555",
+                fill=self._t["plot_muted"],
             )
             return
 
@@ -2062,7 +2129,7 @@ class NetSimGui:
                 20,
                 anchor="nw",
                 text="Waiting for plot area...",
-                fill="#555555",
+                fill=self._t["plot_muted"],
             )
             return
 
@@ -2095,16 +2162,16 @@ class NetSimGui:
         x_den = max(max_index, 1)
         total_iterations = max_index + 1
 
-        canvas.create_line(left, top, left, bottom, fill="#333333", width=1.5)
-        canvas.create_line(left, bottom, right, bottom, fill="#333333", width=1.5)
+        canvas.create_line(left, top, left, bottom, fill=self._t["plot_axis"], width=1.5)
+        canvas.create_line(left, bottom, right, bottom, fill=self._t["plot_axis"], width=1.5)
 
         for i in range(5):
             frac = i / 4 if 4 else 0
             y = top + (bottom - top) * frac
             value_log = max_log - (max_log - min_log) * frac
             value = 10**value_log
-            canvas.create_line(left, y, right, y, fill="#e6e6e6")
-            canvas.create_text(left - 8, y, text=f"{value:.1e}", anchor="e", font=("TkDefaultFont", 8))
+            canvas.create_line(left, y, right, y, fill=self._t["plot_grid"])
+            canvas.create_text(left - 8, y, text=f"{value:.1e}", anchor="e", font=("TkDefaultFont", 8), fill=self._t["plot_text"])
 
         tick_count = min(10, total_iterations)
         tick_indices = sorted(
@@ -2115,8 +2182,8 @@ class NetSimGui:
         )
         for i in tick_indices:
             x = left + (right - left) * (i / x_den)
-            canvas.create_line(x, bottom, x, bottom + 4, fill="#333333")
-            canvas.create_text(x, bottom + 16, text=str(i + 1), anchor="n", font=("TkDefaultFont", 8))
+            canvas.create_line(x, bottom, x, bottom + 4, fill=self._t["plot_axis"])
+            canvas.create_text(x, bottom + 16, text=str(i + 1), anchor="n", font=("TkDefaultFont", 8), fill=self._t["plot_text"])
 
         if history_series and len(history_series) == 2:
             transition_index = history_series[1][3]
@@ -2127,7 +2194,7 @@ class NetSimGui:
                     top,
                     transition_x,
                     bottom,
-                    fill="#999999",
+                    fill=self._t["plot_faint"],
                     dash=(4, 3),
                 )
                 canvas.create_text(
@@ -2135,16 +2202,17 @@ class NetSimGui:
                     top + 10,
                     text="turbulent",
                     anchor="nw",
-                    fill="#666666",
+                    fill=self._t["plot_faint2"],
                     font=("TkDefaultFont", 8),
                 )
 
-        canvas.create_text((left + right) / 2, height - 10, text="Iteration", anchor="s")
+        canvas.create_text((left + right) / 2, height - 10, text="Iteration", anchor="s", fill=self._t["plot_text"])
         canvas.create_text(
             16,
             (top + bottom) / 2,
             text=self._pretty_metric_name(metric_name),
             angle=90,
+            fill=self._t["plot_text"],
         )
 
         for _label, values, color, offset in history_series:
