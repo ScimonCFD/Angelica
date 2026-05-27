@@ -1,8 +1,7 @@
 # Angelica v1: High-Level Workflow and Governing Equations
 
 This note summarises what the current `Angelica` implementation is doing at a
-high level, which equations it is solving, and where the present numerical
-issue is most likely to be.
+high level and which equations it is solving.
 
 The scope of the current solver is:
 
@@ -10,11 +9,11 @@ The scope of the current solver is:
 - isothermal
 - incompressible
 - single-component
-- pressure-driven pipe networks with fittings
+- pressure-driven pipe networks with pipes, fittings, and pumps
 
 ## 1. High-Level Workflow
 
-The current workflow in `src/Angelica/solvers/steady_isothermal_incompressible.py`
+The current workflow in `src/angelica/solvers/steady_isothermal_incompressible.py`
 is:
 
 1. Build the network state from the case definition.
@@ -31,7 +30,7 @@ The case defines:
 
 - nodes
 - pressure boundaries
-- components (`Pipe`, `Fitting`)
+- components (`Pipe`, `Fitting`, `Pump`)
 - fluid properties
 
 This is converted into a mutable internal state with:
@@ -55,6 +54,7 @@ The solver computes a provisional flow field using:
 
 - laminar pipe physics for `Pipe`
 - the fitting local-loss relation for `Fitting`
+- the pump curve relation for `Pump`
 
 Then it assembles and solves a pressure-correction system and updates the
 nodal pressures.
@@ -117,7 +117,7 @@ Notation:
 
 ## 2.1 Pipe, laminar
 
-Implemented in `src/Angelica/closures/friction.py`.
+Implemented in `src/angelica/closures/friction.py`.
 
 The current laminar pipe velocity is:
 
@@ -146,7 +146,7 @@ C_lam = -(rho / (32 mu)) * (A D^2 / L)
 
 ## 2.2 Pipe, turbulent
 
-Also implemented in `src/Angelica/closures/friction.py`.
+Also implemented in `src/angelica/closures/friction.py`.
 
 The turbulent pipe update is based on Darcy-Weisbach:
 
@@ -202,7 +202,7 @@ finite-difference updates.
 
 ## 2.4 Fittings
 
-Implemented in `src/Angelica/closures/minor_losses.py`.
+Implemented in `src/angelica/closures/minor_losses.py`.
 
 The fitting velocity is currently computed from:
 
@@ -226,7 +226,47 @@ C_fit = -2 A / (K abs(V))
 
 ## 2.5 Mass conservation and pressure correction
 
-The global system is assembled in `src/Angelica/numerics/assembly.py`.
+Implemented in `src/angelica/closures/pump.py`.
+
+Pumps are treated as pressure-changing devices driven by a Q-Head curve.
+
+The solver first converts the current pressure difference across the pump into
+the head the pump must deliver:
+
+```text
+H_req = -DeltaP / (rho g)
+```
+
+Then it evaluates the pump curve locally to obtain the volumetric flow rate:
+
+```text
+Q = G(H_req)
+```
+
+Two pump modes are supported:
+
+- a one-point EPANET-style design point, expanded internally to a full curve
+- a piecewise-linear multi-point Q-Head table
+
+The velocity follows from:
+
+```text
+V = Q / A
+```
+
+For pressure correction, the pump contributes the local slope of the curve:
+
+```text
+C_pump = dQ / d(DeltaP) = (dQ / dH) * 1/(rho g)
+```
+
+This is the pump analogue of the hydraulic conductance used for pipes and
+fittings. It lets the pump enter the same global continuity system as any
+other component.
+
+## 2.6 Mass conservation and pressure correction
+
+The global system is assembled in `src/angelica/numerics/assembly.py`.
 
 For each component:
 
