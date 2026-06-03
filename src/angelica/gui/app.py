@@ -1495,13 +1495,13 @@ class NetSimGui:
                 variable=condition_var,
             ).pack(side="left")
 
-            ttk.Label(container, text="Pressure").grid(row=1, column=0, sticky="w", pady=4)
+            ttk.Label(container, text="Pressure (Pa)").grid(row=1, column=0, sticky="w", pady=4)
             pressure_var = tk.StringVar(value=node.properties.get("pressure", ""))
             pressure_entry = ttk.Entry(container, textvariable=pressure_var, width=20)
             pressure_entry.grid(row=1, column=1, sticky="ew", pady=4)
             entries["pressure"] = pressure_var
 
-            ttk.Label(container, text="Flow").grid(row=2, column=0, sticky="w", pady=4)
+            ttk.Label(container, text="Flow (kg/s)").grid(row=2, column=0, sticky="w", pady=4)
             flow_var = tk.StringVar(value=node.properties.get("flow", ""))
             flow_entry = ttk.Entry(container, textvariable=flow_var, width=20)
             flow_entry.grid(row=2, column=1, sticky="ew", pady=4)
@@ -1984,7 +1984,14 @@ class NetSimGui:
 
     @staticmethod
     def _pretty_field_name(field_name: str) -> str:
-        return field_name.replace("_", " ").replace(" m", " (m)").capitalize()
+        labels = {
+            "length_m": "Length (m)",
+            "diameter_m": "Diameter (m)",
+            "height_change_m": "Height change (m)",
+            "roughness_m": "Roughness (m)",
+            "hazen_williams_c": "Hazen-Williams C (−)",
+        }
+        return labels.get(field_name, field_name.replace("_", " ").replace(" m", " (m)").capitalize())
 
     def _node_summary_text(self, node: CanvasNode) -> str:
         lines: list[str] = []
