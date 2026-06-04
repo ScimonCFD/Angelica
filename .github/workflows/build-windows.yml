@@ -1,0 +1,56 @@
+name: Build Windows Installer
+
+on:
+  # Trigger automatically when you push a version tag: git tag v0.1.0 && git push --tags
+  push:
+    tags:
+      - 'v*.*.*'
+  # Also allow running manually from the GitHub Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to attach the .exe to a GitHub Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package and build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller
+
+      - name: Build standalone executable with PyInstaller
+        run: pyinstaller angelica.spec
+
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build Windows installer with Inno Setup
+        run: iscc installer\angelica.iss
+
+      # Always upload the installer as a workflow artifact (downloadable from Actions tab)
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AngelicaSetup-Windows
+          path: installer\Output\AngelicaSetup-*.exe
+          retention-days: 30
+
+      # Only attach to a GitHub Release when triggered by a version tag
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer\Output\AngelicaSetup-*.exe
+          generate_release_notes: true
