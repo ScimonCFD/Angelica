@@ -1193,13 +1193,20 @@ class NetSimGui:
         return self._unit_quantities()[quantity][0]
 
     @staticmethod
+    @staticmethod
     def _default_open_dir() -> str:
-        """Start the Open dialog in the tutorials folder when running as an installed app."""
+        """Start the Open dialog in the tutorials folder when one can be found."""
         if getattr(sys, "frozen", False):
             exe_dir = os.path.dirname(sys.executable)
             tutorials = os.path.join(exe_dir, "tutorials")
             if os.path.isdir(tutorials):
                 return tutorials
+        else:
+            # Dev / editable install: tutorials/ is 3 dirs above src/angelica/gui/
+            here = os.path.dirname(os.path.abspath(__file__))
+            candidate = os.path.normpath(os.path.join(here, "..", "..", "..", "tutorials"))
+            if os.path.isdir(candidate):
+                return candidate
         return os.path.expanduser("~")
 
     def _set_window_icon(self) -> None:
