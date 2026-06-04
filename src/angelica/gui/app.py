@@ -148,10 +148,7 @@ class NetSimGui:
         },
     }
     METRIC_OPTIONS = (
-        ("Max abs pressure correction (Pa)", "pressure_correction_abs_pa"),
-        ("Mean abs pressure correction (Pa)", "pressure_correction_mean_abs_pa"),
-        ("Max rel pressure correction", "pressure_correction_rel"),
-        ("Max nodal mass imbalance (kg/s)", "max_nodal_mass_imbalance_kg_per_s"),
+        ("Max abs ΔP correction (Pa)", "pressure_correction_abs_pa"),
         ("Max rel mass imbalance (−)", "max_nodal_mass_imbalance_rel"),
     )
     UNIT_SYSTEMS: dict[str, dict] = {
