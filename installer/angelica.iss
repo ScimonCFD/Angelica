@@ -21,6 +21,8 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 SetupIconFile=angelica.ico
+WizardImageFile=wizard_left.png
+WizardSmallImageFile=wizard_small.png
 ; Install per-user by default so no admin rights are required
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog

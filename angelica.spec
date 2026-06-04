@@ -8,7 +8,10 @@ a = Analysis(
     ["launcher.py"],
     pathex=["src"],
     binaries=[],
-    datas=sv_ttk_datas,
+    datas=[
+        *sv_ttk_datas,
+        ("installer/angelica_32.png", "."),
+    ],
     hiddenimports=[
         "sv_ttk",
         "openpyxl",

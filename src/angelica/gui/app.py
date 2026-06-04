@@ -207,6 +207,7 @@ class NetSimGui:
         self.root.title("Angelica GUI")
         self.root.geometry("1100x700")
         self.root.minsize(900, 600)
+        self._set_window_icon()
 
         self.metric_label_to_name = {label: name for label, name in self.METRIC_OPTIONS}
         self.metric_name_to_label = {name: label for label, name in self.METRIC_OPTIONS}
@@ -1140,6 +1141,25 @@ class NetSimGui:
             if os.path.isdir(tutorials):
                 return tutorials
         return os.path.expanduser("~")
+
+    def _set_window_icon(self) -> None:
+        icon_path = self._resource_path("angelica_32.png")
+        if not os.path.exists(icon_path):
+            return
+        try:
+            photo = tk.PhotoImage(file=icon_path)
+            self.root.iconphoto(True, photo)
+            self._icon_photo = photo  # keep a reference so GC doesn't collect it
+        except Exception:
+            pass
+
+    @staticmethod
+    def _resource_path(filename: str) -> str:
+        """Resolve a bundled data file: PyInstaller _MEIPASS at runtime, repo root in dev."""
+        if getattr(sys, "frozen", False):
+            return os.path.join(sys._MEIPASS, filename)
+        here = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(here, "..", "..", "..", "..", "installer", filename)
 
     @staticmethod
     def _fmt(value: float) -> str:
