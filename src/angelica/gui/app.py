@@ -669,6 +669,12 @@ class NetSimGui:
         current_velocity_loop_tol = str(
             self.scene.solver_settings.get("velocity_loop_tolerance", "0.0001")
         )
+        current_dp_tol = str(
+            self.scene.solver_settings.get("pressure_correction_abs_tolerance_pa", "0.001")
+        )
+        current_continuity_tol = str(
+            self.scene.solver_settings.get("nodal_mass_imbalance_rel_tolerance", "0.001")
+        )
 
         alpha_var = tk.StringVar(master=dialog, value=current_alpha)
         friction_max_iterations_var = tk.StringVar(
@@ -687,6 +693,8 @@ class NetSimGui:
         friction_method_var = tk.StringVar(master=dialog, value=current_friction_method)
         colebrook_tol_var = tk.StringVar(master=dialog, value=current_colebrook_tol)
         velocity_loop_tol_var = tk.StringVar(master=dialog, value=current_velocity_loop_tol)
+        dp_tol_var = tk.StringVar(master=dialog, value=current_dp_tol)
+        continuity_tol_var = tk.StringVar(master=dialog, value=current_continuity_tol)
         laminar_iterations_var = tk.StringVar(
             master=dialog,
             value=current_laminar_iterations,
@@ -837,6 +845,27 @@ class NetSimGui:
             row=12, column=1, sticky="ew", pady=4
         )
 
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=13, column=0, columnspan=2, sticky="ew", pady=(6, 2)
+        )
+        ttk.Label(frame, text="— Convergence criteria —", foreground="gray").grid(
+            row=14, column=0, columnspan=2, pady=(0, 4)
+        )
+
+        ttk.Label(frame, text="ΔP Correction Tol (Pa)").grid(
+            row=15, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=dp_tol_var, width=26).grid(
+            row=15, column=1, sticky="ew", pady=4
+        )
+
+        ttk.Label(frame, text="Continuity Tol (rel)").grid(
+            row=16, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=continuity_tol_var, width=26).grid(
+            row=16, column=1, sticky="ew", pady=4
+        )
+
         def apply_velocity_method_selection(_event: tk.Event | None = None) -> None:
             velocity_name_var.set(
                 self.VELOCITY_LOOP_METHOD_LIBRARY[velocity_method_var.get()]["name"]
@@ -857,7 +886,7 @@ class NetSimGui:
         friction_method_box.bind("<<ComboboxSelected>>", apply_friction_method_selection)
 
         button_row = ttk.Frame(frame)
-        button_row.grid(row=13, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=17, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
         ttk.Button(
             button_row,
@@ -874,6 +903,8 @@ class NetSimGui:
                 velocity_max_iterations_var,
                 colebrook_tol_var,
                 velocity_loop_tol_var,
+                dp_tol_var,
+                continuity_tol_var,
             ),
         ).pack(side="right", padx=(0, 8))
 
@@ -966,6 +997,8 @@ class NetSimGui:
         velocity_max_iterations_var: tk.StringVar,
         colebrook_tol_var: tk.StringVar,
         velocity_loop_tol_var: tk.StringVar,
+        dp_tol_var: tk.StringVar,
+        continuity_tol_var: tk.StringVar,
     ) -> None:
         laminar_iterations_text = laminar_iterations_var.get().strip()
         if laminar_iterations_text:
@@ -1124,6 +1157,42 @@ class NetSimGui:
             )
             return
 
+        try:
+            dp_tol = float(dp_tol_var.get().strip())
+        except ValueError:
+            messagebox.showerror(
+                "Invalid numerics",
+                "ΔP correction tolerance must be a valid number.",
+                parent=dialog,
+            )
+            return
+
+        if dp_tol <= 0.0:
+            messagebox.showerror(
+                "Invalid numerics",
+                "ΔP correction tolerance must be greater than zero.",
+                parent=dialog,
+            )
+            return
+
+        try:
+            continuity_tol = float(continuity_tol_var.get().strip())
+        except ValueError:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Continuity tolerance must be a valid number.",
+                parent=dialog,
+            )
+            return
+
+        if continuity_tol <= 0.0:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Continuity tolerance must be greater than zero.",
+                parent=dialog,
+            )
+            return
+
         self.scene.update_solver_settings(
             {
                 "laminar_iterations": laminar_iterations,
@@ -1136,6 +1205,8 @@ class NetSimGui:
                 "velocity_loop_max_iterations": velocity_max_iterations,
                 "colebrook_residual_tolerance": colebrook_tol,
                 "velocity_loop_tolerance": velocity_loop_tol,
+                "pressure_correction_abs_tolerance_pa": dp_tol,
+                "nodal_mass_imbalance_rel_tolerance": continuity_tol,
             }
         )
         self._refresh_global_summaries()
@@ -1144,7 +1215,8 @@ class NetSimGui:
             f"laminar={'auto' if laminar_iterations is None else laminar_iterations}, "
             f"turbulent={turbulent_iterations}, "
             f"alpha={alpha:g}, "
-            f"f-tol={colebrook_tol:g}, V*-tol={velocity_loop_tol:g}."
+            f"f-tol={colebrook_tol:g}, V*-tol={velocity_loop_tol:g}, "
+            f"ΔP-tol={dp_tol:g} Pa, continuity-tol={continuity_tol:g}."
         )
         dialog.destroy()
 
@@ -1320,6 +1392,8 @@ class NetSimGui:
         )
         colebrook_tol = self.scene.solver_settings.get("colebrook_residual_tolerance", 1e-4)
         velocity_loop_tol = self.scene.solver_settings.get("velocity_loop_tolerance", 1e-4)
+        dp_tol = self.scene.solver_settings.get("pressure_correction_abs_tolerance_pa", 1e-3)
+        continuity_tol = self.scene.solver_settings.get("nodal_mass_imbalance_rel_tolerance", 1e-3)
         return (
             f"laminar={'auto' if laminar_iterations is None else laminar_iterations}\n"
             f"turbulent={turbulent_iterations}\n"
@@ -1327,7 +1401,8 @@ class NetSimGui:
             f"colebrook={colebrook_strategy_name}\n"
             f"friction={friction_method_name} ({friction_max_iterations})\n"
             f"velocity={velocity_method_name} ({velocity_max_iterations})\n"
-            f"f-tol={colebrook_tol:g}  V*-tol={velocity_loop_tol:g}"
+            f"f-tol={colebrook_tol:g}  V*-tol={velocity_loop_tol:g}\n"
+            f"ΔP-tol={dp_tol:g} Pa  cont-tol={continuity_tol:g}"
         )
 
     def _validate_scene(self) -> list[str]:
