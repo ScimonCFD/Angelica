@@ -1192,7 +1192,6 @@ class NetSimGui:
     def _unit_label(self, quantity: str) -> str:
         return self._unit_quantities()[quantity][0]
 
-    @staticmethod
     def _default_open_dir(self) -> str:
         """Start the Open dialog in the tutorials folder when one can be found."""
         if getattr(sys, "frozen", False):
