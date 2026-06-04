@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+import os
+import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -189,6 +191,7 @@ class NetSimGui:
         self.drag_line_id: int | None = None
         self.moving_node_id: int | None = None
         self.selected_node_id: int | None = None
+        self._last_dir: str = self._default_open_dir()
         self.middle_pan_anchor: tuple[float, float] | None = None
         self.view_offset_x = 0.0
         self.view_offset_y = 0.0
@@ -428,6 +431,7 @@ class NetSimGui:
     def _open_scene(self) -> None:
         file_path = filedialog.askopenfilename(
             title="Open Angelica GUI case",
+            initialdir=self._last_dir,
             filetypes=(
                 ("Angelica GUI case", "*.gui.json"),
                 ("JSON files", "*.json"),
@@ -436,6 +440,8 @@ class NetSimGui:
         )
         if not file_path:
             return
+
+        self._last_dir = os.path.dirname(file_path)
 
         try:
             self.scene = load_scene_from_file(file_path)
@@ -1124,6 +1130,16 @@ class NetSimGui:
 
     def _unit_label(self, quantity: str) -> str:
         return self._unit_quantities()[quantity][0]
+
+    @staticmethod
+    def _default_open_dir() -> str:
+        """Start the Open dialog in the tutorials folder when running as an installed app."""
+        if getattr(sys, "frozen", False):
+            exe_dir = os.path.dirname(sys.executable)
+            tutorials = os.path.join(exe_dir, "tutorials")
+            if os.path.isdir(tutorials):
+                return tutorials
+        return os.path.expanduser("~")
 
     @staticmethod
     def _fmt(value: float) -> str:
