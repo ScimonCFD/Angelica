@@ -16,7 +16,7 @@ def export_solve_result_workbook(result, output_path: str) -> None:
     pressures_sheet.append(["Node", "Pressure (Pa)", "Pressure (kPa)"])
     for node_id in sorted(result.node_pressures_pa):
         pressure_pa = result.node_pressures_pa[node_id]
-        pressures_sheet.append([node_id, pressure_pa, pressure_pa / 1000.0])
+        pressures_sheet.append([node_id, round(pressure_pa, 2), round(pressure_pa / 1000.0, 4)])
 
     flows_sheet = workbook.create_sheet("Flows")
     flows_sheet.append(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"])
@@ -24,8 +24,8 @@ def export_solve_result_workbook(result, output_path: str) -> None:
         flows_sheet.append(
             [
                 component.label,
-                component.mass_flow_kg_per_s,
-                component.volumetric_flow_m3_per_h,
+                round(component.mass_flow_kg_per_s, 4),
+                round(component.volumetric_flow_m3_per_h, 4),
             ]
         )
 
@@ -80,20 +80,20 @@ def save_convergence_plot(result, output_path: str) -> None:
 
 def _print_node_table(node_pressures_pa) -> None:
     print("Node Pressures")
-    print(f"{'Node':>6}  {'Pressure (Pa)':>16}  {'Pressure (kPa)':>16}")
+    print(f"{'Node':>6}  {'Pressure (Pa)':>14}  {'Pressure (kPa)':>14}")
     for node_id in sorted(node_pressures_pa):
         pressure_pa = node_pressures_pa[node_id]
-        print(f"{node_id:>6}  {pressure_pa:>16.6f}  {pressure_pa / 1000.0:>16.6f}")
+        print(f"{node_id:>6}  {pressure_pa:>14.2f}  {pressure_pa / 1000.0:>14.4f}")
 
 
 def _print_component_table(component_flows) -> None:
     print("Component Flows")
-    print(f"{'Component':<20}  {'Mass flow (kg/s)':>18}  {'Vol. flow (m^3/h)':>20}")
+    print(f"{'Component':<20}  {'Mass flow (kg/s)':>16}  {'Vol. flow (m^3/h)':>18}")
     for component in component_flows:
         print(
             f"{component.label:<20}  "
-            f"{component.mass_flow_kg_per_s:>18.9f}  "
-            f"{component.volumetric_flow_m3_per_h:>20.9f}"
+            f"{component.mass_flow_kg_per_s:>16.4f}  "
+            f"{component.volumetric_flow_m3_per_h:>18.4f}"
         )
 
 

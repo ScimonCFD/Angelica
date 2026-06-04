@@ -194,6 +194,23 @@ class CanvasScene:
                 count += 1
         return count
 
+    def remove_node(self, node_id: int) -> list[int]:
+        """Remove a node and all links touching it. Returns the removed link IDs."""
+        if self.get_node(node_id) is None:
+            raise ValueError(f"Node {node_id} does not exist.")
+        self.nodes = [n for n in self.nodes if n.node_id != node_id]
+        removed_link_ids = [
+            link.link_id
+            for link in self.links
+            if link.start_node_id == node_id or link.end_node_id == node_id
+        ]
+        self.links = [
+            link for link in self.links
+            if link.start_node_id != node_id and link.end_node_id != node_id
+        ]
+        self.initial_node_pressures_pa.pop(node_id, None)
+        return removed_link_ids
+
     def clear(self) -> None:
         self.nodes.clear()
         self.links.clear()

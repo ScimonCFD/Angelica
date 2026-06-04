@@ -152,12 +152,43 @@ class NetSimGui:
         ("Max nodal mass imbalance (kg/s)", "max_nodal_mass_imbalance_kg_per_s"),
         ("Max abs flow (kg/s)", "mass_flow_max_abs_kg_per_s"),
     )
+    UNIT_SYSTEMS: dict[str, dict] = {
+        "si": {
+            "name": "SI  (m · Pa · kg/s)",
+            "quantities": {
+                "pressure":      ("Pa",   1.0),
+                "flow":          ("kg/s", 1.0),
+                "length":        ("m",    1.0),
+                "diameter":      ("m",    1.0),
+                "roughness":     ("m",    1.0),
+                "height_change": ("m",    1.0),
+            },
+        },
+        "us": {
+            "name": "US Customary  (ft · psi · lb/s)",
+            "quantities": {
+                "pressure":      ("psi",  1.0 / 6894.757),
+                "flow":          ("lb/s", 1.0 / 0.453592),
+                "length":        ("ft",   1.0 / 0.3048),
+                "diameter":      ("in",   1.0 / 0.0254),
+                "roughness":     ("in",   1.0 / 0.0254),
+                "height_change": ("ft",   1.0 / 0.3048),
+            },
+        },
+    }
+    _FIELD_QUANTITY: dict[str, str] = {
+        "length_m":        "length",
+        "diameter_m":      "diameter",
+        "roughness_m":     "roughness",
+        "height_change_m": "height_change",
+    }
 
     def __init__(self) -> None:
         self.scene = CanvasScene()
         self.drag_source_node_id: int | None = None
         self.drag_line_id: int | None = None
         self.moving_node_id: int | None = None
+        self.selected_node_id: int | None = None
         self.middle_pan_anchor: tuple[float, float] | None = None
         self.view_offset_x = 0.0
         self.view_offset_y = 0.0
@@ -167,6 +198,7 @@ class NetSimGui:
         self.convergence_window: tk.Toplevel | None = None
         self.convergence_canvas: tk.Canvas | None = None
         self._dark = False
+        self._unit_system_key = "si"
         self.root = tk.Tk()
         sv_ttk.set_theme("light")
         self.root.title("Angelica GUI")
@@ -239,6 +271,10 @@ class NetSimGui:
         view_menu = tk.Menu(menu_bar, tearoff=False)
         view_menu.add_command(label="Toggle Dark / Light Theme", command=self._toggle_theme)
         menu_bar.add_cascade(label="View", menu=view_menu)
+
+        settings_menu = tk.Menu(menu_bar, tearoff=False)
+        settings_menu.add_command(label="Unit System…", command=self._open_unit_system_dialog)
+        menu_bar.add_cascade(label="Settings", menu=settings_menu)
 
         self.root.config(menu=menu_bar)
 
@@ -355,6 +391,8 @@ class NetSimGui:
         self.canvas.bind("<MouseWheel>", self._on_canvas_scroll)
         self.canvas.bind("<Button-4>", self._on_canvas_scroll)
         self.canvas.bind("<Button-5>", self._on_canvas_scroll)
+        self.root.bind("<Delete>", self._on_delete_key)
+        self.root.bind("<BackSpace>", self._on_delete_key)
 
         status = ttk.Label(
             self.root,
@@ -376,6 +414,7 @@ class NetSimGui:
         self.drag_source_node_id = None
         self.drag_line_id = None
         self.moving_node_id = None
+        self.selected_node_id = None
         self.middle_pan_anchor = None
         self.view_offset_x = 0.0
         self.view_offset_y = 0.0
@@ -408,6 +447,7 @@ class NetSimGui:
         self.drag_source_node_id = None
         self.drag_line_id = None
         self.moving_node_id = None
+        self.selected_node_id = None
         self.middle_pan_anchor = None
         self.view_offset_x = 0.0
         self.view_offset_y = 0.0
@@ -1041,6 +1081,84 @@ class NetSimGui:
         )
         dialog.destroy()
 
+    def _open_unit_system_dialog(self) -> None:
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Unit System")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+
+        frame = ttk.Frame(dialog, padding=16)
+        frame.pack(fill="both", expand=True)
+
+        unit_var = tk.StringVar(value=self._unit_system_key)
+        for row, (key, info) in enumerate(self.UNIT_SYSTEMS.items()):
+            ttk.Radiobutton(
+                frame,
+                text=info["name"],
+                value=key,
+                variable=unit_var,
+            ).grid(row=row, column=0, sticky="w", pady=4)
+
+        button_row = ttk.Frame(frame)
+        button_row.grid(row=len(self.UNIT_SYSTEMS), column=0, sticky="e", pady=(12, 0))
+        ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
+        ttk.Button(
+            button_row,
+            text="Apply",
+            command=lambda: self._apply_unit_system(unit_var.get(), dialog),
+        ).pack(side="right", padx=(0, 8))
+
+        dialog.update_idletasks()
+        dialog.wait_visibility()
+        dialog.grab_set()
+        dialog.focus_set()
+
+    def _apply_unit_system(self, key: str, dialog: tk.Toplevel) -> None:
+        self._unit_system_key = key
+        self._redraw_scene()
+        self.status_var.set(f"Unit system: {self.UNIT_SYSTEMS[key]['name']}.")
+        dialog.destroy()
+
+    def _unit_quantities(self) -> dict:
+        return self.UNIT_SYSTEMS[self._unit_system_key]["quantities"]
+
+    def _unit_label(self, quantity: str) -> str:
+        return self._unit_quantities()[quantity][0]
+
+    @staticmethod
+    def _fmt(value: float) -> str:
+        """European format: period thousands separator, comma decimal, 2 decimal places."""
+        s = f"{value:,.2f}"
+        return s.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+
+    def _si_to_display(self, si_str: str, quantity: str) -> str:
+        if not si_str.strip():
+            return si_str
+        try:
+            si_val = float(si_str)
+        except ValueError:
+            return si_str
+        _unit, factor = self._unit_quantities()[quantity]
+        return f"{si_val * factor:.6g}"
+
+    def _display_to_si(self, display_str: str, quantity: str) -> str:
+        if not display_str.strip():
+            return display_str
+        try:
+            display_val = float(display_str)
+        except ValueError:
+            return display_str
+        _unit, factor = self._unit_quantities()[quantity]
+        return repr(display_val / factor)
+
+    def _field_from_si(self, field_name: str, si_str: str) -> str:
+        quantity = self._FIELD_QUANTITY.get(field_name)
+        return self._si_to_display(si_str, quantity) if quantity else si_str
+
+    def _field_to_si(self, field_name: str, display_str: str) -> str:
+        quantity = self._FIELD_QUANTITY.get(field_name)
+        return self._display_to_si(display_str, quantity) if quantity else display_str
+
     def _refresh_global_summaries(self) -> None:
         self.material_summary_var.set(self._material_summary_text())
         self.pressure_drop_summary_var.set(self._pressure_drop_summary_text())
@@ -1108,7 +1226,73 @@ class NetSimGui:
             f"velocity={velocity_method_name} ({velocity_max_iterations})"
         )
 
+    def _validate_scene(self) -> list[str]:
+        errors: list[str] = []
+        scene = self.scene
+
+        if not scene.nodes:
+            return ["The network has no nodes."]
+        if not scene.links:
+            return ["The network has no connections between nodes."]
+
+        # adjacency map from canvas node IDs only (no internal solver nodes)
+        adjacency: dict[int, set[int]] = {node.node_id: set() for node in scene.nodes}
+        linked_ids: set[int] = set()
+        for link in scene.links:
+            linked_ids.add(link.start_node_id)
+            linked_ids.add(link.end_node_id)
+            adjacency[link.start_node_id].add(link.end_node_id)
+            adjacency[link.end_node_id].add(link.start_node_id)
+
+        # isolated nodes (not in any link)
+        for node in scene.nodes:
+            if node.node_id not in linked_ids:
+                errors.append(
+                    f"{node.node_type.capitalize()} #{node.node_id} is not connected to any other node."
+                )
+
+        # fully connected graph — BFS from the first node
+        if not errors:
+            all_ids = {node.node_id for node in scene.nodes}
+            start = next(iter(all_ids))
+            visited: set[int] = {start}
+            queue = [start]
+            while queue:
+                current = queue.pop()
+                for neighbor in adjacency[current]:
+                    if neighbor not in visited:
+                        visited.add(neighbor)
+                        queue.append(neighbor)
+            unreachable = all_ids - visited
+            if unreachable:
+                errors.append(
+                    "The network has disconnected sub-networks. "
+                    "All nodes must form a single connected graph."
+                )
+
+        # at least one pressure boundary condition
+        has_pressure_bc = any(
+            node.node_type in {"source", "sink"}
+            and node.properties.get("condition_type", "pressure") == "pressure"
+            for node in scene.nodes
+        )
+        if not has_pressure_bc:
+            errors.append(
+                "No pressure boundary condition found. "
+                "At least one source or sink must have a fixed pressure."
+            )
+
+        return errors
+
     def _run_simulation(self) -> None:
+        errors = self._validate_scene()
+        if errors:
+            messagebox.showerror(
+                "Cannot run simulation",
+                "\n\n".join(f"• {e}" for e in errors),
+            )
+            return
+
         try:
             case = self._build_network_case_from_scene()
         except ValueError as exc:
@@ -1172,15 +1356,24 @@ class NetSimGui:
             return
 
         if node_id is None:
+            if self.selected_node_id is not None:
+                self.selected_node_id = None
+                self._redraw_scene()
             return
 
         node = self.scene.get_node(node_id)
         if node is None:
             return
 
+        prev_selected = self.selected_node_id
+        self.selected_node_id = node_id
         self.moving_node_id = node_id
+        self.canvas.focus_set()
+        if self.selected_node_id != prev_selected:
+            self._redraw_scene()
         self.status_var.set(
-            f"Moving {node.node_type} #{node.node_id}. Drag with left mouse button."
+            f"Selected {node.node_type} #{node.node_id}. "
+            "Drag to move · Delete/Backspace to remove."
         )
 
     def _on_canvas_right_press(self, event: tk.Event) -> None:
@@ -1270,6 +1463,29 @@ class NetSimGui:
         self.view_scale *= factor
         self._redraw_scene()
 
+    def _on_delete_key(self, _event: tk.Event) -> None:
+        # Ignore if a dialog or entry widget has focus
+        focused = self.root.focus_get()
+        if focused is not None and focused is not self.canvas and focused is not self.root:
+            return
+        self._delete_selected_node()
+
+    def _delete_selected_node(self) -> None:
+        if self.selected_node_id is None:
+            return
+        node = self.scene.get_node(self.selected_node_id)
+        if node is None:
+            self.selected_node_id = None
+            return
+        node_id = self.selected_node_id
+        node_type = node.node_type
+        self.scene.remove_node(node_id)
+        self.selected_node_id = None
+        self.latest_boundary_results = {}
+        self.latest_result = None
+        self._redraw_scene()
+        self.status_var.set(f"Deleted {node_type} #{node_id} and its connections.")
+
     def _on_canvas_release(self, event: tk.Event) -> None:
         if self.moving_node_id is not None:
             moved_node = self.scene.get_node(self.moving_node_id)
@@ -1357,7 +1573,8 @@ class NetSimGui:
             )
 
     def _draw_node(self, node: CanvasNode) -> None:
-        radius = 24
+        s = self.view_scale
+        radius = max(8, round(24 * s))
         canvas_x, canvas_y = self._scene_to_canvas(node.x, node.y)
         x0 = canvas_x - radius
         y0 = canvas_y - radius
@@ -1366,6 +1583,7 @@ class NetSimGui:
 
         fill_color = self._node_fill(node.node_type)
         label = self._node_label(node)
+        is_selected = node.node_id == self.selected_node_id
 
         node_tag = f"node_{node.node_id}"
 
@@ -1375,24 +1593,24 @@ class NetSimGui:
             x1,
             y1,
             fill=fill_color,
-            outline=self._t["node_outline"],
-            width=2,
+            outline="#ffcc00" if is_selected else self._t["node_outline"],
+            width=max(2, round(3 * s)) if is_selected else max(1, round(2 * s)),
             tags=(node_tag, "node"),
         )
         self.canvas.create_text(
             canvas_x,
-            canvas_y - 2,
+            canvas_y - round(2 * s),
             text=label,
             fill=self._t["node_text"],
-            font=("TkDefaultFont", 9, "bold"),
+            font=("TkDefaultFont", max(6, round(9 * s)), "bold"),
             tags=(node_tag, "node"),
         )
         self.canvas.create_text(
             canvas_x,
-            canvas_y + 12,
+            canvas_y + round(12 * s),
             text=str(node.node_id),
             fill=self._t["node_text"],
-            font=("TkDefaultFont", 8),
+            font=("TkDefaultFont", max(5, round(8 * s))),
             tags=(node_tag, "node"),
         )
 
@@ -1400,9 +1618,9 @@ class NetSimGui:
         if summary:
             self.canvas.create_text(
                 canvas_x,
-                canvas_y + 40,
+                canvas_y + round(40 * s),
                 text=summary,
-                font=("TkDefaultFont", 8),
+                font=("TkDefaultFont", max(5, round(8 * s))),
                 fill=self._t["node_summary"],
                 justify="center",
                 tags=(node_tag, "node"),
@@ -1495,14 +1713,14 @@ class NetSimGui:
                 variable=condition_var,
             ).pack(side="left")
 
-            ttk.Label(container, text="Pressure (Pa)").grid(row=1, column=0, sticky="w", pady=4)
-            pressure_var = tk.StringVar(value=node.properties.get("pressure", ""))
+            ttk.Label(container, text=f"Pressure ({self._unit_label('pressure')})").grid(row=1, column=0, sticky="w", pady=4)
+            pressure_var = tk.StringVar(value=self._si_to_display(node.properties.get("pressure", ""), "pressure"))
             pressure_entry = ttk.Entry(container, textvariable=pressure_var, width=20)
             pressure_entry.grid(row=1, column=1, sticky="ew", pady=4)
             entries["pressure"] = pressure_var
 
-            ttk.Label(container, text="Flow (kg/s)").grid(row=2, column=0, sticky="w", pady=4)
-            flow_var = tk.StringVar(value=node.properties.get("flow", ""))
+            ttk.Label(container, text=f"Flow ({self._unit_label('flow')})").grid(row=2, column=0, sticky="w", pady=4)
+            flow_var = tk.StringVar(value=self._si_to_display(node.properties.get("flow", ""), "flow"))
             flow_entry = ttk.Entry(container, textvariable=flow_var, width=20)
             flow_entry.grid(row=2, column=1, sticky="ew", pady=4)
             entries["flow"] = flow_var
@@ -1619,11 +1837,185 @@ class NetSimGui:
 
         button_row = ttk.Frame(container)
         button_row.grid(row=2, column=0, columnspan=3, sticky="e", pady=(12, 0))
-        ttk.Button(button_row, text="Close", command=dialog.destroy).pack(side="right")
+        ttk.Button(button_row, text="Close", command=dialog.destroy).pack(side="right", padx=(6, 0))
+        ttk.Button(
+            button_row,
+            text="Pressure Profile",
+            command=lambda: self._show_link_pressure_profile(link),
+            state="normal" if self.latest_boundary_results else "disabled",
+        ).pack(side="right")
 
         dialog.update_idletasks()
         dialog.grab_set()
         dialog.focus_set()
+
+    def _link_node_sequence(self, link) -> list[int]:
+        """Return [start, internal_1, ..., end] node IDs matching solver result indices."""
+        next_id = max(node.node_id for node in self.scene.nodes) + 1
+        for scene_link in self.scene.links:
+            node_ids: list[int] = [scene_link.start_node_id]
+            for comp_idx, _comp in enumerate(scene_link.components):
+                is_last = comp_idx == len(scene_link.components) - 1
+                end = scene_link.end_node_id if is_last else next_id
+                if not is_last:
+                    next_id += 1
+                node_ids.append(end)
+            if scene_link.link_id == link.link_id:
+                return node_ids
+        return [link.start_node_id, link.end_node_id]
+
+    def _show_link_pressure_profile(self, link) -> None:
+        win = tk.Toplevel(self.root)
+        win.title(f"Pressure Profile — Connection #{link.link_id}")
+        win.geometry("760x440")
+
+        frame = ttk.Frame(win, padding=10)
+        frame.pack(fill="both", expand=True)
+
+        plot_canvas = tk.Canvas(
+            frame,
+            background=self._t["plot_bg"],
+            highlightthickness=1,
+            highlightbackground=self._t["canvas_hl"],
+        )
+        plot_canvas.pack(fill="both", expand=True)
+        plot_canvas.bind(
+            "<Configure>",
+            lambda _event: self._draw_pressure_profile_plot(plot_canvas, link),
+        )
+
+        win.transient(self.root)
+        win.grab_set()
+        win.focus_set()
+        win.update_idletasks()
+        self._draw_pressure_profile_plot(plot_canvas, link)
+
+    def _draw_pressure_profile_plot(self, canvas: tk.Canvas, link) -> None:
+        canvas.delete("all")
+        W = int(canvas.winfo_width() or 720)
+        H = int(canvas.winfo_height() or 380)
+
+        ML, MR, MT, MB = 75, 20, 20, 50
+        plot_w = W - ML - MR
+        plot_h = H - MT - MB
+
+        if plot_w < 100 or plot_h < 80:
+            return
+
+        node_ids = self._link_node_sequence(link)
+        results = self.latest_boundary_results
+
+        if not results or not all(nid in results for nid in node_ids):
+            canvas.create_text(
+                W // 2, H // 2,
+                text="Run the solver first to see the pressure profile.",
+                fill=self._t["plot_muted"],
+                font=("TkDefaultFont", 11),
+                anchor="center",
+            )
+            return
+
+        p_unit = self._unit_label("pressure")
+        _, p_factor = self._unit_quantities()["pressure"]
+
+        pressures_disp = [results[nid]["pressure_pa"] * p_factor for nid in node_ids]
+
+        # cumulative distance: pipes contribute length_m; fittings and pumps are point elements
+        cum_dist: list[float] = [0.0]
+        for comp in link.components:
+            if comp.component_type == "pipe":
+                try:
+                    length = float(comp.properties.get("length_m", "0") or "0")
+                except ValueError:
+                    length = 0.0
+                cum_dist.append(cum_dist[-1] + length)
+            else:
+                cum_dist.append(cum_dist[-1])
+
+        x_max = max(cum_dist) if max(cum_dist) > 0 else 1.0
+        x_min = 0.0
+
+        p_min = min(pressures_disp)
+        p_max = max(pressures_disp)
+        p_span = p_max - p_min
+        if p_span < 1e-10:
+            p_span = max(abs(p_max) * 0.1, 1.0)
+        pad = p_span * 0.08
+        p_lo = p_min - pad
+        p_hi = p_max + pad
+        p_span = p_hi - p_lo
+
+        def _cx(x): return ML + (x - x_min) / (x_max - x_min) * plot_w
+        def _cy(p): return MT + plot_h - (p - p_lo) / p_span * plot_h
+
+        # plot border
+        canvas.create_rectangle(ML, MT, ML + plot_w, MT + plot_h,
+                                 outline=self._t["plot_axis"], width=1)
+
+        # horizontal grid + y-tick labels
+        for i in range(6):
+            p_val = p_lo + i / 5 * p_span
+            y = _cy(p_val)
+            canvas.create_line(ML, y, ML + plot_w, y, fill=self._t["plot_grid"])
+            canvas.create_text(ML - 6, y, text=f"{p_val:.4g}", anchor="e",
+                                font=("TkDefaultFont", 8), fill=self._t["plot_text"])
+
+        # vertical grid + x-tick labels
+        for i in range(6):
+            x_val = x_min + i / 5 * (x_max - x_min)
+            x = _cx(x_val)
+            canvas.create_line(x, MT, x, MT + plot_h, fill=self._t["plot_grid"])
+            canvas.create_text(x, MT + plot_h + 4, text=f"{x_val:.4g}", anchor="n",
+                                font=("TkDefaultFont", 8), fill=self._t["plot_text"])
+
+        # axes
+        canvas.create_line(ML, MT, ML, MT + plot_h, fill=self._t["plot_axis"], width=1.5)
+        canvas.create_line(ML, MT + plot_h, ML + plot_w, MT + plot_h,
+                            fill=self._t["plot_axis"], width=1.5)
+
+        # axis labels
+        canvas.create_text(ML + plot_w // 2, MT + plot_h + 36,
+                            text="Cumulative distance (m)", anchor="s",
+                            font=("TkDefaultFont", 9), fill=self._t["plot_text"])
+        canvas.create_text(12, MT + plot_h // 2,
+                            text=f"Pressure ({p_unit})", anchor="center",
+                            font=("TkDefaultFont", 9), fill=self._t["plot_text"],
+                            angle=90)
+
+        pipe_color = self._t["plot_laminar"]
+        fitting_color = "#e69c00"
+        pump_color = self._t["plot_turbulent"]
+
+        legend_seen: dict[str, tuple[str, tuple]] = {}
+
+        for i, comp in enumerate(link.components):
+            x0c, y0c = _cx(cum_dist[i]), _cy(pressures_disp[i])
+            x1c, y1c = _cx(cum_dist[i + 1]), _cy(pressures_disp[i + 1])
+
+            if comp.component_type == "pipe":
+                canvas.create_line(x0c, y0c, x1c, y1c, fill=pipe_color, width=2)
+                legend_seen.setdefault("Pipe", (pipe_color, ()))
+            elif comp.component_type == "fitting":
+                canvas.create_line(x0c, y0c, x0c, y1c, fill=fitting_color, width=2, dash=(6, 3))
+                legend_seen.setdefault("Fitting", (fitting_color, (6, 3)))
+            elif comp.component_type == "pump":
+                canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
+                legend_seen.setdefault("Pump", (pump_color, (6, 3)))
+
+        # node boundary dots
+        for x_m, p_d in zip(cum_dist, pressures_disp):
+            xc, yc = _cx(x_m), _cy(p_d)
+            r = 4
+            canvas.create_oval(xc - r, yc - r, xc + r, yc + r,
+                                 fill=self._t["plot_text"], outline=self._t["plot_axis"], width=1)
+
+        # legend (top-left of plot area)
+        lx, ly = ML + 10, MT + 10
+        for label, (color, dash) in legend_seen.items():
+            canvas.create_line(lx, ly + 5, lx + 22, ly + 5, fill=color, width=2, dash=dash)
+            canvas.create_text(lx + 27, ly + 5, text=label, anchor="w",
+                                font=("TkDefaultFont", 9), fill=self._t["plot_text"])
+            ly += 20
 
     def _add_component_to_link(
         self,
@@ -1695,7 +2087,7 @@ class NetSimGui:
             ttk.Label(properties_frame, text=self._pretty_field_name(key)).grid(
                 row=row, column=0, sticky="w", pady=4
             )
-            var = tk.StringVar(value=value)
+            var = tk.StringVar(value=self._field_from_si(key, value))
             ttk.Entry(properties_frame, textvariable=var, width=18).grid(
                 row=row, column=1, sticky="ew", pady=4
             )
@@ -1724,7 +2116,7 @@ class NetSimGui:
         link_id: int,
         components_list: tk.Listbox,
     ) -> None:
-        diameter_var = tk.StringVar(value=component.properties.get("diameter_m", ""))
+        diameter_var = tk.StringVar(value=self._field_from_si("diameter_m", component.properties.get("diameter_m", "")))
         mode_var = tk.StringVar(value=component.properties.get("fitting_mode", "manual"))
         preset_var = tk.StringVar(
             value=component.properties.get("fitting_preset", "regular_90_flanged")
@@ -1736,7 +2128,7 @@ class NetSimGui:
         entries["fitting_preset"] = preset_var
         entries["loss_coefficient"] = loss_var
 
-        ttk.Label(properties_frame, text="Diameter (m)").grid(
+        ttk.Label(properties_frame, text=f"Diameter ({self._unit_label('diameter')})").grid(
             row=1, column=0, sticky="w", pady=4
         )
         ttk.Entry(properties_frame, textvariable=diameter_var, width=18).grid(
@@ -1841,9 +2233,9 @@ class NetSimGui:
         link_id: int,
         components_list: tk.Listbox,
     ) -> None:
-        diameter_var = tk.StringVar(value=component.properties.get("diameter_m", ""))
+        diameter_var = tk.StringVar(value=self._field_from_si("diameter_m", component.properties.get("diameter_m", "")))
 
-        ttk.Label(properties_frame, text="Diameter (m)").grid(
+        ttk.Label(properties_frame, text=f"Diameter ({self._unit_label('diameter')})").grid(
             row=1, column=0, sticky="w", pady=4
         )
         ttk.Entry(properties_frame, textvariable=diameter_var, width=18).grid(
@@ -1887,7 +2279,7 @@ class NetSimGui:
         components_list: tk.Listbox,
         properties_frame: ttk.LabelFrame,
     ) -> None:
-        properties = {key: value.get().strip() for key, value in entries.items()}
+        properties = {key: self._field_to_si(key, value.get().strip()) for key, value in entries.items()}
         updated_link = self.scene.update_link_component_properties(
             link_id,
             component_id,
@@ -1912,7 +2304,7 @@ class NetSimGui:
         properties_frame: ttk.LabelFrame,
     ) -> None:
         properties = {
-            "diameter_m": diameter_var.get().strip(),
+            "diameter_m": self._field_to_si("diameter_m", diameter_var.get().strip()),
             "curve_points_q_head": curve_text.get("1.0", "end").strip(),
         }
         updated_link = self.scene.update_link_component_properties(
@@ -1948,7 +2340,15 @@ class NetSimGui:
         entries: dict[str, tk.StringVar],
         dialog: tk.Toplevel,
     ) -> None:
-        properties = {key: value.get().strip() for key, value in entries.items()}
+        properties: dict[str, str] = {}
+        for key, var in entries.items():
+            val = var.get().strip()
+            if key == "pressure":
+                properties[key] = self._display_to_si(val, "pressure")
+            elif key == "flow":
+                properties[key] = self._display_to_si(val, "flow")
+            else:
+                properties[key] = val
         updated_node = self.scene.update_node_properties(node_id, properties)
         self._redraw_scene()
         self.status_var.set(
@@ -1982,40 +2382,56 @@ class NetSimGui:
             return f"Pump #{display_index}"
         return f"{component.component_type.capitalize()} #{display_index}"
 
-    @staticmethod
-    def _pretty_field_name(field_name: str) -> str:
-        labels = {
-            "length_m": "Length (m)",
-            "diameter_m": "Diameter (m)",
-            "height_change_m": "Height change (m)",
-            "roughness_m": "Roughness (m)",
-            "hazen_williams_c": "Hazen-Williams C (−)",
-        }
-        return labels.get(field_name, field_name.replace("_", " ").replace(" m", " (m)").capitalize())
+    def _pretty_field_name(self, field_name: str) -> str:
+        quantity = self._FIELD_QUANTITY.get(field_name)
+        if quantity:
+            unit = self._unit_label(quantity)
+            base = {
+                "length_m": "Length",
+                "diameter_m": "Diameter",
+                "roughness_m": "Roughness",
+                "height_change_m": "Height change",
+            }[field_name]
+            return f"{base} ({unit})"
+        if field_name == "hazen_williams_c":
+            return "Hazen-Williams C (−)"
+        return field_name.replace("_", " ").capitalize()
 
     def _node_summary_text(self, node: CanvasNode) -> str:
         lines: list[str] = []
         if node.node_type in {"source", "sink"}:
             condition_type = node.properties.get("condition_type", "pressure")
+            _, p_factor = self._unit_quantities()["pressure"]
+            _, q_factor = self._unit_quantities()["flow"]
+            p_unit = self._unit_label("pressure")
+            q_unit = self._unit_label("flow")
             if condition_type == "pressure":
-                pressure = node.properties.get("pressure", "").strip()
-                if pressure:
-                    lines.append(f"P={pressure}")
+                pressure_si = node.properties.get("pressure", "").strip()
+                try:
+                    lines.append(f"P={self._fmt(float(pressure_si) * p_factor)} {p_unit}")
+                except ValueError:
+                    pass
             else:
-                flow = node.properties.get("flow", "").strip()
-                if flow:
-                    lines.append(f"Q={flow}")
+                flow_si = node.properties.get("flow", "").strip()
+                try:
+                    lines.append(f"Q={self._fmt(float(flow_si) * q_factor)} {q_unit}")
+                except ValueError:
+                    pass
 
             result_data = self.latest_boundary_results.get(node.node_id)
             if result_data is not None:
                 if condition_type == "pressure" and "flow_kg_per_s" in result_data:
-                    lines.append(f"Q={result_data['flow_kg_per_s']:.3f} kg/s")
+                    lines.append(f"Q={self._fmt(result_data['flow_kg_per_s'] * q_factor)} {q_unit}")
                 elif condition_type == "flow" and "pressure_pa" in result_data:
-                    lines.append(f"P={result_data['pressure_pa']:.1f} Pa")
+                    lines.append(f"P={self._fmt(result_data['pressure_pa'] * p_factor)} {p_unit}")
             return "\n".join(lines)
 
-        label = node.properties.get("label", "").strip()
-        return label
+        result_data = self.latest_boundary_results.get(node.node_id)
+        if result_data and "pressure_pa" in result_data:
+            _, p_factor = self._unit_quantities()["pressure"]
+            p_unit = self._unit_label("pressure")
+            return f"P={self._fmt(result_data['pressure_pa'] * p_factor)} {p_unit}"
+        return ""
 
     def _build_network_case_from_scene(self) -> NetworkCase:
         return build_network_case_from_scene(self.scene)
