@@ -1193,8 +1193,7 @@ class NetSimGui:
         return self._unit_quantities()[quantity][0]
 
     @staticmethod
-    @staticmethod
-    def _default_open_dir() -> str:
+    def _default_open_dir(self) -> str:
         """Start the Open dialog in the tutorials folder when one can be found."""
         if getattr(sys, "frozen", False):
             exe_dir = os.path.dirname(sys.executable)
