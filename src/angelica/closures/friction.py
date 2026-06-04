@@ -122,9 +122,12 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
         friction_factor_max_iterations: int = 50,
         velocity_loop_method: str = "fixed_point",
         velocity_loop_max_iterations: int = 50,
+        velocity_loop_tolerance: float | None = None,
     ) -> float:
         if tolerance is None:
             raise ValueError("ColebrookPipeCorrelation requires a tolerance value.")
+
+        v_tol = velocity_loop_tolerance if velocity_loop_tolerance is not None else tolerance
 
         initial_velocity = self._safe_velocity_guess(pipe_state.velocity_m_per_s)
         problem = NonlinearProblem(
@@ -155,7 +158,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
             velocity_loop_method,
             max_iterations=velocity_loop_max_iterations,
         )
-        solved_velocity = solver.solve(problem, initial_velocity, tolerance)
+        solved_velocity = solver.solve(problem, initial_velocity, v_tol)
         self._assign_pipe_state(
             pipe_state,
             solved_velocity,

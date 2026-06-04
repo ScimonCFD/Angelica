@@ -152,7 +152,7 @@ class NetSimGui:
         ("Mean abs pressure correction (Pa)", "pressure_correction_mean_abs_pa"),
         ("Max rel pressure correction", "pressure_correction_rel"),
         ("Max nodal mass imbalance (kg/s)", "max_nodal_mass_imbalance_kg_per_s"),
-        ("Max abs flow (kg/s)", "mass_flow_max_abs_kg_per_s"),
+        ("Max rel mass imbalance (−)", "max_nodal_mass_imbalance_rel"),
     )
     UNIT_SYSTEMS: dict[str, dict] = {
         "si": {
@@ -663,6 +663,12 @@ class NetSimGui:
         current_friction_method = str(
             self.scene.solver_settings.get("friction_factor_method", "newton")
         )
+        current_colebrook_tol = str(
+            self.scene.solver_settings.get("colebrook_residual_tolerance", "0.0001")
+        )
+        current_velocity_loop_tol = str(
+            self.scene.solver_settings.get("velocity_loop_tolerance", "0.0001")
+        )
 
         alpha_var = tk.StringVar(master=dialog, value=current_alpha)
         friction_max_iterations_var = tk.StringVar(
@@ -679,6 +685,8 @@ class NetSimGui:
             value=current_velocity_max_iterations,
         )
         friction_method_var = tk.StringVar(master=dialog, value=current_friction_method)
+        colebrook_tol_var = tk.StringVar(master=dialog, value=current_colebrook_tol)
+        velocity_loop_tol_var = tk.StringVar(master=dialog, value=current_velocity_loop_tol)
         laminar_iterations_var = tk.StringVar(
             master=dialog,
             value=current_laminar_iterations,
@@ -815,6 +823,20 @@ class NetSimGui:
         )
         friction_max_iterations_entry.grid(row=10, column=1, sticky="ew", pady=4)
 
+        ttk.Label(frame, text="f Loop Tolerance").grid(
+            row=11, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=colebrook_tol_var, width=26).grid(
+            row=11, column=1, sticky="ew", pady=4
+        )
+
+        ttk.Label(frame, text="V* Loop Tolerance").grid(
+            row=12, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=velocity_loop_tol_var, width=26).grid(
+            row=12, column=1, sticky="ew", pady=4
+        )
+
         def apply_velocity_method_selection(_event: tk.Event | None = None) -> None:
             velocity_name_var.set(
                 self.VELOCITY_LOOP_METHOD_LIBRARY[velocity_method_var.get()]["name"]
@@ -835,7 +857,7 @@ class NetSimGui:
         friction_method_box.bind("<<ComboboxSelected>>", apply_friction_method_selection)
 
         button_row = ttk.Frame(frame)
-        button_row.grid(row=11, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=13, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
         ttk.Button(
             button_row,
@@ -850,6 +872,8 @@ class NetSimGui:
                 friction_max_iterations_var,
                 velocity_method_var,
                 velocity_max_iterations_var,
+                colebrook_tol_var,
+                velocity_loop_tol_var,
             ),
         ).pack(side="right", padx=(0, 8))
 
@@ -940,6 +964,8 @@ class NetSimGui:
         friction_max_iterations_var: tk.StringVar,
         velocity_method_var: tk.StringVar,
         velocity_max_iterations_var: tk.StringVar,
+        colebrook_tol_var: tk.StringVar,
+        velocity_loop_tol_var: tk.StringVar,
     ) -> None:
         laminar_iterations_text = laminar_iterations_var.get().strip()
         if laminar_iterations_text:
@@ -1062,6 +1088,42 @@ class NetSimGui:
             )
             return
 
+        try:
+            colebrook_tol = float(colebrook_tol_var.get().strip())
+        except ValueError:
+            messagebox.showerror(
+                "Invalid numerics",
+                "f loop tolerance must be a valid number.",
+                parent=dialog,
+            )
+            return
+
+        if colebrook_tol <= 0.0:
+            messagebox.showerror(
+                "Invalid numerics",
+                "f loop tolerance must be greater than zero.",
+                parent=dialog,
+            )
+            return
+
+        try:
+            velocity_loop_tol = float(velocity_loop_tol_var.get().strip())
+        except ValueError:
+            messagebox.showerror(
+                "Invalid numerics",
+                "V* loop tolerance must be a valid number.",
+                parent=dialog,
+            )
+            return
+
+        if velocity_loop_tol <= 0.0:
+            messagebox.showerror(
+                "Invalid numerics",
+                "V* loop tolerance must be greater than zero.",
+                parent=dialog,
+            )
+            return
+
         self.scene.update_solver_settings(
             {
                 "laminar_iterations": laminar_iterations,
@@ -1072,6 +1134,8 @@ class NetSimGui:
                 "friction_factor_max_iterations": friction_max_iterations,
                 "velocity_loop_method": velocity_method,
                 "velocity_loop_max_iterations": velocity_max_iterations,
+                "colebrook_residual_tolerance": colebrook_tol,
+                "velocity_loop_tolerance": velocity_loop_tol,
             }
         )
         self._refresh_global_summaries()
@@ -1079,12 +1143,8 @@ class NetSimGui:
             "Numerics updated: "
             f"laminar={'auto' if laminar_iterations is None else laminar_iterations}, "
             f"turbulent={turbulent_iterations}, "
-            f"Explicit relaxation (alpha={alpha:g}), "
-            f"Colebrook={self.COLEBROOK_FRICTION_STRATEGY_LIBRARY[colebrook_strategy]['name']}, "
-            f"{self.FRICTION_FACTOR_METHOD_LIBRARY[friction_method]['name']} "
-            f"(max={friction_max_iterations}) for friction, "
-            f"{self.VELOCITY_LOOP_METHOD_LIBRARY[velocity_method]['name']} "
-            f"(max={velocity_max_iterations})."
+            f"alpha={alpha:g}, "
+            f"f-tol={colebrook_tol:g}, V*-tol={velocity_loop_tol:g}."
         )
         dialog.destroy()
 
@@ -1253,13 +1313,16 @@ class NetSimGui:
             "velocity_loop_max_iterations",
             50,
         )
+        colebrook_tol = self.scene.solver_settings.get("colebrook_residual_tolerance", 1e-4)
+        velocity_loop_tol = self.scene.solver_settings.get("velocity_loop_tolerance", 1e-4)
         return (
             f"laminar={'auto' if laminar_iterations is None else laminar_iterations}\n"
             f"turbulent={turbulent_iterations}\n"
             f"Explicit\nalpha={alpha}\n"
             f"colebrook={colebrook_strategy_name}\n"
             f"friction={friction_method_name} ({friction_max_iterations})\n"
-            f"velocity={velocity_method_name} ({velocity_max_iterations})"
+            f"velocity={velocity_method_name} ({velocity_max_iterations})\n"
+            f"f-tol={colebrook_tol:g}  V*-tol={velocity_loop_tol:g}"
         )
 
     def _validate_scene(self) -> list[str]:

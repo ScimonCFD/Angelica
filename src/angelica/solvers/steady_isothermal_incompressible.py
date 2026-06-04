@@ -139,14 +139,14 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             history.append(correction_abs)
             self._update_velocities(network_state, fluid_model, laminar=True)
             self._update_mass_flows(network_state, fluid_model)
-            max_mass_imbalance = self._compute_max_nodal_mass_imbalance(network_state)
+            max_mass_imbalance, max_mass_imbalance_rel = self._compute_max_nodal_mass_imbalance(network_state)
             metrics_history.append(
                 self._build_iteration_metrics(
-                    network_state,
                     correction_abs,
                     correction_mean_abs,
                     correction_rel,
                     max_mass_imbalance,
+                    max_mass_imbalance_rel,
                 )
             )
             if progress_callback is not None:
@@ -191,14 +191,14 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             history.append(correction_abs)
             self._update_velocities(network_state, fluid_model, laminar=False)
             self._update_mass_flows(network_state, fluid_model)
-            max_mass_imbalance = self._compute_max_nodal_mass_imbalance(network_state)
+            max_mass_imbalance, max_mass_imbalance_rel = self._compute_max_nodal_mass_imbalance(network_state)
             metrics_history.append(
                 self._build_iteration_metrics(
-                    network_state,
                     correction_abs,
                     correction_mean_abs,
                     correction_rel,
                     max_mass_imbalance,
+                    max_mass_imbalance_rel,
                 )
             )
             if progress_callback is not None:
@@ -213,6 +213,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
                     or correction_rel <= self.settings.pressure_correction_rel_tolerance
                 )
                 and max_mass_imbalance <= self.settings.nodal_mass_imbalance_tolerance_kg_per_s
+                and max_mass_imbalance_rel <= self.settings.nodal_mass_imbalance_rel_tolerance
             ):
                 converged = True
                 break
@@ -225,24 +226,18 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
 
     def _build_iteration_metrics(
         self,
-        network_state,
         correction_abs: float,
         correction_mean_abs: float,
         correction_rel: float,
         max_mass_imbalance: float,
+        max_mass_imbalance_rel: float,
     ) -> IterationMetrics:
-        abs_mass_flows = [abs(float(link.mass_flow_kg_per_s)) for link in network_state.components]
-        if abs_mass_flows:
-            mass_flow_max = max(abs_mass_flows)
-        else:
-            mass_flow_max = 0.0
-
         return IterationMetrics(
             pressure_correction_abs_pa=correction_abs,
             pressure_correction_mean_abs_pa=correction_mean_abs,
             pressure_correction_rel=correction_rel,
             max_nodal_mass_imbalance_kg_per_s=max_mass_imbalance,
-            mass_flow_max_abs_kg_per_s=mass_flow_max,
+            max_nodal_mass_imbalance_rel=max_mass_imbalance_rel,
         )
 
     def _update_velocities(self, network_state, fluid_model, laminar: bool) -> None:
@@ -273,6 +268,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
                         self.settings.friction_factor_max_iterations,
                         self.settings.velocity_loop_method,
                         self.settings.velocity_loop_max_iterations,
+                        self.settings.velocity_loop_tolerance,
                     )
             elif isinstance(link_state, FittingState):
                 link_state.velocity_m_per_s = correlation.calculate_velocity(
@@ -339,16 +335,28 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         mean_abs_correction = sum(abs_corrections) / len(abs_corrections)
         return max_abs_value(scaled_correction), mean_abs_correction, max(relative_corrections)
 
-    def _compute_max_nodal_mass_imbalance(self, network_state) -> float:
+    def _compute_max_nodal_mass_imbalance(self, network_state) -> tuple[float, float]:
+        """Return (max_abs_imbalance_kg_per_s, max_rel_imbalance) across junction nodes."""
         imbalance_by_node = {node_id: 0.0 for node_id in network_state.nodes}
+        throughput_by_node = {node_id: 0.0 for node_id in network_state.nodes}
 
         for link_state in network_state.components:
             mass_flow = float(link_state.mass_flow_kg_per_s)
+            abs_flow = abs(mass_flow)
             imbalance_by_node[link_state.start_node.node_id] -= mass_flow
             imbalance_by_node[link_state.end_node.node_id] += mass_flow
+            throughput_by_node[link_state.start_node.node_id] += abs_flow
+            throughput_by_node[link_state.end_node.node_id] += abs_flow
 
+        max_abs = 0.0
+        max_rel = 0.0
         for node_id, node_state in network_state.nodes.items():
             if node_state.is_boundary:
-                imbalance_by_node[node_id] = 0.0
+                continue
+            imbalance = abs(imbalance_by_node[node_id])
+            throughput = throughput_by_node[node_id]
+            max_abs = max(max_abs, imbalance)
+            # rel = |m_in - m_out| / (m_in + m_out); throughput = m_in + m_out
+            max_rel = max(max_rel, imbalance / max(throughput, 1e-10))
 
-        return max(abs(imbalance) for imbalance in imbalance_by_node.values())
+        return max_abs, max_rel
