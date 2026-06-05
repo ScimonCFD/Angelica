@@ -2181,12 +2181,38 @@ class NetSimGui:
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
                 legend_seen.setdefault("Pump", (pump_color, (6, 3)))
 
-        # node boundary dots
-        for x_m, p_d in zip(cum_dist, pressures_disp):
+        # markers: filled circle at start/end, × at intermediate device boundaries
+        n_nodes = len(cum_dist)
+        for idx, (x_m, p_d) in enumerate(zip(cum_dist, pressures_disp)):
             xc, yc = _cx(x_m), _cy(p_d)
-            r = 4
-            canvas.create_oval(xc - r, yc - r, xc + r, yc + r,
-                                 fill=self._t["plot_text"], outline=self._t["plot_axis"], width=1)
+            if idx == 0 or idx == n_nodes - 1:
+                r = 4
+                canvas.create_oval(xc - r, yc - r, xc + r, yc + r,
+                                   fill=self._t["plot_text"],
+                                   outline=self._t["plot_axis"], width=1)
+            else:
+                r = 5
+                canvas.create_line(xc - r, yc - r, xc + r, yc + r,
+                                   fill=self._t["plot_axis"], width=2)
+                canvas.create_line(xc + r, yc - r, xc - r, yc + r,
+                                   fill=self._t["plot_axis"], width=2)
+
+        # segment type labels (midpoint of each component's x-range)
+        for i, comp in enumerate(link.components):
+            if comp.component_type == "pipe":
+                mid_x = _cx(0.5 * (cum_dist[i] + cum_dist[i + 1]))
+                mid_y = _cy(0.5 * (pressures_disp[i] + pressures_disp[i + 1]))
+                canvas.create_text(mid_x, mid_y - 9, text="pipe",
+                                   anchor="s", font=("TkDefaultFont", 7),
+                                   fill=pipe_color)
+            else:
+                lbl = "pump" if comp.component_type == "pump" else "fitting"
+                clr = pump_color if comp.component_type == "pump" else fitting_color
+                mid_y = _cy(0.5 * (pressures_disp[i] + pressures_disp[i + 1]))
+                lbl_x = _cx(cum_dist[i]) + 7
+                canvas.create_text(lbl_x, mid_y, text=lbl,
+                                   anchor="w", font=("TkDefaultFont", 7),
+                                   fill=clr)
 
         # legend (top-left of plot area)
         lx, ly = ML + 10, MT + 10
