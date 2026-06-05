@@ -820,14 +820,14 @@ class NetSimGui:
         )
         friction_max_iterations_entry.grid(row=10, column=1, sticky="ew", pady=4)
 
-        ttk.Label(frame, text="f Loop Tolerance").grid(
+        ttk.Label(frame, text="f Loop Tolerance (−)").grid(
             row=11, column=0, sticky="w", padx=(0, 8), pady=4
         )
         ttk.Entry(frame, textvariable=colebrook_tol_var, width=26).grid(
             row=11, column=1, sticky="ew", pady=4
         )
 
-        ttk.Label(frame, text="V* Loop Tolerance").grid(
+        ttk.Label(frame, text="V* Loop Tolerance (m/s)").grid(
             row=12, column=0, sticky="w", padx=(0, 8), pady=4
         )
         ttk.Entry(frame, textvariable=velocity_loop_tol_var, width=26).grid(
@@ -848,7 +848,7 @@ class NetSimGui:
             row=15, column=1, sticky="ew", pady=4
         )
 
-        ttk.Label(frame, text="Continuity Tol (rel)").grid(
+        ttk.Label(frame, text="Continuity Tol (−)").grid(
             row=16, column=0, sticky="w", padx=(0, 8), pady=4
         )
         ttk.Entry(frame, textvariable=continuity_tol_var, width=26).grid(
@@ -1399,10 +1399,10 @@ class NetSimGui:
             f"colebrook={colebrook_strategy_name}\n"
             f"friction={friction_method_name} ({friction_max_iterations})\n"
             f"velocity={velocity_method_name} ({velocity_max_iterations})\n"
-            f"f-tol={self._fmt_sci(colebrook_tol)}\n"
-            f"V*-tol={self._fmt_sci(velocity_loop_tol)}\n"
+            f"f-tol={self._fmt_sci(colebrook_tol)} −\n"
+            f"V*-tol={self._fmt_sci(velocity_loop_tol)} m/s\n"
             f"ΔP-tol={self._fmt_sci(dp_tol)} Pa\n"
-            f"cont-tol={self._fmt_sci(continuity_tol)}"
+            f"cont-tol={self._fmt_sci(continuity_tol)} −"
         )
 
     def _validate_scene(self) -> list[str]:
