@@ -1386,12 +1386,14 @@ class NetSimGui:
         return (
             f"laminar={'auto' if laminar_iterations is None else laminar_iterations}\n"
             f"turbulent={turbulent_iterations}\n"
-            f"Explicit\nalpha={alpha}\n"
+            f"alpha={alpha}\n"
             f"colebrook={colebrook_strategy_name}\n"
             f"friction={friction_method_name} ({friction_max_iterations})\n"
             f"velocity={velocity_method_name} ({velocity_max_iterations})\n"
-            f"f-tol={colebrook_tol:.2e}  V*-tol={velocity_loop_tol:.2e}\n"
-            f"ΔP-tol={dp_tol:.2e} Pa  cont-tol={continuity_tol:.2e}"
+            f"f-tol={colebrook_tol:.2e}\n"
+            f"V*-tol={velocity_loop_tol:.2e}\n"
+            f"ΔP-tol={dp_tol:.2e} Pa\n"
+            f"cont-tol={continuity_tol:.2e}"
         )
 
     def _validate_scene(self) -> list[str]:
