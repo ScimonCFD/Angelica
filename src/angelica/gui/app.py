@@ -660,18 +660,10 @@ class NetSimGui:
         current_friction_method = str(
             self.scene.solver_settings.get("friction_factor_method", "newton")
         )
-        current_colebrook_tol = str(
-            self.scene.solver_settings.get("colebrook_residual_tolerance", "0.0001")
-        )
-        current_velocity_loop_tol = str(
-            self.scene.solver_settings.get("velocity_loop_tolerance", "0.0001")
-        )
-        current_dp_tol = str(
-            self.scene.solver_settings.get("pressure_correction_abs_tolerance_pa", "0.001")
-        )
-        current_continuity_tol = str(
-            self.scene.solver_settings.get("nodal_mass_imbalance_rel_tolerance", "0.001")
-        )
+        current_colebrook_tol = f"{float(self.scene.solver_settings.get('colebrook_residual_tolerance', 1e-4)):.2e}"
+        current_velocity_loop_tol = f"{float(self.scene.solver_settings.get('velocity_loop_tolerance', 1e-4)):.2e}"
+        current_dp_tol = f"{float(self.scene.solver_settings.get('pressure_correction_abs_tolerance_pa', 1e-3)):.2e}"
+        current_continuity_tol = f"{float(self.scene.solver_settings.get('nodal_mass_imbalance_rel_tolerance', 1e-3)):.2e}"
 
         alpha_var = tk.StringVar(master=dialog, value=current_alpha)
         friction_max_iterations_var = tk.StringVar(
@@ -1212,8 +1204,8 @@ class NetSimGui:
             f"laminar={'auto' if laminar_iterations is None else laminar_iterations}, "
             f"turbulent={turbulent_iterations}, "
             f"alpha={alpha:g}, "
-            f"f-tol={colebrook_tol:g}, V*-tol={velocity_loop_tol:g}, "
-            f"ΔP-tol={dp_tol:g} Pa, continuity-tol={continuity_tol:g}."
+            f"f-tol={colebrook_tol:.2e}, V*-tol={velocity_loop_tol:.2e}, "
+            f"ΔP-tol={dp_tol:.2e} Pa, continuity-tol={continuity_tol:.2e}."
         )
         dialog.destroy()
 
@@ -1398,8 +1390,8 @@ class NetSimGui:
             f"colebrook={colebrook_strategy_name}\n"
             f"friction={friction_method_name} ({friction_max_iterations})\n"
             f"velocity={velocity_method_name} ({velocity_max_iterations})\n"
-            f"f-tol={colebrook_tol:g}  V*-tol={velocity_loop_tol:g}\n"
-            f"ΔP-tol={dp_tol:g} Pa  cont-tol={continuity_tol:g}"
+            f"f-tol={colebrook_tol:.2e}  V*-tol={velocity_loop_tol:.2e}\n"
+            f"ΔP-tol={dp_tol:.2e} Pa  cont-tol={continuity_tol:.2e}"
         )
 
     def _validate_scene(self) -> list[str]:
