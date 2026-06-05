@@ -11,7 +11,13 @@ import sv_ttk
 from angelica.core.components import FITTING_PRESET_LIBRARY
 from angelica.io import export_solve_result_workbook
 
-from .io import build_network_case_from_scene, build_solver_from_scene, load_scene_from_file
+from .io import (
+    build_network_case_from_scene,
+    build_solver_from_scene,
+    load_scene_and_results_from_file,
+    load_scene_from_file,
+    save_scene_to_file,
+)
 from .model import (
     CanvasLink,
     CanvasLinkComponent,
@@ -195,13 +201,14 @@ class NetSimGui:
         self.view_scale = 1.0
         self.latest_result = None
         self.latest_boundary_results: dict[int, dict[str, float]] = {}
+        self.current_file_path: str | None = None
         self.convergence_window: tk.Toplevel | None = None
         self.convergence_canvas: tk.Canvas | None = None
         self._dark = False
         self._unit_system_key = "si"
         self.root = tk.Tk()
         sv_ttk.set_theme("light")
-        self.root.title("Angelica GUI")
+        self.root.title("Angelica")
         self.root.geometry("1100x700")
         self.root.minsize(900, 600)
         self._set_window_icon()
@@ -245,11 +252,16 @@ class NetSimGui:
         menu_bar = tk.Menu(self.root)
         file_menu = tk.Menu(menu_bar, tearoff=False)
         file_menu.add_command(label="New", command=self._new_scene)
-        file_menu.add_command(label="Open", command=self._open_scene)
+        file_menu.add_command(label="Open…", command=self._open_scene)
+        file_menu.add_separator()
+        file_menu.add_command(label="Save", accelerator="Ctrl+S", command=self._save_scene)
+        file_menu.add_command(label="Save As…", command=self._save_scene_as)
+        file_menu.add_separator()
         file_menu.add_command(label="Export Results Report", command=self._export_results_report)
         file_menu.add_separator()
         file_menu.add_command(label="Close", command=self.root.destroy)
         menu_bar.add_cascade(label="File", menu=file_menu)
+        self.root.bind("<Control-s>", lambda _event: self._save_scene())
 
         material_menu = tk.Menu(menu_bar, tearoff=False)
         material_menu.add_command(label="Define Material", command=self._open_material_dialog)
@@ -422,7 +434,9 @@ class NetSimGui:
         self.view_scale = 1.0
         self.latest_result = None
         self.latest_boundary_results = {}
+        self.current_file_path = None
         self.tool_var.set("No tool selected")
+        self._update_title()
         self._refresh_global_summaries()
         self.status_var.set("New scene created. Select a node type from the palette.")
 
@@ -442,11 +456,12 @@ class NetSimGui:
         self._last_dir = os.path.dirname(file_path)
 
         try:
-            self.scene = load_scene_from_file(file_path)
+            scene, cached_results = load_scene_and_results_from_file(file_path)
         except Exception as exc:  # pragma: no cover - UI feedback path
             messagebox.showerror("Open failed", f"Could not open case:\n{exc}")
             return
 
+        self.scene = scene
         self.canvas.delete("all")
         self.drag_source_node_id = None
         self.drag_line_id = None
@@ -457,11 +472,67 @@ class NetSimGui:
         self.view_offset_y = 0.0
         self.view_scale = 1.0
         self.latest_result = None
-        self.latest_boundary_results = {}
+        self.current_file_path = file_path
+        self._update_title()
+
+        if cached_results is not None:
+            self.latest_boundary_results = cached_results["boundary_results"]
+            self.convergence_history = cached_results["convergence_history"]
+            status_suffix = " — results restored" if cached_results["converged"] else " — unconverged results restored"
+        else:
+            self.latest_boundary_results = {}
+            self.convergence_history = {"laminar": [], "turbulent": []}
+            status_suffix = ""
+
         self.tool_var.set("No tool selected")
         self._refresh_global_summaries()
         self._redraw_scene()
-        self.status_var.set(f"Opened GUI case: {file_path}")
+        self.status_var.set(f"Opened: {os.path.basename(file_path)}{status_suffix}")
+
+    def _update_title(self) -> None:
+        if self.current_file_path:
+            self.root.title(f"Angelica — {os.path.basename(self.current_file_path)}")
+        else:
+            self.root.title("Angelica")
+
+    def _save_scene(self) -> None:
+        if self.current_file_path:
+            self._do_save(self.current_file_path)
+        else:
+            self._save_scene_as()
+
+    def _save_scene_as(self) -> None:
+        file_path = filedialog.asksaveasfilename(
+            title="Save Angelica GUI case",
+            initialdir=self._last_dir,
+            defaultextension=".gui.json",
+            filetypes=(
+                ("Angelica GUI case", "*.gui.json"),
+                ("JSON files", "*.json"),
+                ("All files", "*.*"),
+            ),
+        )
+        if not file_path:
+            return
+        self._last_dir = os.path.dirname(file_path)
+        self.current_file_path = file_path
+        self._update_title()
+        self._do_save(file_path)
+
+    def _do_save(self, file_path: str) -> None:
+        converged = self.latest_result.converged if self.latest_result is not None else False
+        try:
+            save_scene_to_file(
+                self.scene,
+                file_path,
+                boundary_results=self.latest_boundary_results or None,
+                convergence_history=self.convergence_history if self.latest_boundary_results else None,
+                converged=converged,
+            )
+        except Exception as exc:  # pragma: no cover - UI feedback path
+            messagebox.showerror("Save failed", f"Could not save case:\n{exc}")
+            return
+        self.status_var.set(f"Saved: {os.path.basename(file_path)}")
 
     def _open_material_dialog(self) -> None:
         dialog = tk.Toplevel(self.root)

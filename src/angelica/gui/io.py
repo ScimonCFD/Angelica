@@ -6,6 +6,7 @@ from pathlib import Path
 
 from angelica.core.case import FlowBoundary, NetworkCase, PressureBoundary
 from angelica.core.components import FITTING_PRESET_LIBRARY, Fitting, Pipe, Pump
+from angelica.core.results import IterationMetrics
 from angelica.core.settings import SolverSettings
 from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
 from angelica.properties.single_component import SingleComponentFluid
@@ -81,6 +82,104 @@ def scene_from_dict(data: dict) -> CanvasScene:
 def load_scene_from_file(path: str | Path) -> CanvasScene:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     return scene_from_dict(data)
+
+
+def scene_to_dict(scene: CanvasScene) -> dict:
+    return {
+        "nodes": [
+            {
+                "node_id": node.node_id,
+                "node_type": node.node_type,
+                "x": node.x,
+                "y": node.y,
+                "properties": dict(node.properties),
+            }
+            for node in scene.nodes
+        ],
+        "links": [
+            {
+                "link_id": link.link_id,
+                "start_node_id": link.start_node_id,
+                "end_node_id": link.end_node_id,
+                "components": [
+                    {
+                        "component_id": comp.component_id,
+                        "component_type": comp.component_type,
+                        "properties": dict(comp.properties),
+                    }
+                    for comp in link.components
+                ],
+            }
+            for link in scene.links
+        ],
+        "material": dict(scene.material),
+        "pressure_drop_model": dict(scene.pressure_drop_model),
+        "solver_settings": dict(scene.solver_settings),
+        "initial_node_pressures_pa": {
+            str(k): v for k, v in scene.initial_node_pressures_pa.items()
+        },
+    }
+
+
+def _metrics_to_dict(m: IterationMetrics) -> dict:
+    return {
+        "pressure_correction_abs_pa": m.pressure_correction_abs_pa,
+        "pressure_correction_mean_abs_pa": m.pressure_correction_mean_abs_pa,
+        "pressure_correction_rel": m.pressure_correction_rel,
+        "max_nodal_mass_imbalance_kg_per_s": m.max_nodal_mass_imbalance_kg_per_s,
+        "max_nodal_mass_imbalance_rel": m.max_nodal_mass_imbalance_rel,
+    }
+
+
+def _metrics_from_dict(d: dict) -> IterationMetrics:
+    return IterationMetrics(
+        pressure_correction_abs_pa=float(d["pressure_correction_abs_pa"]),
+        pressure_correction_mean_abs_pa=float(d["pressure_correction_mean_abs_pa"]),
+        pressure_correction_rel=float(d["pressure_correction_rel"]),
+        max_nodal_mass_imbalance_kg_per_s=float(d["max_nodal_mass_imbalance_kg_per_s"]),
+        max_nodal_mass_imbalance_rel=float(d["max_nodal_mass_imbalance_rel"]),
+    )
+
+
+def save_scene_to_file(
+    scene: CanvasScene,
+    path: str | Path,
+    boundary_results: dict[int, dict[str, float]] | None = None,
+    convergence_history: dict[str, list[IterationMetrics]] | None = None,
+    converged: bool = False,
+) -> None:
+    data = scene_to_dict(scene)
+    if boundary_results:
+        data["cached_results"] = {
+            "converged": converged,
+            "boundary_results": {str(k): v for k, v in boundary_results.items()},
+            "convergence_history": {
+                stage: [_metrics_to_dict(m) for m in metrics_list]
+                for stage, metrics_list in (convergence_history or {}).items()
+            },
+        }
+    Path(path).write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def load_scene_and_results_from_file(
+    path: str | Path,
+) -> tuple[CanvasScene, dict | None]:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    scene = scene_from_dict(data)
+    raw = data.get("cached_results")
+    if not raw:
+        return scene, None
+    cached: dict = {
+        "converged": bool(raw.get("converged", False)),
+        "boundary_results": {
+            int(k): dict(v) for k, v in raw.get("boundary_results", {}).items()
+        },
+        "convergence_history": {
+            stage: [_metrics_from_dict(m) for m in metrics_list]
+            for stage, metrics_list in raw.get("convergence_history", {}).items()
+        },
+    }
+    return scene, cached
 
 
 def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
