@@ -489,31 +489,53 @@ class NetSimGui:
         self._redraw_scene()
         self.status_var.set(f"Opened: {os.path.basename(file_path)}{status_suffix}")
 
+    @staticmethod
+    def _is_tutorial_file(file_path: str) -> bool:
+        """Return True if file_path lives inside any directory named 'tutorials'."""
+        parts = os.path.normcase(os.path.abspath(file_path)).split(os.sep)
+        return "tutorials" in parts
+
     def _update_title(self) -> None:
         if self.current_file_path:
-            self.root.title(f"Angelica — {os.path.basename(self.current_file_path)}")
+            name = os.path.basename(self.current_file_path)
+            suffix = " [tutorial]" if self._is_tutorial_file(self.current_file_path) else ""
+            self.root.title(f"Angelica — {name}{suffix}")
         else:
             self.root.title("Angelica")
 
     def _save_scene(self) -> None:
-        if self.current_file_path:
+        if self.current_file_path and not self._is_tutorial_file(self.current_file_path):
             self._do_save(self.current_file_path)
         else:
+            if self.current_file_path:
+                messagebox.showinfo(
+                    "Tutorial — read-only",
+                    "Tutorial files cannot be overwritten.\n\n"
+                    "Choose a different location to save your work.",
+                )
             self._save_scene_as()
 
     def _save_scene_as(self) -> None:
-        file_path = filedialog.asksaveasfilename(
-            title="Save Angelica GUI case",
-            initialdir=self._last_dir,
-            defaultextension=".gui.json",
-            filetypes=(
-                ("Angelica GUI case", "*.gui.json"),
-                ("JSON files", "*.json"),
-                ("All files", "*.*"),
-            ),
-        )
-        if not file_path:
-            return
+        while True:
+            file_path = filedialog.asksaveasfilename(
+                title="Save Angelica GUI case",
+                initialdir=self._last_dir,
+                defaultextension=".gui.json",
+                filetypes=(
+                    ("Angelica GUI case", "*.gui.json"),
+                    ("JSON files", "*.json"),
+                    ("All files", "*.*"),
+                ),
+            )
+            if not file_path:
+                return
+            if not self._is_tutorial_file(file_path):
+                break
+            messagebox.showwarning(
+                "Tutorial folder — read-only",
+                "The tutorials folder is protected and cannot be used as a save location.\n\n"
+                "Please choose a different folder.",
+            )
         self._last_dir = os.path.dirname(file_path)
         self.current_file_path = file_path
         self._update_title()
