@@ -660,10 +660,10 @@ class NetSimGui:
         current_friction_method = str(
             self.scene.solver_settings.get("friction_factor_method", "newton")
         )
-        current_colebrook_tol = f"{float(self.scene.solver_settings.get('colebrook_residual_tolerance', 1e-4)):.2e}"
-        current_velocity_loop_tol = f"{float(self.scene.solver_settings.get('velocity_loop_tolerance', 1e-4)):.2e}"
-        current_dp_tol = f"{float(self.scene.solver_settings.get('pressure_correction_abs_tolerance_pa', 1e-3)):.2e}"
-        current_continuity_tol = f"{float(self.scene.solver_settings.get('nodal_mass_imbalance_rel_tolerance', 1e-3)):.2e}"
+        current_colebrook_tol = self._fmt_sci(self.scene.solver_settings.get("colebrook_residual_tolerance", 1e-4))
+        current_velocity_loop_tol = self._fmt_sci(self.scene.solver_settings.get("velocity_loop_tolerance", 1e-4))
+        current_dp_tol = self._fmt_sci(self.scene.solver_settings.get("pressure_correction_abs_tolerance_pa", 1e-3))
+        current_continuity_tol = self._fmt_sci(self.scene.solver_settings.get("nodal_mass_imbalance_rel_tolerance", 1e-3))
 
         alpha_var = tk.StringVar(master=dialog, value=current_alpha)
         friction_max_iterations_var = tk.StringVar(
@@ -1204,8 +1204,8 @@ class NetSimGui:
             f"laminar={'auto' if laminar_iterations is None else laminar_iterations}, "
             f"turbulent={turbulent_iterations}, "
             f"alpha={alpha:g}, "
-            f"f-tol={colebrook_tol:.2e}, V*-tol={velocity_loop_tol:.2e}, "
-            f"ΔP-tol={dp_tol:.2e} Pa, continuity-tol={continuity_tol:.2e}."
+            f"f-tol={self._fmt_sci(colebrook_tol)}, V*-tol={self._fmt_sci(velocity_loop_tol)}, "
+            f"ΔP-tol={self._fmt_sci(dp_tol)} Pa, continuity-tol={self._fmt_sci(continuity_tol)}."
         )
         dialog.destroy()
 
@@ -1292,6 +1292,15 @@ class NetSimGui:
         """European format: period thousands separator, comma decimal, 2 decimal places."""
         s = f"{value:,.2f}"
         return s.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+
+    @staticmethod
+    def _fmt_sci(value: float) -> str:
+        """Scientific notation without decimals: 1e-4, 5e-3, 1e+3."""
+        s = f"{float(value):.0e}"
+        mantissa, exp_part = s.split("e")
+        sign = exp_part[0]
+        exp_val = str(int(exp_part[1:]))
+        return f"{mantissa}e{sign}{exp_val}"
 
     def _si_to_display(self, si_str: str, quantity: str) -> str:
         if not si_str.strip():
@@ -1390,10 +1399,10 @@ class NetSimGui:
             f"colebrook={colebrook_strategy_name}\n"
             f"friction={friction_method_name} ({friction_max_iterations})\n"
             f"velocity={velocity_method_name} ({velocity_max_iterations})\n"
-            f"f-tol={colebrook_tol:.2e}\n"
-            f"V*-tol={velocity_loop_tol:.2e}\n"
-            f"ΔP-tol={dp_tol:.2e} Pa\n"
-            f"cont-tol={continuity_tol:.2e}"
+            f"f-tol={self._fmt_sci(colebrook_tol)}\n"
+            f"V*-tol={self._fmt_sci(velocity_loop_tol)}\n"
+            f"ΔP-tol={self._fmt_sci(dp_tol)} Pa\n"
+            f"cont-tol={self._fmt_sci(continuity_tol)}"
         )
 
     def _validate_scene(self) -> list[str]:
