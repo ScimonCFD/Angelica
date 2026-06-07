@@ -13,7 +13,7 @@
     "pressure_relaxation": 0.3,
     "colebrook_residual_tolerance": 0.0001,
     "pressure_correction_abs_tolerance_pa": 0.001,
-    "pressure_correction_rel_tolerance": 0.000001
+    "pressure_correction_rel_tolerance": 1e-06
   },
   "initial_node_pressures_pa": {
     "1": 251300.0,
@@ -240,5 +240,6 @@
         }
       ]
     }
-  ]
+  ],
+  "case_name": "Outlet flow boundary"
 }

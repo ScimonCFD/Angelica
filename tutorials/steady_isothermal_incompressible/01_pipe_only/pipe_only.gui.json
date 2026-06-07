@@ -180,5 +180,6 @@
         }
       ]
     }
-  ]
+  ],
+  "case_name": "Pipe-only network"
 }

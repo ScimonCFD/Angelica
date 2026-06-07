@@ -332,5 +332,6 @@
         }
       ]
     }
-  ]
+  ],
+  "case_name": "EPANET pump benchmark"
 }

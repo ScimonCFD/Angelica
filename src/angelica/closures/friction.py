@@ -383,6 +383,7 @@ class HazenWilliamsPipeCorrelation(PressureDropCorrelation):
         friction_factor_max_iterations: int = 50,
         velocity_loop_method: str = "fixed_point",
         velocity_loop_max_iterations: int = 50,
+        velocity_loop_tolerance: float | None = None,
     ) -> float:
         del (
             viscosity,
@@ -392,6 +393,7 @@ class HazenWilliamsPipeCorrelation(PressureDropCorrelation):
             friction_factor_max_iterations,
             velocity_loop_method,
             velocity_loop_max_iterations,
+            velocity_loop_tolerance,
         )
         driving_term_pa = delta_p - elevation_pressure_term(
             density,

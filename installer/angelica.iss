@@ -1,5 +1,5 @@
 #define MyAppName      "Angelica"
-#define MyAppVersion   "0.1.1"
+#define MyAppVersion   "1.0.0"
 #define MyAppPublisher "Simon Rodriguez"
 #define MyAppURL       "https://scimonCFD.github.io/Angelica_website/"
 #define MyAppExeName   "Angelica.exe"

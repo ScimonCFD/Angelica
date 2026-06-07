@@ -6,7 +6,7 @@ from pathlib import Path
 
 from angelica.core.case import FlowBoundary, NetworkCase, PressureBoundary
 from angelica.core.components import FITTING_PRESET_LIBRARY, Fitting, Pipe, Pump
-from angelica.core.results import IterationMetrics
+from angelica.core.results import ComponentFlowResult, IterationMetrics
 from angelica.core.settings import SolverSettings
 from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
 from angelica.properties.single_component import SingleComponentFluid
@@ -71,6 +71,7 @@ def scene_from_dict(data: dict) -> CanvasScene:
     scene.pressure_drop_model.update(
         {key: str(value) for key, value in data.get("pressure_drop_model", {}).items()}
     )
+    scene.case_name = str(data.get("case_name", ""))
     scene.solver_settings = dict(data.get("solver_settings", {}))
     scene.initial_node_pressures_pa = {
         int(node_id): float(value)
@@ -112,6 +113,7 @@ def scene_to_dict(scene: CanvasScene) -> dict:
             }
             for link in scene.links
         ],
+        "case_name": scene.case_name,
         "material": dict(scene.material),
         "pressure_drop_model": dict(scene.pressure_drop_model),
         "solver_settings": dict(scene.solver_settings),
@@ -141,12 +143,29 @@ def _metrics_from_dict(d: dict) -> IterationMetrics:
     )
 
 
+def _component_flow_to_dict(cf: ComponentFlowResult) -> dict:
+    return {
+        "label": cf.label,
+        "mass_flow_kg_per_s": cf.mass_flow_kg_per_s,
+        "volumetric_flow_m3_per_h": cf.volumetric_flow_m3_per_h,
+    }
+
+
+def _component_flow_from_dict(d: dict) -> ComponentFlowResult:
+    return ComponentFlowResult(
+        label=str(d["label"]),
+        mass_flow_kg_per_s=float(d["mass_flow_kg_per_s"]),
+        volumetric_flow_m3_per_h=float(d["volumetric_flow_m3_per_h"]),
+    )
+
+
 def save_scene_to_file(
     scene: CanvasScene,
     path: str | Path,
     boundary_results: dict[int, dict[str, float]] | None = None,
     convergence_history: dict[str, list[IterationMetrics]] | None = None,
     converged: bool = False,
+    component_flows: list[ComponentFlowResult] | None = None,
 ) -> None:
     data = scene_to_dict(scene)
     if boundary_results:
@@ -157,6 +176,7 @@ def save_scene_to_file(
                 stage: [_metrics_to_dict(m) for m in metrics_list]
                 for stage, metrics_list in (convergence_history or {}).items()
             },
+            "component_flows": [_component_flow_to_dict(cf) for cf in (component_flows or [])],
         }
     Path(path).write_text(json.dumps(data, indent=2), encoding="utf-8")
 
@@ -178,6 +198,9 @@ def load_scene_and_results_from_file(
             stage: [_metrics_from_dict(m) for m in metrics_list]
             for stage, metrics_list in raw.get("convergence_history", {}).items()
         },
+        "component_flows": [
+            _component_flow_from_dict(cf) for cf in raw.get("component_flows", [])
+        ],
     }
     return scene, cached
 
@@ -311,7 +334,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
     all_node_ids = visible_node_ids.union(range(max(visible_node_ids) + 1, next_internal_node_id))
 
     return NetworkCase(
-        name="GUI scene",
+        name=scene.case_name or "GUI scene",
         fluid_model=SingleComponentFluid(
             density_kg_per_m3=float(scene.material["density_kg_per_m3"]),
             viscosity_pa_s=float(scene.material["viscosity_pa_s"]),

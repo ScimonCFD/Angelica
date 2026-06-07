@@ -47,6 +47,7 @@ class CanvasLinkComponent:
 @dataclass
 class CanvasScene:
     active_tool: Optional[str] = None
+    case_name: str = ""
     nodes: List[CanvasNode] = field(default_factory=list)
     links: List[CanvasLink] = field(default_factory=list)
     material: Dict[str, str] = field(default_factory=dict)
@@ -193,6 +194,41 @@ class CanvasScene:
             if link.start_node_id == node_id or link.end_node_id == node_id:
                 count += 1
         return count
+
+    def remove_link(self, link_id: int) -> None:
+        """Remove a link by ID. Raises if not found."""
+        for link in self.links:
+            if link.link_id == link_id:
+                self.links = [lk for lk in self.links if lk.link_id != link_id]
+                return
+        raise ValueError(f"Link {link_id} does not exist.")
+
+    def remove_link_component(self, link_id: int, component_id: int) -> CanvasLink:
+        """Remove a component from a link. Returns updated link."""
+        for index, link in enumerate(self.links):
+            if link.link_id != link_id:
+                continue
+            updated = replace(link, components=[c for c in link.components if c.component_id != component_id])
+            self.links[index] = updated
+            return updated
+        raise ValueError(f"Link {link_id} does not exist.")
+
+    def move_link_component(self, link_id: int, component_id: int, direction: int) -> CanvasLink:
+        """Move a component up (direction=-1) or down (direction=+1). Returns updated link."""
+        for index, link in enumerate(self.links):
+            if link.link_id != link_id:
+                continue
+            comps = list(link.components)
+            idx = next((i for i, c in enumerate(comps) if c.component_id == component_id), None)
+            if idx is None:
+                raise ValueError(f"Component {component_id} not in link {link_id}.")
+            new_idx = idx + direction
+            if 0 <= new_idx < len(comps):
+                comps[idx], comps[new_idx] = comps[new_idx], comps[idx]
+            updated = replace(link, components=comps)
+            self.links[index] = updated
+            return updated
+        raise ValueError(f"Link {link_id} does not exist.")
 
     def remove_node(self, node_id: int) -> list[int]:
         """Remove a node and all links touching it. Returns the removed link IDs."""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import math
 import os
 import sys
@@ -9,6 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 import sv_ttk
 
 from angelica.core.components import FITTING_PRESET_LIBRARY
+from angelica.core.results import ComponentFlowResult, SolveResult
 from angelica.io import export_solve_result_workbook
 
 from .io import (
@@ -17,6 +19,8 @@ from .io import (
     load_scene_and_results_from_file,
     load_scene_from_file,
     save_scene_to_file,
+    scene_from_dict,
+    scene_to_dict,
 )
 from .model import (
     CanvasLink,
@@ -202,6 +206,9 @@ class NetSimGui:
         self.latest_result = None
         self.latest_boundary_results: dict[int, dict[str, float]] = {}
         self.current_file_path: str | None = None
+        self._undo_stack: list[dict] = []
+        self._redo_stack: list[dict] = []
+        self._move_pre_snapshot: dict | None = None
         self.convergence_window: tk.Toplevel | None = None
         self.convergence_canvas: tk.Canvas | None = None
         self._dark = False
@@ -263,6 +270,13 @@ class NetSimGui:
         menu_bar.add_cascade(label="File", menu=file_menu)
         self.root.bind("<Control-s>", lambda _event: self._save_scene())
 
+        edit_menu = tk.Menu(menu_bar, tearoff=False)
+        edit_menu.add_command(label="Undo", accelerator="Ctrl+Z", command=self._undo)
+        edit_menu.add_command(label="Redo", accelerator="Ctrl+Y", command=self._redo)
+        menu_bar.add_cascade(label="Edit", menu=edit_menu)
+        self.root.bind("<Control-z>", lambda _event: self._undo())
+        self.root.bind("<Control-y>", lambda _event: self._redo())
+
         material_menu = tk.Menu(menu_bar, tearoff=False)
         material_menu.add_command(label="Define Material", command=self._open_material_dialog)
         menu_bar.add_cascade(label="Material", menu=material_menu)
@@ -283,6 +297,7 @@ class NetSimGui:
 
         view_menu = tk.Menu(menu_bar, tearoff=False)
         view_menu.add_command(label="Toggle Dark / Light Theme", command=self._toggle_theme)
+        view_menu.add_command(label="Convergence Window", command=self._open_convergence_window)
         menu_bar.add_cascade(label="View", menu=view_menu)
 
         settings_menu = tk.Menu(menu_bar, tearoff=False)
@@ -435,6 +450,8 @@ class NetSimGui:
         self.latest_result = None
         self.latest_boundary_results = {}
         self.current_file_path = None
+        self._undo_stack.clear()
+        self._redo_stack.clear()
         self.tool_var.set("No tool selected")
         self._update_title()
         self._refresh_global_summaries()
@@ -473,11 +490,28 @@ class NetSimGui:
         self.view_scale = 1.0
         self.latest_result = None
         self.current_file_path = file_path
+        self._undo_stack.clear()
+        self._redo_stack.clear()
         self._update_title()
 
         if cached_results is not None:
             self.latest_boundary_results = cached_results["boundary_results"]
             self.convergence_history = cached_results["convergence_history"]
+            if cached_results["component_flows"]:
+                node_pressures = {
+                    node_id: entry["pressure_pa"]
+                    for node_id, entry in cached_results["boundary_results"].items()
+                }
+                self.latest_result = SolveResult(
+                    case_name="GUI scene",
+                    converged=cached_results["converged"],
+                    node_pressures_pa=node_pressures,
+                    component_flows=cached_results["component_flows"],
+                    laminar_history=[],
+                    laminar_metrics=cached_results["convergence_history"].get("laminar", []),
+                    turbulent_history=[],
+                    turbulent_metrics=cached_results["convergence_history"].get("turbulent", []),
+                )
             status_suffix = " — results restored" if cached_results["converged"] else " — unconverged results restored"
         else:
             self.latest_boundary_results = {}
@@ -543,6 +577,9 @@ class NetSimGui:
 
     def _do_save(self, file_path: str) -> None:
         converged = self.latest_result.converged if self.latest_result is not None else False
+        component_flows = (
+            list(self.latest_result.component_flows) if self.latest_result is not None else None
+        )
         try:
             save_scene_to_file(
                 self.scene,
@@ -550,11 +587,53 @@ class NetSimGui:
                 boundary_results=self.latest_boundary_results or None,
                 convergence_history=self.convergence_history if self.latest_boundary_results else None,
                 converged=converged,
+                component_flows=component_flows,
             )
         except Exception as exc:  # pragma: no cover - UI feedback path
             messagebox.showerror("Save failed", f"Could not save case:\n{exc}")
             return
         self.status_var.set(f"Saved: {os.path.basename(file_path)}")
+
+    def _make_snapshot(self) -> dict:
+        return copy.deepcopy(scene_to_dict(self.scene))
+
+    def _push_undo(self) -> None:
+        self._undo_stack.append(self._make_snapshot())
+        self._redo_stack.clear()
+
+    def _commit_move_if_changed(self) -> None:
+        if self._move_pre_snapshot is None:
+            return
+        snap = self._move_pre_snapshot
+        self._move_pre_snapshot = None
+        current_nodes = scene_to_dict(self.scene)["nodes"]
+        if current_nodes != snap["nodes"]:
+            self._undo_stack.append(snap)
+            self._redo_stack.clear()
+
+    def _restore_snapshot(self, snap: dict) -> None:
+        self.scene = scene_from_dict(snap)
+        self.selected_node_id = None
+        self.moving_node_id = None
+        self.latest_boundary_results = {}
+        self.latest_result = None
+        self._redraw_scene()
+
+    def _undo(self) -> None:
+        if not self._undo_stack:
+            self.status_var.set("Nothing to undo.")
+            return
+        self._redo_stack.append(self._make_snapshot())
+        self._restore_snapshot(self._undo_stack.pop())
+        self.status_var.set("Undo.")
+
+    def _redo(self) -> None:
+        if not self._redo_stack:
+            self.status_var.set("Nothing to redo.")
+            return
+        self._undo_stack.append(self._make_snapshot())
+        self._restore_snapshot(self._redo_stack.pop())
+        self.status_var.set("Redo.")
 
     def _open_material_dialog(self) -> None:
         dialog = tk.Toplevel(self.root)
@@ -1640,6 +1719,7 @@ class NetSimGui:
         prev_selected = self.selected_node_id
         self.selected_node_id = node_id
         self.moving_node_id = node_id
+        self._move_pre_snapshot = self._make_snapshot()
         self.canvas.focus_set()
         if self.selected_node_id != prev_selected:
             self._redraw_scene()
@@ -1653,27 +1733,33 @@ class NetSimGui:
             return
 
         node_id = self._node_id_at(event.x, event.y)
-        if node_id is None:
+        if node_id is not None:
+            node = self.scene.get_node(node_id)
+            if node is None:
+                return
+            self.drag_source_node_id = node_id
+            source_x, source_y = self._scene_to_canvas(node.x, node.y)
+            self.drag_line_id = self.canvas.create_line(
+                source_x,
+                source_y,
+                event.x,
+                event.y,
+                fill=self._t["drag_line"],
+                width=2,
+                dash=(5, 3),
+            )
+            self.status_var.set(
+                f"Connecting from {node.node_type} #{node.node_id}. Drag with right mouse button."
+            )
             return
 
-        node = self.scene.get_node(node_id)
-        if node is None:
+        link_id = self._link_id_at(event.x, event.y)
+        if link_id is None:
             return
-
-        self.drag_source_node_id = node_id
-        source_x, source_y = self._scene_to_canvas(node.x, node.y)
-        self.drag_line_id = self.canvas.create_line(
-            source_x,
-            source_y,
-            event.x,
-            event.y,
-            fill=self._t["drag_line"],
-            width=2,
-            dash=(5, 3),
-        )
-        self.status_var.set(
-            f"Connecting from {node.node_type} #{node.node_id}. Drag with right mouse button."
-        )
+        link = self.scene.get_link(link_id)
+        if link is None:
+            return
+        self._show_link_context_menu(event, link)
 
     def _on_canvas_shift_press(self, event: tk.Event) -> None:
         self._on_canvas_right_press(event)
@@ -1751,6 +1837,7 @@ class NetSimGui:
             return
         node_id = self.selected_node_id
         node_type = node.node_type
+        self._push_undo()
         self.scene.remove_node(node_id)
         self.selected_node_id = None
         self.latest_boundary_results = {}
@@ -1758,10 +1845,40 @@ class NetSimGui:
         self._redraw_scene()
         self.status_var.set(f"Deleted {node_type} #{node_id} and its connections.")
 
+    def _show_link_context_menu(self, event: tk.Event, link: CanvasLink) -> None:
+        menu = tk.Menu(self.root, tearoff=False)
+        menu.add_command(
+            label=f"Edit Components — Connection #{link.link_id}",
+            command=lambda: self._open_link_properties_dialog(link),
+        )
+        if self.latest_boundary_results:
+            menu.add_command(
+                label="Pressure Profile",
+                command=lambda: self._show_link_pressure_profile(link),
+            )
+        menu.add_separator()
+        menu.add_command(
+            label=f"Delete Connection #{link.link_id}",
+            command=lambda: self._delete_link(link.link_id),
+        )
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def _delete_link(self, link_id: int) -> None:
+        self._push_undo()
+        self.scene.remove_link(link_id)
+        self.latest_boundary_results = {}
+        self.latest_result = None
+        self._redraw_scene()
+        self.status_var.set(f"Deleted connection #{link_id}.")
+
+    def _open_convergence_window(self) -> None:
+        self._prepare_convergence_window()
+
     def _on_canvas_release(self, event: tk.Event) -> None:
         if self.moving_node_id is not None:
             moved_node = self.scene.get_node(self.moving_node_id)
             self.moving_node_id = None
+            self._commit_move_if_changed()
             if moved_node is not None:
                 self.status_var.set(
                     f"Moved {moved_node.node_type} #{moved_node.node_id} to "
@@ -1777,6 +1894,7 @@ class NetSimGui:
             self.status_var.set("Release on empty canvas space to place a new node.")
             return
 
+        self._push_undo()
         scene_x, scene_y = self._canvas_to_scene(event.x, event.y)
         node = self.scene.add_node(scene_x, scene_y)
         self._draw_node(node)
@@ -1813,7 +1931,10 @@ class NetSimGui:
         if link is None:
             return
 
-        self._open_link_properties_dialog(link)
+        if self.latest_boundary_results:
+            self._show_link_pressure_profile(link)
+        else:
+            self._open_link_properties_dialog(link)
 
     def _finish_connection(self, event: tk.Event) -> None:
         source_node_id = self.drag_source_node_id
@@ -1829,9 +1950,11 @@ class NetSimGui:
             self.status_var.set("Connection cancelled. Choose a different target node.")
             return
 
+        self._push_undo()
         try:
             link = self.scene.add_link(source_node_id, target_node_id)
         except ValueError as exc:
+            self._undo_stack.pop()
             self.status_var.set(str(exc))
             return
 
@@ -2107,8 +2230,60 @@ class NetSimGui:
             ),
         )
 
+        list_actions = ttk.Frame(container)
+        list_actions.grid(row=2, column=1, sticky="w", pady=(4, 0))
+
+        def _refresh_list() -> None:
+            updated = self.scene.get_link(link.link_id)
+            if updated is None:
+                return
+            sel = components_list.curselection()
+            components_list.delete(0, "end")
+            for ci, comp in enumerate(updated.components, start=1):
+                components_list.insert("end", self._component_list_label(comp, ci))
+            if sel:
+                new_idx = min(sel[0], components_list.size() - 1)
+                if new_idx >= 0:
+                    components_list.selection_set(new_idx)
+                    self._render_link_component_properties(link.link_id, components_list, properties_frame)
+
+        def _move_selected(direction: int) -> None:
+            sel = components_list.curselection()
+            if not sel:
+                return
+            current_link = self.scene.get_link(link.link_id)
+            if current_link is None or sel[0] >= len(current_link.components):
+                return
+            comp = current_link.components[sel[0]]
+            self._push_undo()
+            self.scene.move_link_component(link.link_id, comp.component_id, direction)
+            _refresh_list()
+            new_idx = sel[0] + direction
+            if 0 <= new_idx < components_list.size():
+                components_list.selection_clear(0, "end")
+                components_list.selection_set(new_idx)
+                self._render_link_component_properties(link.link_id, components_list, properties_frame)
+
+        def _delete_selected() -> None:
+            sel = components_list.curselection()
+            if not sel:
+                return
+            current_link = self.scene.get_link(link.link_id)
+            if current_link is None or sel[0] >= len(current_link.components):
+                return
+            comp = current_link.components[sel[0]]
+            self._push_undo()
+            self.scene.remove_link_component(link.link_id, comp.component_id)
+            self.latest_boundary_results = {}
+            self.latest_result = None
+            _refresh_list()
+
+        ttk.Button(list_actions, text="↑", width=3, command=lambda: _move_selected(-1)).pack(side="left", padx=(0, 2))
+        ttk.Button(list_actions, text="↓", width=3, command=lambda: _move_selected(1)).pack(side="left", padx=(0, 6))
+        ttk.Button(list_actions, text="Delete", command=_delete_selected).pack(side="left")
+
         button_row = ttk.Frame(container)
-        button_row.grid(row=2, column=0, columnspan=3, sticky="e", pady=(12, 0))
+        button_row.grid(row=3, column=0, columnspan=3, sticky="e", pady=(12, 0))
         ttk.Button(button_row, text="Close", command=dialog.destroy).pack(side="right", padx=(6, 0))
         ttk.Button(
             button_row,
@@ -2139,7 +2314,7 @@ class NetSimGui:
     def _show_link_pressure_profile(self, link) -> None:
         win = tk.Toplevel(self.root)
         win.title(f"Pressure Profile — Connection #{link.link_id}")
-        win.geometry("760x440")
+        win.geometry("760x480")
 
         frame = ttk.Frame(win, padding=10)
         frame.pack(fill="both", expand=True)
@@ -2156,8 +2331,13 @@ class NetSimGui:
             lambda _event: self._draw_pressure_profile_plot(plot_canvas, link),
         )
 
+        btn_row = ttk.Frame(frame)
+        btn_row.pack(fill="x", pady=(8, 0))
+        ttk.Button(btn_row, text="Edit Components…",
+                   command=lambda: self._open_link_properties_dialog(link)).pack(side="left")
+        ttk.Button(btn_row, text="Close", command=win.destroy).pack(side="right")
+
         win.transient(self.root)
-        win.grab_set()
         win.focus_set()
         win.update_idletasks()
         self._draw_pressure_profile_plot(plot_canvas, link)

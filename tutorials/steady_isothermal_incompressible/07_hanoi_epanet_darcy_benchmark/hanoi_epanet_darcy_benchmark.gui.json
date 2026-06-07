@@ -7,19 +7,13 @@
     "viscosity_pa_s": "0.001"
   },
   "pressure_drop_model": {
-    "library_key": "colebrook_white",
-    "name": "Colebrook-White"
+    "library_key": "hazen_williams",
+    "name": "Hazen-Williams"
   },
   "solver_settings": {
     "laminar_iterations": 50,
     "turbulent_iterations": 300,
     "pressure_relaxation": 0.3,
-    "colebrook_friction_strategy": "transformed",
-    "friction_factor_method": "newton",
-    "friction_factor_max_iterations": 80,
-    "velocity_loop_method": "secant",
-    "velocity_loop_max_iterations": 120,
-    "colebrook_residual_tolerance": 0.0001,
     "pressure_correction_abs_tolerance_pa": 0.001,
     "pressure_correction_rel_tolerance": 1e-07
   },
@@ -1901,5 +1895,6 @@
     "129": 979283.25,
     "130": 979283.25,
     "131": 979283.25
-  }
+  },
+  "case_name": "Hanoi network benchmark"
 }
