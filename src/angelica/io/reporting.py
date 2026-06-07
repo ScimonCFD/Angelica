@@ -3,6 +3,33 @@ from __future__ import annotations
 from pathlib import Path
 
 
+def export_solve_result_csv(result, output_path: str) -> None:
+    import csv
+
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    with output.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["case", result.case_name])
+        writer.writerow(["converged", result.converged])
+        writer.writerow([])
+        writer.writerow(["Node", "Pressure (Pa)", "Pressure (kPa)"])
+        for node_id in sorted(result.node_pressures_pa):
+            pressure_pa = result.node_pressures_pa[node_id]
+            writer.writerow([node_id, round(pressure_pa, 2), round(pressure_pa / 1000.0, 4)])
+        writer.writerow([])
+        writer.writerow(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"])
+        for component in result.component_flows:
+            writer.writerow(
+                [
+                    component.label,
+                    round(component.mass_flow_kg_per_s, 4),
+                    round(component.volumetric_flow_m3_per_h, 4),
+                ]
+            )
+
+
 def export_solve_result_workbook(result, output_path: str) -> None:
     from openpyxl import Workbook
 

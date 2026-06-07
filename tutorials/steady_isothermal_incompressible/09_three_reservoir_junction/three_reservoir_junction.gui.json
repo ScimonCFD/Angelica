@@ -1,0 +1,129 @@
+{
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 120.0,
+      "y": 280.0,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "293784.975",
+        "flow": ""
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "junction",
+      "x": 400.0,
+      "y": 280.0,
+      "properties": {
+        "label": "J"
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "sink",
+      "x": 680.0,
+      "y": 140.0,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "195856.65",
+        "flow": ""
+      }
+    },
+    {
+      "node_id": 4,
+      "node_type": "sink",
+      "x": 680.0,
+      "y": 420.0,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "48964.1625",
+        "flow": ""
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "1000.0",
+            "diameter_m": "0.2",
+            "height_change_m": "0.0",
+            "roughness_m": "0.0001",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 2,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": 2,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "800.0",
+            "diameter_m": "0.15",
+            "height_change_m": "0.0",
+            "roughness_m": "0.0001",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 3,
+      "start_node_id": 2,
+      "end_node_id": 4,
+      "components": [
+        {
+          "component_id": 3,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "600.0",
+            "diameter_m": "0.1",
+            "height_change_m": "0.0",
+            "roughness_m": "0.0001",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    }
+  ],
+  "case_name": "Three-reservoir junction",
+  "material": {
+    "library_key": "water_liquid",
+    "definition_mode": "library",
+    "name": "Water",
+    "density_kg_per_m3": "998.25",
+    "viscosity_pa_s": "0.001"
+  },
+  "pressure_drop_model": {
+    "library_key": "colebrook_white",
+    "name": "Colebrook-White"
+  },
+  "solver_settings": {
+    "turbulent_iterations": 300,
+    "pressure_relaxation": 0.5,
+    "pressure_correction_abs_tolerance_pa": 0.001,
+    "pressure_correction_rel_tolerance": 1e-08
+  },
+  "initial_node_pressures_pa": {
+    "1": 293784.975,
+    "2": 247403.37,
+    "3": 195856.65,
+    "4": 48964.1625
+  }
+}

@@ -1,3 +1,3 @@
-from .reporting import export_solve_result_workbook, print_solve_result
+from .reporting import export_solve_result_csv, export_solve_result_workbook, print_solve_result
 
-__all__ = ["print_solve_result", "export_solve_result_workbook"]
+__all__ = ["print_solve_result", "export_solve_result_workbook", "export_solve_result_csv"]

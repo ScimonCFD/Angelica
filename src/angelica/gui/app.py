@@ -11,7 +11,7 @@ import sv_ttk
 
 from angelica.core.components import FITTING_PRESET_LIBRARY
 from angelica.core.results import ComponentFlowResult, SolveResult
-from angelica.io import export_solve_result_workbook
+from angelica.io import export_solve_result_csv, export_solve_result_workbook
 
 from .io import (
     build_network_case_from_scene,
@@ -264,7 +264,8 @@ class NetSimGui:
         file_menu.add_command(label="Save", accelerator="Ctrl+S", command=self._save_scene)
         file_menu.add_command(label="Save As…", command=self._save_scene_as)
         file_menu.add_separator()
-        file_menu.add_command(label="Export Results Report", command=self._export_results_report)
+        file_menu.add_command(label="Export Results Report (Excel)", command=self._export_results_report)
+        file_menu.add_command(label="Export Results Report (CSV)", command=self._export_results_report_csv)
         file_menu.add_separator()
         file_menu.add_command(label="Close", command=self.root.destroy)
         menu_bar.add_cascade(label="File", menu=file_menu)
@@ -1694,6 +1695,39 @@ class NetSimGui:
 
         try:
             export_solve_result_workbook(self.latest_result, file_path)
+        except Exception as exc:  # pragma: no cover - UI feedback path
+            messagebox.showerror("Export failed", f"Could not export report:\n{exc}")
+            return
+
+        self.status_var.set(f"Results report exported to {file_path}.")
+
+    def _export_results_report_csv(self) -> None:
+        if self.latest_result is None:
+            messagebox.showerror(
+                "Export failed",
+                "Run a simulation before exporting a results report.",
+            )
+            return
+        if not self.latest_result.converged:
+            messagebox.showerror(
+                "Export failed",
+                "Only converged simulations can be exported to a results report.",
+            )
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            title="Export Results Report (CSV)",
+            defaultextension=".csv",
+            filetypes=(
+                ("CSV file", "*.csv"),
+                ("All files", "*.*"),
+            ),
+        )
+        if not file_path:
+            return
+
+        try:
+            export_solve_result_csv(self.latest_result, file_path)
         except Exception as exc:  # pragma: no cover - UI feedback path
             messagebox.showerror("Export failed", f"Could not export report:\n{exc}")
             return

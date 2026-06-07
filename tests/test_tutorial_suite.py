@@ -15,7 +15,9 @@ from angelica.cases import (
     build_steady_water_network_inlet_flow_boundary_case,
     build_steady_water_network_no_fittings_case,
     build_steady_water_network_two_flow_boundaries_case,
+    build_three_reservoir_junction_case,
 )
+from angelica.closures import ColebrookPipeCorrelation
 from angelica.core.settings import SolverSettings
 from angelica.solvers import SteadyIsothermalIncompressibleSolver
 
@@ -104,3 +106,23 @@ class TutorialSuiteSmokeTests(unittest.TestCase):
             ),
         )
         self.assertTrue(result.converged)
+
+    def test_three_reservoir_junction_converges(self) -> None:
+        solver = SteadyIsothermalIncompressibleSolver(
+            settings=SolverSettings(
+                turbulent_iterations=300,
+                pressure_relaxation=0.5,
+                pressure_correction_abs_tolerance_pa=1e-3,
+                pressure_correction_rel_tolerance=1e-8,
+            ),
+            turbulent_pipe_correlation=ColebrookPipeCorrelation(),
+        )
+        result = solver.solve(build_three_reservoir_junction_case())
+        self.assertTrue(result.converged)
+        junction_pa = result.node_pressures_pa[2]
+        junction_head_m = junction_pa / (998.25 * 9.81)
+        self.assertAlmostEqual(junction_head_m, 25.26, delta=0.01)
+        flows = {cf.label: cf.volumetric_flow_m3_per_h for cf in result.component_flows}
+        self.assertAlmostEqual(flows["Pipe 1->2"], 112.35, delta=0.1)
+        self.assertAlmostEqual(flows["Pipe 2->3"], 62.36, delta=0.1)
+        self.assertAlmostEqual(flows["Pipe 2->4"], 49.99, delta=0.1)

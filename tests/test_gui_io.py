@@ -37,7 +37,7 @@ class GuiIoTests(unittest.TestCase):
         case = build_network_case_from_scene(scene)
         result = build_solver_from_scene(scene).solve(case)
 
-        self.assertEqual(case.name, "GUI scene")
+        self.assertEqual(case.name, "Pipe-only network")
         self.assertEqual(len(case.components), 6)
         self.assertTrue(result.converged)
 

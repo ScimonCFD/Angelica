@@ -27,7 +27,7 @@ Angelica solves **steady, incompressible, isothermal pipe networks** — computi
 
 ### Windows — one-click installer
 
-Download **AngelicaSetup-0.1.0.exe** from the [latest release](https://github.com/ScimonCFD/Angelica/releases/latest) and run it. No Python required. The installer places Angelica in your user folder (no admin rights needed) and optionally creates a desktop shortcut.
+Download **AngelicaSetup-1.0.0.exe** from the [latest release](https://github.com/ScimonCFD/Angelica/releases/latest) and run it. No Python required. The installer places Angelica in your user folder (no admin rights needed) and optionally creates a desktop shortcut.
 
 ### Linux / macOS — pip from GitHub
 
