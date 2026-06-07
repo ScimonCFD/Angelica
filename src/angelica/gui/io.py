@@ -217,6 +217,23 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
     if not scene.material.get("viscosity_pa_s", "").strip():
         raise ValueError("The material is missing viscosity_pa_s.")
 
+    for node in scene.nodes:
+        if node.node_type != "junction":
+            continue
+        connection_count = sum(
+            1 for link in scene.links
+            if link.start_node_id == node.node_id or link.end_node_id == node.node_id
+        )
+        if connection_count == 0:
+            raise ValueError(
+                f"Junction #{node.node_id} is not connected to any pipe."
+            )
+        if connection_count == 1:
+            raise ValueError(
+                f"Junction #{node.node_id} has only one connection — "
+                "it acts as a dead end. Add another connection or change this node to a source or sink."
+            )
+
     pressure_inlets: list[PressureBoundary] = []
     pressure_outlets: list[PressureBoundary] = []
     flow_inlets: list[FlowBoundary] = []

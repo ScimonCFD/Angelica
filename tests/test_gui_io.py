@@ -9,6 +9,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from angelica.gui.io import build_network_case_from_scene, build_solver_from_scene, load_scene_from_file
+from angelica.gui.model import CanvasLink, CanvasLinkComponent, CanvasNode, CanvasScene
 
 
 class GuiIoTests(unittest.TestCase):
@@ -183,3 +184,56 @@ class GuiIoTests(unittest.TestCase):
 
         self.assertEqual(scene.pressure_drop_model["library_key"], "hazen_williams")
         self.assertEqual(type(solver.turbulent_pipe_correlation).__name__, "HazenWilliamsPipeCorrelation")
+
+    # ------------------------------------------------------------------
+    # Junction topology validation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _minimal_scene_with_junction_links(link_pairs: list[tuple[int, int]]) -> CanvasScene:
+        """Build a 3-node scene (source-1, junction-2, sink-3) with given link topology."""
+        pipe_props = {
+            "length_m": "100",
+            "diameter_m": "0.05",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+        }
+        scene = CanvasScene()
+        scene.nodes = [
+            CanvasNode(1, "source", 0.0, 0.0, {"condition_type": "pressure", "pressure": "200000", "flow": ""}),
+            CanvasNode(2, "junction", 100.0, 0.0, {"label": ""}),
+            CanvasNode(3, "sink", 200.0, 0.0, {"condition_type": "pressure", "pressure": "100000", "flow": ""}),
+        ]
+        scene.links = [
+            CanvasLink(
+                link_id=idx + 1,
+                start_node_id=start,
+                end_node_id=end,
+                components=[CanvasLinkComponent(idx + 1, "pipe", pipe_props)],
+            )
+            for idx, (start, end) in enumerate(link_pairs)
+        ]
+        scene.material = {"density_kg_per_m3": "998.25", "viscosity_pa_s": "0.001"}
+        return scene
+
+    def test_isolated_junction_is_rejected(self) -> None:
+        # junction(2) has no connections at all
+        scene = self._minimal_scene_with_junction_links([(1, 3)])
+        with self.assertRaises(ValueError) as ctx:
+            build_network_case_from_scene(scene)
+        self.assertIn("not connected to any pipe", str(ctx.exception))
+
+    def test_dead_end_junction_is_rejected(self) -> None:
+        # junction(2) has exactly one connection — dead end, mass cannot be conserved
+        scene = self._minimal_scene_with_junction_links([(1, 2), (1, 3)])
+        with self.assertRaises(ValueError) as ctx:
+            build_network_case_from_scene(scene)
+        self.assertIn("dead end", str(ctx.exception))
+
+    def test_junction_with_two_connections_is_accepted(self) -> None:
+        # junction(2) has one connection in and one out — valid
+        scene = self._minimal_scene_with_junction_links([(1, 2), (2, 3)])
+        case = build_network_case_from_scene(scene)
+        self.assertEqual(len(case.components), 2)
