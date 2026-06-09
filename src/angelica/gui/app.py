@@ -1572,10 +1572,10 @@ class NetSimGui:
             f"colebrook={colebrook_strategy_name}\n"
             f"friction={friction_method_name} ({friction_max_iterations})\n"
             f"velocity={velocity_method_name} ({velocity_max_iterations})\n"
-            f"f-tol={self._fmt_sci(colebrook_tol)} −\n"
+            f"f-tol={self._fmt_sci(colebrook_tol)}\n"
             f"V*-tol={self._fmt_sci(velocity_loop_tol)} m/s\n"
             f"ΔP-tol={self._fmt_sci(dp_tol)} Pa\n"
-            f"cont-tol={self._fmt_sci(continuity_tol)} −"
+            f"cont-tol={self._fmt_sci(continuity_tol)}"
         )
 
     def _validate_scene(self) -> list[str]:
