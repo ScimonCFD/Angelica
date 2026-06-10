@@ -1647,6 +1647,7 @@ class NetSimGui:
             return
 
         solver = build_solver_from_scene(self.scene)
+        self.convergence_history = {"laminar": [], "turbulent": []}
         self._prepare_convergence_window()
         result = solver.solve(case, progress_callback=self._on_solver_progress)
         self.latest_result = result
@@ -2957,8 +2958,6 @@ class NetSimGui:
         return boundary_results
 
     def _prepare_convergence_window(self) -> None:
-        self.convergence_history = {"laminar": [], "turbulent": []}
-
         if self.convergence_window is None or not self.convergence_window.winfo_exists():
             self.convergence_window = tk.Toplevel(self.root)
             self.convergence_window.title("Convergence Metrics")
@@ -3099,13 +3098,19 @@ class NetSimGui:
         canvas.create_line(left, top, left, bottom, fill=self._t["plot_axis"], width=1.5)
         canvas.create_line(left, bottom, right, bottom, fill=self._t["plot_axis"], width=1.5)
 
-        for i in range(5):
-            frac = i / 4 if 4 else 0
+        decade_min = math.floor(min_log)
+        decade_max = math.ceil(max_log)
+        num_decades = decade_max - decade_min
+        decade_step = 1 if num_decades <= 6 else 2 if num_decades <= 12 else 3
+        decade_ticks = range(decade_min, decade_max + 1, decade_step)
+        for decade in decade_ticks:
+            if decade < min_log - 0.01 or decade > max_log + 0.01:
+                continue
+            frac = (max_log - decade) / (max_log - min_log)
             y = top + (bottom - top) * frac
-            value_log = max_log - (max_log - min_log) * frac
-            value = 10**value_log
+            value = 10 ** decade
             canvas.create_line(left, y, right, y, fill=self._t["plot_grid"])
-            canvas.create_text(left - 8, y, text=f"{value:.1e}", anchor="e", font=("TkDefaultFont", 8), fill=self._t["plot_text"])
+            canvas.create_text(left - 8, y, text=f"{value:.0e}", anchor="e", font=("TkDefaultFont", 8), fill=self._t["plot_text"])
 
         tick_count = min(10, total_iterations)
         tick_indices = sorted(
