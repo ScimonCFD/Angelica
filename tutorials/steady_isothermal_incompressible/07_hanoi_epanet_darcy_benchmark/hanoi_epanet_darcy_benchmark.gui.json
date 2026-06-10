@@ -14,7 +14,8 @@
     "turbulent_iterations": 300,
     "pressure_relaxation": 0.3,
     "pressure_correction_abs_tolerance_pa": 0.001,
-    "pressure_correction_rel_tolerance": 1e-07
+    "pressure_correction_rel_tolerance": 1e-07,
+    "laminar_iterations": 50
   },
   "nodes": [
     {

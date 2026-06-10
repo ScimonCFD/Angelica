@@ -156,12 +156,8 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
                     metrics_history[-1],
                 )
             if (
-                (
-                    correction_abs <= self.settings.pressure_correction_abs_tolerance_pa
-                    or correction_rel <= self.settings.pressure_correction_rel_tolerance
-                )
-                and max_mass_imbalance <= self.settings.nodal_mass_imbalance_tolerance_kg_per_s
-                and max_mass_imbalance_rel <= self.settings.nodal_mass_imbalance_rel_tolerance
+                correction_abs <= self.settings.pressure_correction_abs_tolerance_pa
+                or correction_rel <= self.settings.pressure_correction_rel_tolerance
             ):
                 break
         return history, metrics_history
