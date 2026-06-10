@@ -3132,14 +3132,6 @@ class NetSimGui:
                     fill=self._t["plot_faint"],
                     dash=(4, 3),
                 )
-                canvas.create_text(
-                    transition_x + 4,
-                    top + 10,
-                    text="turbulent",
-                    anchor="nw",
-                    fill=self._t["plot_faint2"],
-                    font=("TkDefaultFont", 8),
-                )
 
         canvas.create_text((left + right) / 2, height - 10, text="Iteration", anchor="s", fill=self._t["plot_text"])
         canvas.create_text(
