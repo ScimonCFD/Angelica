@@ -11,7 +11,6 @@
     "name": "Hazen-Williams"
   },
   "solver_settings": {
-    "laminar_iterations": 50,
     "turbulent_iterations": 300,
     "pressure_relaxation": 0.3,
     "pressure_correction_abs_tolerance_pa": 0.001,
