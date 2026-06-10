@@ -44,7 +44,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AngelicaSetup-Windows
-          path: installer\Output\AngelicaSetup-*.exe
+          path: installer\Output\AngelicaSetup.exe
           retention-days: 30
 
       # Only attach to a GitHub Release when triggered by a version tag
@@ -52,5 +52,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: installer\Output\AngelicaSetup-*.exe
+          files: installer\Output\AngelicaSetup.exe
           generate_release_notes: true

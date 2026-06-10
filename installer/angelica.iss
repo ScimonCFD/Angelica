@@ -1,5 +1,5 @@
 #define MyAppName      "Angelica"
-#define MyAppVersion   "1.0.2"
+#define MyAppVersion   "1.0.3"
 #define MyAppPublisher "Simon Rodriguez"
 #define MyAppURL       "https://scimonCFD.github.io/Angelica_website/"
 #define MyAppExeName   "Angelica.exe"
@@ -16,7 +16,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=Output
-OutputBaseFilename=AngelicaSetup-{#MyAppVersion}
+OutputBaseFilename=AngelicaSetup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
