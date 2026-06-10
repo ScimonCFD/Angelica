@@ -3041,17 +3041,13 @@ class NetSimGui:
             )
             return
 
-        expected_laminar = int(self.scene.solver_settings.get("laminar_iterations", 10))
-        expected_turbulent = int(self.scene.solver_settings.get("turbulent_iterations", 60))
-        expected_total = expected_laminar + expected_turbulent
-        self._draw_history_plot(self.convergence_canvas, history_series, metric_name, expected_total)
+        self._draw_history_plot(self.convergence_canvas, history_series, metric_name)
 
     def _draw_history_plot(
         self,
         canvas: tk.Canvas,
         history_series: list[tuple[str, list[float], str, int]],
         metric_name: str,
-        expected_total: int = 0,
     ) -> None:
         canvas.delete("all")
         width = int(canvas.winfo_width() or canvas["width"])
@@ -3088,12 +3084,12 @@ class NetSimGui:
             min_log -= 1.0
             max_log += 1.0
 
-        actual_max_index = max(
+        max_index = max(
             offset + len(values) - 1
             for _label, values, _color, offset in history_series
         )
-        total_iterations = max(expected_total, actual_max_index + 1)
-        x_den = max(total_iterations - 1, 1)
+        x_den = max(max_index, 1)
+        total_iterations = max_index + 1
 
         canvas.create_line(left, top, left, bottom, fill=self._t["plot_axis"], width=1.5)
         canvas.create_line(left, bottom, right, bottom, fill=self._t["plot_axis"], width=1.5)
