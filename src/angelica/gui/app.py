@@ -812,7 +812,7 @@ class NetSimGui:
         frame.pack(fill="both", expand=True)
 
         _li = self.scene.solver_settings.get("laminar_iterations")
-        current_laminar_iterations = "" if _li is None else str(_li)
+        current_laminar_iterations = "10" if _li is None else str(_li)
         current_turbulent_iterations = str(
             self.scene.solver_settings.get("turbulent_iterations", "60")
         )
@@ -1161,27 +1161,23 @@ class NetSimGui:
         dp_tol_var: tk.StringVar,
         continuity_tol_var: tk.StringVar,
     ) -> None:
-        laminar_iterations_text = laminar_iterations_var.get().strip()
-        if laminar_iterations_text:
-            try:
-                laminar_iterations: int | None = int(laminar_iterations_text)
-            except ValueError:
-                messagebox.showerror(
-                    "Invalid numerics",
-                    "Laminar iterations must be an integer.",
-                    parent=dialog,
-                )
-                return
+        try:
+            laminar_iterations = int(laminar_iterations_var.get().strip())
+        except ValueError:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Laminar iterations must be an integer.",
+                parent=dialog,
+            )
+            return
 
-            if laminar_iterations <= 0:
-                messagebox.showerror(
-                    "Invalid numerics",
-                    "Laminar iterations must be greater than zero.",
-                    parent=dialog,
-                )
-                return
-        else:
-            laminar_iterations = None
+        if laminar_iterations <= 0:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Laminar iterations must be greater than zero.",
+                parent=dialog,
+            )
+            return
 
         try:
             turbulent_iterations = int(turbulent_iterations_var.get().strip())
@@ -1373,7 +1369,7 @@ class NetSimGui:
         self._refresh_global_summaries()
         self.status_var.set(
             "Numerics updated: "
-            f"laminar={'auto' if laminar_iterations is None else laminar_iterations}, "
+            f"laminar={laminar_iterations}, "
             f"turbulent={turbulent_iterations}, "
             f"alpha={alpha:g}, "
             f"f-tol={self._fmt_sci(colebrook_tol)}, V*-tol={self._fmt_sci(velocity_loop_tol)}, "
@@ -1528,7 +1524,7 @@ class NetSimGui:
         return "Not defined"
 
     def _numerics_summary_text(self) -> str:
-        laminar_iterations = self.scene.solver_settings.get("laminar_iterations")
+        laminar_iterations = self.scene.solver_settings.get("laminar_iterations", 10)
         turbulent_iterations = self.scene.solver_settings.get("turbulent_iterations", 60)
         alpha = self.scene.solver_settings.get("pressure_relaxation", 1.0)
         velocity_method = str(
@@ -1565,7 +1561,7 @@ class NetSimGui:
         dp_tol = self.scene.solver_settings.get("pressure_correction_abs_tolerance_pa", 1e-3)
         continuity_tol = self.scene.solver_settings.get("nodal_mass_imbalance_rel_tolerance", 1e-3)
         return (
-            f"laminar={'auto' if laminar_iterations is None else laminar_iterations}\n"
+            f"laminar={laminar_iterations}\n"
             f"turbulent={turbulent_iterations}\n"
             f"alpha={alpha}\n"
             f"colebrook={colebrook_strategy_name}\n"
