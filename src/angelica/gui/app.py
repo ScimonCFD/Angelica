@@ -811,9 +811,8 @@ class NetSimGui:
         frame = ttk.Frame(dialog, padding=12)
         frame.pack(fill="both", expand=True)
 
-        current_laminar_iterations = str(
-            self.scene.solver_settings.get("laminar_iterations", "")
-        )
+        _li = self.scene.solver_settings.get("laminar_iterations")
+        current_laminar_iterations = "" if _li is None else str(_li)
         current_turbulent_iterations = str(
             self.scene.solver_settings.get("turbulent_iterations", "60")
         )
