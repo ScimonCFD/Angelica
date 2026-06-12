@@ -185,6 +185,53 @@ class GuiIoTests(unittest.TestCase):
         self.assertEqual(scene.pressure_drop_model["library_key"], "hazen_williams")
         self.assertEqual(type(solver.turbulent_pipe_correlation).__name__, "HazenWilliamsPipeCorrelation")
 
+    def test_hazen_williams_single_pipe_matches_analytical(self) -> None:
+        import math
+
+        D = 0.05      # m
+        L = 100.0     # m
+        C = 130.0     # HW roughness coefficient
+        P_in = 200_000.0   # Pa
+        P_out = 100_000.0  # Pa
+        rho = 998.25  # kg/m³
+
+        h_f = (P_in - P_out) / (rho * 9.81)
+        R = 10.67 * L / (C ** 1.852 * D ** 4.871)
+        q_analytical = (h_f / R) ** (1.0 / 1.852)
+        mdot_analytical = rho * q_analytical
+
+        pipe_props = {
+            "length_m": str(L),
+            "diameter_m": str(D),
+            "height_change_m": "0.0",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": str(C),
+            "num_segments": "1",
+        }
+        scene = CanvasScene()
+        scene.nodes = [
+            CanvasNode(1, "source", 0.0, 0.0, {"condition_type": "pressure", "pressure": str(P_in), "flow": ""}),
+            CanvasNode(2, "sink", 100.0, 0.0, {"condition_type": "pressure", "pressure": str(P_out), "flow": ""}),
+        ]
+        scene.links = [
+            CanvasLink(
+                link_id=1,
+                start_node_id=1,
+                end_node_id=2,
+                components=[CanvasLinkComponent(1, "pipe", pipe_props)],
+            )
+        ]
+        scene.material = {"density_kg_per_m3": str(rho), "viscosity_pa_s": "0.001"}
+        scene.update_pressure_drop_model({"library_key": "hazen_williams", "name": "Hazen-Williams"})
+
+        case = build_network_case_from_scene(scene)
+        result = build_solver_from_scene(scene).solve(case)
+
+        self.assertTrue(result.converged)
+        pipe_mdot = result.component_flows[0].mass_flow_kg_per_s
+        relative_error = abs(pipe_mdot - mdot_analytical) / mdot_analytical
+        self.assertLess(relative_error, 1e-4, msg=f"HW flow error {relative_error:.2e} exceeds 0.01%")
+
     # ------------------------------------------------------------------
     # Junction topology validation
     # ------------------------------------------------------------------

@@ -9,7 +9,6 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from angelica.cases.laminar_parallel_pipes import build_laminar_parallel_pipes_case
-from angelica.core.settings import SolverSettings
 from angelica.solvers import SteadyIsothermalIncompressibleSolver
 
 # ── Fluid and geometry constants ────────────────────────────────────────────
@@ -41,13 +40,7 @@ def reynolds(D: float, Q_m3s: float) -> float:
 
 def solve_angelica():
     case = build_laminar_parallel_pipes_case()
-    solver = SteadyIsothermalIncompressibleSolver(
-        settings=SolverSettings(
-            turbulent_iterations=0,
-            laminar_iterations=20,
-        ),
-    )
-    result = solver.solve(case)
+    result = SteadyIsothermalIncompressibleSolver().solve(case)
     return result
 
 
@@ -66,8 +59,9 @@ def main() -> None:
     result = solve_angelica()
     ang_flows = [comp.volumetric_flow_m3_per_h for comp in result.component_flows]
 
-    print(f"Converged: {result.converged}  (expected False — turbulent_iterations=0)")
-    print(f"Laminar iterations: {len(result.laminar_metrics)}")
+    print(f"Converged: {result.converged}")
+    print(f"Laminar iterations:   {len(result.laminar_metrics)}")
+    print(f"Turbulent iterations: {len(result.turbulent_metrics)}")
     print()
 
     # Verify laminar regime

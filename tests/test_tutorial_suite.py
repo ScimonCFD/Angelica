@@ -9,6 +9,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from angelica.cases import (
+    build_crude_oil_pipeline_case,
     build_steady_water_network_aggressive_elevation_case,
     build_steady_water_network_aggressive_elevation_outlet_flow_case,
     build_steady_water_network_case,
@@ -106,6 +107,22 @@ class TutorialSuiteSmokeTests(unittest.TestCase):
             ),
         )
         self.assertTrue(result.converged)
+
+    def test_crude_oil_pipeline_converges(self) -> None:
+        result = solve(
+            build_crude_oil_pipeline_case(),
+            SolverSettings(
+                turbulent_iterations=60,
+                pressure_relaxation=1.0,
+                pressure_correction_abs_tolerance_pa=1e-3,
+                pressure_correction_rel_tolerance=1e-8,
+            ),
+        )
+        self.assertTrue(result.converged)
+        flows = {cf.label: cf.volumetric_flow_m3_per_h for cf in result.component_flows}
+        self.assertAlmostEqual(flows["Pipe:pipe_1"], 43.0, delta=0.1)
+        self.assertAlmostEqual(flows["Pipe:pipe_2"], 26.7, delta=0.1)
+        self.assertAlmostEqual(flows["Pipe:pipe_3"], 16.3, delta=0.1)
 
     def test_three_reservoir_junction_converges(self) -> None:
         solver = SteadyIsothermalIncompressibleSolver(

@@ -15,10 +15,11 @@ Poiseuille closure
 which should reproduce the analytical result exactly (to floating-point
 precision) once the pressure field has converged.
 
-The solver is run with `turbulent_iterations=0` so only the laminar
-initialisation phase executes.  This is intentional: the test targets the
-Poiseuille closure and pressure-correction loop, not the Colebrook-White
-turbulent closure.
+The solver runs with default settings.  Because all Reynolds numbers are well
+below 2300, `ColebrookPipeCorrelation` automatically uses f = 64/Re (the
+laminar Poiseuille friction factor) for any turbulent-phase iteration that
+touches these pipes, so the result is consistent with the exact closed-form
+solution regardless of which phase solves it.
 
 ## Network
 
@@ -69,12 +70,7 @@ Maximum Re ≈ 179 (Pipe 3), far below the turbulent transition threshold.
 | Pipe 2 flow (m³/h)               | 0.27948            |
 | Pipe 3 flow (m³/h)               | 1.43769            |
 | Max relative error vs analytical | < 0.001 %          |
-| Converged                        | False (by design)  |
-
-`converged=False` is expected because the convergence check requires at least
-one turbulent iteration; with `turbulent_iterations=0` the turbulent phase
-never runs and the flag stays False even though the laminar solution is
-numerically exact.
+| Converged                        | True               |
 
 ## How to Run
 

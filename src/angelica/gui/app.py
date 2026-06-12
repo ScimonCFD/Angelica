@@ -9,6 +9,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import sv_ttk
 
+from angelica.core.case import NetworkCase
 from angelica.core.components import FITTING_PRESET_LIBRARY
 from angelica.core.results import ComponentFlowResult, SolveResult
 from angelica.io import export_solve_result_csv, export_solve_result_workbook
@@ -654,20 +655,17 @@ class NetSimGui:
         )
         mode_var = tk.StringVar(master=dialog, value=definition_mode)
         name_var = tk.StringVar(master=dialog, value=material.get("name", ""))
-        density_var = tk.StringVar(
-            master=dialog,
-            value=material.get("density_kg_per_m3", ""),
-        )
-        viscosity_var = tk.StringVar(
-            master=dialog,
-            value=material.get("viscosity_pa_s", ""),
-        )
+        density_var = tk.StringVar(master=dialog, value=material.get("density_kg_per_m3", ""))
+        viscosity_var = tk.StringVar(master=dialog, value=material.get("viscosity_pa_s", ""))
+        api_var = tk.StringVar(master=dialog, value=material.get("api_gravity", "30.0"))
+        temperature_var = tk.StringVar(master=dialog, value=material.get("temperature_c", "60.0"))
 
         ttk.Label(frame, text="Definition").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
         mode_row = ttk.Frame(frame)
         mode_row.grid(row=0, column=1, sticky="w", pady=4)
         ttk.Radiobutton(mode_row, text="Library", variable=mode_var, value="library").pack(side="left")
         ttk.Radiobutton(mode_row, text="Custom", variable=mode_var, value="custom").pack(side="left", padx=(8, 0))
+        ttk.Radiobutton(mode_row, text="Crude oil", variable=mode_var, value="crude_oil").pack(side="left", padx=(8, 0))
 
         ttk.Label(frame, text="Material Library").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=4)
         library_box = ttk.Combobox(
@@ -683,13 +681,23 @@ class NetSimGui:
         name_entry = ttk.Entry(frame, textvariable=name_var, width=26)
         name_entry.grid(row=2, column=1, sticky="ew", pady=4)
 
-        ttk.Label(frame, text="Density (kg/m^3)").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=4)
+        ttk.Label(frame, text="Density (kg/m³)").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=4)
         density_entry = ttk.Entry(frame, textvariable=density_var, width=26)
         density_entry.grid(row=3, column=1, sticky="ew", pady=4)
 
         ttk.Label(frame, text="Viscosity (Pa·s)").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=4)
         viscosity_entry = ttk.Entry(frame, textvariable=viscosity_var, width=26)
         viscosity_entry.grid(row=4, column=1, sticky="ew", pady=4)
+
+        api_label = ttk.Label(frame, text="API Gravity (°)")
+        api_label.grid(row=5, column=0, sticky="w", padx=(0, 8), pady=4)
+        api_entry = ttk.Entry(frame, textvariable=api_var, width=26)
+        api_entry.grid(row=5, column=1, sticky="ew", pady=4)
+
+        temperature_label = ttk.Label(frame, text="Temperature (°C)")
+        temperature_label.grid(row=6, column=0, sticky="w", padx=(0, 8), pady=4)
+        temperature_entry = ttk.Entry(frame, textvariable=temperature_var, width=26)
+        temperature_entry.grid(row=6, column=1, sticky="ew", pady=4)
 
         frame.columnconfigure(1, weight=1)
 
@@ -700,12 +708,24 @@ class NetSimGui:
             viscosity_var.set(preset["viscosity_pa_s"])
 
         def sync_mode_state(*_args: object) -> None:
-            is_library = mode_var.get() == "library"
+            mode = mode_var.get()
+            is_library = mode == "library"
+            is_crude_oil = mode == "crude_oil"
             library_box.configure(state="readonly" if is_library else "disabled")
-            editable_state = "disabled" if is_library else "normal"
-            name_entry.configure(state=editable_state)
-            density_entry.configure(state=editable_state)
-            viscosity_entry.configure(state=editable_state)
+            std_state = "normal" if mode == "custom" else "disabled"
+            name_entry.configure(state=std_state)
+            density_entry.configure(state=std_state)
+            viscosity_entry.configure(state=std_state)
+            if is_crude_oil:
+                api_label.grid()
+                api_entry.grid()
+                temperature_label.grid()
+                temperature_entry.grid()
+            else:
+                api_label.grid_remove()
+                api_entry.grid_remove()
+                temperature_label.grid_remove()
+                temperature_entry.grid_remove()
             if is_library and library_var.get():
                 apply_library_selection()
 
@@ -714,7 +734,7 @@ class NetSimGui:
         sync_mode_state()
 
         button_row = ttk.Frame(frame)
-        button_row.grid(row=5, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=7, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
         ttk.Button(
             button_row,
@@ -726,6 +746,8 @@ class NetSimGui:
                 name_var,
                 density_var,
                 viscosity_var,
+                api_var,
+                temperature_var,
             ),
         ).pack(side="right", padx=(0, 8))
 
@@ -1084,7 +1106,44 @@ class NetSimGui:
         name_var: tk.StringVar,
         density_var: tk.StringVar,
         viscosity_var: tk.StringVar,
+        api_var: tk.StringVar,
+        temperature_var: tk.StringVar,
     ) -> None:
+        mode = mode_var.get()
+
+        if mode == "crude_oil":
+            try:
+                api = float(api_var.get().strip())
+                temp = float(temperature_var.get().strip())
+            except ValueError:
+                messagebox.showerror(
+                    "Invalid material",
+                    "API gravity and temperature must be valid numbers.",
+                    parent=dialog,
+                )
+                return
+            from angelica.properties.dead_oil import dead_oil_density_kg_per_m3, dead_oil_viscosity_pa_s
+            try:
+                density = dead_oil_density_kg_per_m3(api)
+                viscosity = dead_oil_viscosity_pa_s(api, temp)
+            except ValueError as exc:
+                messagebox.showerror("Invalid material", str(exc), parent=dialog)
+                return
+            material = {
+                "definition_mode": "crude_oil",
+                "library_key": "",
+                "name": f"Crude oil ({api:.1f}°API, {temp:.1f}°C)",
+                "api_gravity": str(api),
+                "temperature_c": str(temp),
+                "density_kg_per_m3": f"{density:.4f}",
+                "viscosity_pa_s": f"{viscosity:.6f}",
+            }
+            self.scene.update_material(material)
+            self._refresh_global_summaries()
+            self.status_var.set(f"Material set to {material['name']}.")
+            dialog.destroy()
+            return
+
         try:
             float(density_var.get().strip())
             float(viscosity_var.get().strip())
@@ -1097,13 +1156,13 @@ class NetSimGui:
             return
 
         material = {
-            "definition_mode": mode_var.get().strip(),
-            "library_key": library_var.get().strip() if mode_var.get() == "library" else "",
+            "definition_mode": mode,
+            "library_key": library_var.get().strip() if mode == "library" else "",
             "name": name_var.get().strip(),
             "density_kg_per_m3": density_var.get().strip(),
             "viscosity_pa_s": viscosity_var.get().strip(),
         }
-        if mode_var.get() == "library" and not material["library_key"]:
+        if mode == "library" and not material["library_key"]:
             messagebox.showerror(
                 "Invalid material",
                 "Select a material from the library.",

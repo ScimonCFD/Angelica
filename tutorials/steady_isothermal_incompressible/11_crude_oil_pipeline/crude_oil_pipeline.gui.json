@@ -1,0 +1,130 @@
+{
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 80.0,
+      "y": 280.0,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "500000.0",
+        "flow": ""
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "junction",
+      "x": 400.0,
+      "y": 280.0,
+      "properties": {
+        "condition_type": "none",
+        "pressure": "",
+        "flow": ""
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "sink",
+      "x": 700.0,
+      "y": 160.0,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "101325.0",
+        "flow": ""
+      }
+    },
+    {
+      "node_id": 4,
+      "node_type": "sink",
+      "x": 700.0,
+      "y": 400.0,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "101325.0",
+        "flow": ""
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "1000.0",
+            "diameter_m": "0.10",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 2,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": 2,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "500.0",
+            "diameter_m": "0.08",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 3,
+      "start_node_id": 2,
+      "end_node_id": 4,
+      "components": [
+        {
+          "component_id": 3,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "300.0",
+            "diameter_m": "0.06",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    }
+  ],
+  "case_name": "Crude Oil Pipeline (32°API, 65°C)",
+  "material": {
+    "library_key": "custom",
+    "definition_mode": "custom",
+    "name": "Crude oil 32°API @ 65°C",
+    "density_kg_per_m3": "864.6334",
+    "viscosity_pa_s": "0.004254"
+  },
+  "pressure_drop_model": {
+    "library_key": "colebrook_white",
+    "name": "Colebrook-White"
+  },
+  "solver_settings": {
+    "pressure_relaxation": 1.0,
+    "pressure_correction_abs_tolerance_pa": 0.001,
+    "pressure_correction_rel_tolerance": 1e-08
+  },
+  "initial_node_pressures_pa": {
+    "1": 500000.0,
+    "2": 300000.0,
+    "3": 101325.0,
+    "4": 101325.0
+  }
+}

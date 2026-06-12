@@ -44,7 +44,7 @@ pip install -e ".[dev]"
 pytest tests/
 ```
 
-All 47 tests must pass before submitting a pull request.
+All tests must pass before submitting a pull request.
 
 ## Submitting a pull request
 

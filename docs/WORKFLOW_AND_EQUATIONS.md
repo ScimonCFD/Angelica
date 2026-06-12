@@ -185,7 +185,14 @@ place where sign sensitivity matters.
 
 ## 2.3 Pipe friction factor
 
-The friction factor is found from the Colebrook equation:
+For Re < 2300 (laminar regime) the friction factor is taken directly from the
+Hagen-Poiseuille result:
+
+```text
+f = 64 / Re
+```
+
+For Re ≥ 2300 the friction factor is found from the Colebrook equation:
 
 ```text
 1 / sqrt(f) = -2 log10( eps/(3.7 D) + 2.51/(Re sqrt(f)) )
@@ -224,7 +231,7 @@ The fitting coupling used in the pressure-correction system is:
 C_fit = -2 A / (K abs(V))
 ```
 
-## 2.5 Mass conservation and pressure correction
+## 2.5 Pumps
 
 Implemented in `src/angelica/closures/pump.py`.
 
