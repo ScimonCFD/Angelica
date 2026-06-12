@@ -142,7 +142,7 @@ def _print_final_turbulent_metrics(metrics) -> None:
     print("Final Turbulent Metrics")
     print(f"  Max abs pressure correction (Pa): {metrics.pressure_correction_abs_pa:.9f}")
     print(f"  Max rel pressure correction:      {metrics.pressure_correction_rel:.9e}")
-    print(f"  Max nodal mass imbalance (kg/s):  {metrics.max_nodal_mass_imbalance_kg_per_s:.9e}")
+    print(f"  Max nodal mass imbalance (−):     {metrics.max_nodal_mass_imbalance_rel:.9e}")
 
 
 def _print_iteration_metrics_history(title: str, metrics_history) -> None:
@@ -151,14 +151,14 @@ def _print_iteration_metrics_history(title: str, metrics_history) -> None:
         f"{'Iter':>6}  "
         f"{'Abs Corr. (Pa)':>16}  "
         f"{'Rel Corr.':>12}  "
-        f"{'Max Mass Imb. (kg/s)':>22}"
+        f"{'Max Mass Imb. (−)':>20}"
     )
     for iteration, metrics in enumerate(metrics_history, start=1):
         print(
             f"{iteration:>6}  "
             f"{metrics.pressure_correction_abs_pa:>16.9f}  "
             f"{metrics.pressure_correction_rel:>12.5e}  "
-            f"{metrics.max_nodal_mass_imbalance_kg_per_s:>22.9e}"
+            f"{metrics.max_nodal_mass_imbalance_rel:>20.9e}"
         )
 
 

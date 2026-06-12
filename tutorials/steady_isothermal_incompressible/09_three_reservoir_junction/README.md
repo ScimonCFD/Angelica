@@ -60,7 +60,7 @@ Fluid: water at 998.25 kg/m³, 0.001 Pa·s.
 | Flow A→J                  | 112.35 m³/h     |
 | Flow J→B                  | 62.36 m³/h      |
 | Flow J→C                  | 49.99 m³/h      |
-| Mass balance error at J   | < 1 × 10⁻⁴ kg/s |
+| Mass balance error at J   | < 1 × 10⁻³ (−)  |
 
 The junction head (25.26 m) lies between the heads of reservoirs B (20 m) and
 A (30 m), which is required for flow to move from A to J and from J to both B

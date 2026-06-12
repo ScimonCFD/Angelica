@@ -18,7 +18,6 @@ class SolverSettings:
     velocity_loop_tolerance: float = 1e-4
     pressure_correction_abs_tolerance_pa: float = 1e-3
     pressure_correction_rel_tolerance: float = 1e-8
-    nodal_mass_imbalance_tolerance_kg_per_s: float = 1e-4
     nodal_mass_imbalance_rel_tolerance: float = 1e-3
 
     @property

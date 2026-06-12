@@ -32,7 +32,7 @@ def main() -> None:
             "Final metrics: "
             f"abs_dp={final_metrics.pressure_correction_abs_pa:.6e} Pa, "
             f"rel_dp={final_metrics.pressure_correction_rel:.6e}, "
-            f"max_mass_imbalance={final_metrics.max_nodal_mass_imbalance_kg_per_s:.6e} kg/s"
+            f"max_mass_imbalance_rel={final_metrics.max_nodal_mass_imbalance_rel:.6e}"
         )
 
 

@@ -15,7 +15,6 @@ class IterationMetrics:
     pressure_correction_abs_pa: float
     pressure_correction_mean_abs_pa: float
     pressure_correction_rel: float
-    max_nodal_mass_imbalance_kg_per_s: float
     max_nodal_mass_imbalance_rel: float
 
 

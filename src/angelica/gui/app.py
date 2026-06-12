@@ -3079,6 +3079,16 @@ class NetSimGui:
             if value > 0.0
         ]
         if not all_values:
+            total_iters = sum(len(values) for _label, values, _color, _offset in history_series)
+            msg = (
+                "Converged immediately — correction below machine precision."
+                if total_iters > 0
+                else "No convergence data yet."
+            )
+            canvas.delete("all")
+            canvas.create_text(
+                20, 20, anchor="nw", text=msg, fill=self._t["plot_muted"],
+            )
             return
 
         min_log = math.log10(min(all_values))

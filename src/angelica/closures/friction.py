@@ -261,6 +261,8 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
     ) -> tuple[float, float]:
         reynolds = density * abs(velocity) * pipe_state.component.diameter_m / viscosity
         pipe_state.reynolds = reynolds
+        if reynolds < 2300.0:
+            return 64.0 / max(reynolds, 1e-12), reynolds
         initial_guess = max(64.0 / max(reynolds, 1e-12), 1e-6)
         friction_factor = self.solve_colebrook(
             pipe_state,

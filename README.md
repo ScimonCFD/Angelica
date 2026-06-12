@@ -27,7 +27,7 @@ Angelica solves **steady, incompressible, isothermal pipe networks** — computi
 
 ### Windows — one-click installer
 
-Download **AngelicaSetup-1.0.0.exe** from the [latest release](https://github.com/ScimonCFD/Angelica/releases/latest) and run it. No Python required. The installer places Angelica in your user folder (no admin rights needed) and optionally creates a desktop shortcut.
+Download **AngelicaSetup.exe** from the [latest release](https://github.com/ScimonCFD/Angelica/releases/latest) and run it. No Python required. The installer places Angelica in your user folder (no admin rights needed) and optionally creates a desktop shortcut.
 
 ### Linux / macOS — pip from GitHub
 
@@ -69,7 +69,7 @@ angelica-gui
 
 ## Tutorials and Benchmarks
 
-Eight cases are included under [`tutorials/steady_isothermal_incompressible/`](tutorials/steady_isothermal_incompressible/):
+Ten cases are included under [`tutorials/steady_isothermal_incompressible/`](tutorials/steady_isothermal_incompressible/):
 
 | # | Case | Type |
 |---|------|------|
@@ -81,6 +81,8 @@ Eight cases are included under [`tutorials/steady_isothermal_incompressible/`](t
 | 06 | Combined inlet and outlet mass-flow boundaries | Tutorial |
 | 07 | Hanoi network — 32 nodes, 34 pipes | Benchmark (EPANET reference) |
 | 08 | EPANET pump network | Benchmark (EPANET reference) |
+| 09 | Three-reservoir junction | Benchmark (analytical Colebrook-White) |
+| 10 | Laminar Poiseuille parallel pipes | Benchmark (exact closed-form) |
 
 ## Roadmap
 

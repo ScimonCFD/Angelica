@@ -35,7 +35,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         network_state = build_network_state(case)
         self._initialise_pressure_field(network_state, case)
 
-        laminar_history, laminar_metrics = self._solve_laminar(
+        laminar_history, laminar_metrics, laminar_converged = self._solve_laminar(
             network_state,
             case.fluid_model,
             progress_callback=progress_callback,
@@ -45,6 +45,8 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             case.fluid_model,
             progress_callback=progress_callback,
         )
+        if self.settings.turbulent_iterations == 0:
+            converged = laminar_converged
 
         node_pressures = {
             node_id: float(network_state.nodes[node_id].pressure_pa)
@@ -123,9 +125,10 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         network_state,
         fluid_model,
         progress_callback=None,
-    ) -> tuple[list[float], list[IterationMetrics]]:
+    ) -> tuple[list[float], list[IterationMetrics], bool]:
         history = []
         metrics_history = []
+        converged = False
         for iteration_index in range(self._get_laminar_iteration_count(network_state)):
             self._update_velocities(network_state, fluid_model, laminar=True)
             self._update_mass_flows(network_state, fluid_model)
@@ -139,13 +142,12 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             history.append(correction_abs)
             self._update_velocities(network_state, fluid_model, laminar=True)
             self._update_mass_flows(network_state, fluid_model)
-            max_mass_imbalance, max_mass_imbalance_rel = self._compute_max_nodal_mass_imbalance(network_state)
+            max_mass_imbalance_rel = self._compute_max_nodal_mass_imbalance(network_state)
             metrics_history.append(
                 self._build_iteration_metrics(
                     correction_abs,
                     correction_mean_abs,
                     correction_rel,
-                    max_mass_imbalance,
                     max_mass_imbalance_rel,
                 )
             )
@@ -160,11 +162,11 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
                     correction_abs <= self.settings.pressure_correction_abs_tolerance_pa
                     or correction_rel <= self.settings.pressure_correction_rel_tolerance
                 )
-                and max_mass_imbalance <= self.settings.nodal_mass_imbalance_tolerance_kg_per_s
                 and max_mass_imbalance_rel <= self.settings.nodal_mass_imbalance_rel_tolerance
             ):
+                converged = True
                 break
-        return history, metrics_history
+        return history, metrics_history, converged
 
     def _get_laminar_iteration_count(self, network_state) -> int:
         if self.settings.laminar_iterations is not None:
@@ -200,13 +202,12 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             history.append(correction_abs)
             self._update_velocities(network_state, fluid_model, laminar=False)
             self._update_mass_flows(network_state, fluid_model)
-            max_mass_imbalance, max_mass_imbalance_rel = self._compute_max_nodal_mass_imbalance(network_state)
+            max_mass_imbalance_rel = self._compute_max_nodal_mass_imbalance(network_state)
             metrics_history.append(
                 self._build_iteration_metrics(
                     correction_abs,
                     correction_mean_abs,
                     correction_rel,
-                    max_mass_imbalance,
                     max_mass_imbalance_rel,
                 )
             )
@@ -221,7 +222,6 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
                     correction_abs <= self.settings.pressure_correction_abs_tolerance_pa
                     or correction_rel <= self.settings.pressure_correction_rel_tolerance
                 )
-                and max_mass_imbalance <= self.settings.nodal_mass_imbalance_tolerance_kg_per_s
                 and max_mass_imbalance_rel <= self.settings.nodal_mass_imbalance_rel_tolerance
             ):
                 converged = True
@@ -238,14 +238,12 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         correction_abs: float,
         correction_mean_abs: float,
         correction_rel: float,
-        max_mass_imbalance: float,
         max_mass_imbalance_rel: float,
     ) -> IterationMetrics:
         return IterationMetrics(
             pressure_correction_abs_pa=correction_abs,
             pressure_correction_mean_abs_pa=correction_mean_abs,
             pressure_correction_rel=correction_rel,
-            max_nodal_mass_imbalance_kg_per_s=max_mass_imbalance,
             max_nodal_mass_imbalance_rel=max_mass_imbalance_rel,
         )
 
@@ -344,8 +342,8 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         mean_abs_correction = sum(abs_corrections) / len(abs_corrections)
         return max_abs_value(scaled_correction), mean_abs_correction, max(relative_corrections)
 
-    def _compute_max_nodal_mass_imbalance(self, network_state) -> tuple[float, float]:
-        """Return (max_abs_imbalance_kg_per_s, max_rel_imbalance) across junction nodes."""
+    def _compute_max_nodal_mass_imbalance(self, network_state) -> float:
+        """Return max relative mass imbalance across junction nodes: |in-out|/(in+out)."""
         imbalance_by_node = {node_id: 0.0 for node_id in network_state.nodes}
         throughput_by_node = {node_id: 0.0 for node_id in network_state.nodes}
 
@@ -357,15 +355,12 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             throughput_by_node[link_state.start_node.node_id] += abs_flow
             throughput_by_node[link_state.end_node.node_id] += abs_flow
 
-        max_abs = 0.0
         max_rel = 0.0
         for node_id, node_state in network_state.nodes.items():
             if node_state.is_boundary:
                 continue
             imbalance = abs(imbalance_by_node[node_id])
             throughput = throughput_by_node[node_id]
-            max_abs = max(max_abs, imbalance)
-            # rel = |m_in - m_out| / (m_in + m_out); throughput = m_in + m_out
             max_rel = max(max_rel, imbalance / max(throughput, 1e-10))
 
-        return max_abs, max_rel
+        return max_rel

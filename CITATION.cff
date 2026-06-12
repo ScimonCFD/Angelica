@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use Angelica in your work, please cite it using the metadata below."
+type: software
+title: "Angelica"
+abstract: >
+  Angelica is an open-source platform for steady, incompressible, isothermal
+  pipe network simulation. It solves for nodal pressures and component flow
+  rates in networks of pipes, fittings, and pumps using a pressure-correction
+  algorithm (modified SIMPLE) with Colebrook-White, Hazen-Williams, or
+  Poiseuille closures. A graphical network editor is included.
+authors:
+  - family-names: Rodriguez
+    given-names: Simon
+    # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"
+version: "1.0.11"
+license: MIT
+repository-code: "https://github.com/ScimonCFD/Angelica"
+url: "https://scimonCFD.github.io/Angelica_website/"
+keywords:
+  - pipe network
+  - hydraulics
+  - flow simulation
+  - pressure correction
+  - SIMPLE algorithm
+  - Colebrook-White
+  - Hazen-Williams
+  - open source
