@@ -83,6 +83,7 @@ Ten cases are included under [`tutorials/steady_isothermal_incompressible/`](tut
 | 08 | EPANET pump network | Benchmark (EPANET reference) |
 | 09 | Three-reservoir junction | Benchmark (analytical Colebrook-White) |
 | 10 | Laminar Poiseuille parallel pipes | Benchmark (exact closed-form) |
+| 11 | Crude oil gathering pipeline — 32°API, 65°C | Demo (Beggs & Robinson properties) |
 
 ## Roadmap
 
