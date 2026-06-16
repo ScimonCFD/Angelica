@@ -4,13 +4,18 @@ import json
 import math
 from pathlib import Path
 
-from angelica.core.case import FlowBoundary, NetworkCase, PressureBoundary
+from angelica.core.case import FlowBoundary, NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import FITTING_PRESET_LIBRARY, Fitting, Pipe, Pump
 from angelica.core.results import ComponentFlowResult, IterationMetrics
 from angelica.core.settings import SolverSettings
 from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
 from angelica.properties.single_component import SingleComponentFluid
-from angelica.solvers import SteadyIsothermalIncompressibleSolver
+from angelica.properties.thermal_fluid import ThermalFluid
+from angelica.solvers import (
+    NonIsothermalSolverSettings,
+    SteadyIsothermalIncompressibleSolver,
+    SteadyNonIsothermalIncompressibleSolver,
+)
 
 from .model import (
     CanvasLink,
@@ -72,6 +77,7 @@ def scene_from_dict(data: dict) -> CanvasScene:
         {key: str(value) for key, value in data.get("pressure_drop_model", {}).items()}
     )
     scene.case_name = str(data.get("case_name", ""))
+    scene.physics_mode = str(data.get("physics_mode", "isothermal"))
     scene.solver_settings = dict(data.get("solver_settings", {}))
     scene.initial_node_pressures_pa = {
         int(node_id): float(value)
@@ -114,6 +120,7 @@ def scene_to_dict(scene: CanvasScene) -> dict:
             for link in scene.links
         ],
         "case_name": scene.case_name,
+        "physics_mode": scene.physics_mode,
         "material": dict(scene.material),
         "pressure_drop_model": dict(scene.pressure_drop_model),
         "solver_settings": dict(scene.solver_settings),
@@ -209,11 +216,27 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
     if not scene.links:
         raise ValueError("The scene has no links. Add at least one connection before running.")
     if not scene.material:
-        raise ValueError("No material is defined. Use Material -> Define Material before running.")
+        raise ValueError("No material is defined. Use Material → Define Material before running.")
     if not scene.material.get("density_kg_per_m3", "").strip():
         raise ValueError("The material is missing density_kg_per_m3.")
     if not scene.material.get("viscosity_pa_s", "").strip():
         raise ValueError("The material is missing viscosity_pa_s.")
+
+    is_non_isothermal = scene.physics_mode == "non_isothermal"
+
+    if is_non_isothermal:
+        cp_text = scene.material.get("specific_heat_j_per_kg_k", "").strip()
+        k_text = scene.material.get("thermal_conductivity_w_per_m_k", "").strip()
+        if not cp_text:
+            raise ValueError(
+                "Non-isothermal mode requires Specific Heat (cp) in the material. "
+                "Open Material → Define Material."
+            )
+        if not k_text:
+            raise ValueError(
+                "Non-isothermal mode requires Thermal Conductivity (k) in the material. "
+                "Open Material → Define Material."
+            )
 
     for node in scene.nodes:
         if node.node_type != "junction":
@@ -294,6 +317,15 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                     default=130.0,
                 )
                 height_change = _optional_float(component, "height_change_m", default=0.0)
+                heat_transfer = _optional_float(
+                    component, "heat_transfer_coefficient_w_per_m2k", default=0.0
+                ) if is_non_isothermal else 0.0
+                ambient_temp = _optional_float(
+                    component, "ambient_temperature_c", default=20.0
+                ) if is_non_isothermal else 20.0
+                n_segs = max(1, int(_optional_float(
+                    component, "n_thermal_segments", default=10.0
+                ))) if is_non_isothermal else 1
                 components.append(
                     Pipe(
                         start_node=current_start,
@@ -303,6 +335,9 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         absolute_roughness_m=roughness,
                         hazen_williams_c=hazen_williams_c,
                         height_change_m=height_change,
+                        heat_transfer_coefficient_w_per_m2k=heat_transfer,
+                        ambient_temperature_c=ambient_temp,
+                        n_thermal_segments=n_segs,
                         component_id=f"link_{link.link_id}_pipe_{component.component_id}",
                     )
                 )
@@ -348,12 +383,32 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
     visible_node_ids = {node.node_id for node in scene.nodes}
     all_node_ids = visible_node_ids.union(range(max(visible_node_ids) + 1, next_internal_node_id))
 
-    return NetworkCase(
-        name=scene.case_name or "GUI scene",
-        fluid_model=SingleComponentFluid(
+    if is_non_isothermal:
+        fluid_model = ThermalFluid.from_constants(
             density_kg_per_m3=float(scene.material["density_kg_per_m3"]),
             viscosity_pa_s=float(scene.material["viscosity_pa_s"]),
-        ),
+            specific_heat_j_per_kg_k=float(scene.material["specific_heat_j_per_kg_k"]),
+            thermal_conductivity_w_per_m_k=float(scene.material["thermal_conductivity_w_per_m_k"]),
+        )
+        thermal_inlets = tuple(
+            ThermalBoundary(
+                node_id=node.node_id,
+                temperature_c=float(node.properties["inlet_temperature_c"]),
+            )
+            for node in scene.nodes
+            if node.node_type == "source"
+            and node.properties.get("inlet_temperature_c", "").strip()
+        )
+    else:
+        fluid_model = SingleComponentFluid(
+            density_kg_per_m3=float(scene.material["density_kg_per_m3"]),
+            viscosity_pa_s=float(scene.material["viscosity_pa_s"]),
+        )
+        thermal_inlets = ()
+
+    return NetworkCase(
+        name=scene.case_name or "GUI scene",
+        fluid_model=fluid_model,
         pressure_inlets=tuple(pressure_inlets),
         pressure_outlets=tuple(pressure_outlets),
         flow_inlets=tuple(flow_inlets),
@@ -361,10 +416,11 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
         components=tuple(components),
         node_ids=tuple(sorted(all_node_ids)),
         initial_node_pressures_pa=dict(scene.initial_node_pressures_pa),
+        thermal_inlets=thermal_inlets,
     )
 
 
-def build_solver_from_scene(scene: CanvasScene) -> SteadyIsothermalIncompressibleSolver:
+def build_solver_from_scene(scene: CanvasScene):
     pressure_drop_model_key = scene.pressure_drop_model.get("library_key", "")
     if pressure_drop_model_key == "colebrook_white":
         turbulent_pipe_correlation = ColebrookPipeCorrelation()
@@ -377,11 +433,13 @@ def build_solver_from_scene(scene: CanvasScene) -> SteadyIsothermalIncompressibl
 
     settings = SolverSettings(**scene.solver_settings) if scene.solver_settings else SolverSettings()
 
-    if scene.solver_settings:
-        return SteadyIsothermalIncompressibleSolver(
-            settings=settings,
+    if scene.physics_mode == "non_isothermal":
+        return SteadyNonIsothermalIncompressibleSolver(
+            hydraulic_settings=settings,
+            non_isothermal_settings=NonIsothermalSolverSettings(),
             turbulent_pipe_correlation=turbulent_pipe_correlation,
         )
+
     return SteadyIsothermalIncompressibleSolver(
         settings=settings,
         turbulent_pipe_correlation=turbulent_pipe_correlation,

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from angelica.closures.convection_scheme import ConvectionScheme, UpwindScheme
+from angelica.closures.pressure_drop import PressureDropCorrelation
 from angelica.core.network import build_network_state
 from angelica.core.results import SolveResult
 from angelica.core.settings import SolverSettings
@@ -40,12 +41,14 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         hydraulic_settings: SolverSettings | None = None,
         non_isothermal_settings: NonIsothermalSolverSettings | None = None,
         convection_scheme: ConvectionScheme | None = None,
+        turbulent_pipe_correlation: PressureDropCorrelation | None = None,
     ) -> None:
         self.hydraulic_settings = hydraulic_settings or SolverSettings()
         self.non_isothermal_settings = non_isothermal_settings or NonIsothermalSolverSettings()
         self.convection_scheme = convection_scheme or UpwindScheme()
         self._hydraulic_solver = SteadyIsothermalIncompressibleSolver(
-            settings=self.hydraulic_settings
+            settings=self.hydraulic_settings,
+            turbulent_pipe_correlation=turbulent_pipe_correlation,
         )
 
     def solve(self, case, _progress_callback=None) -> SolveResult:
@@ -150,7 +153,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         )
 
     @staticmethod
-    def _initial_temperature(case, network_state) -> float:
+    def _initial_temperature(case, _network_state) -> float:
         if case.thermal_inlets:
             return case.thermal_inlets[0].temperature_c
         # fallback: ambient of first pipe, or 20 °C

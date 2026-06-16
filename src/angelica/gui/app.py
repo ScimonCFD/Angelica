@@ -127,6 +127,8 @@ class NetSimGui:
             "name": "Water",
             "density_kg_per_m3": "998.25",
             "viscosity_pa_s": "0.001",
+            "specific_heat_j_per_kg_k": "4182.0",
+            "thermal_conductivity_w_per_m_k": "0.598",
         }
     }
     PRESSURE_DROP_MODEL_LIBRARY = {
@@ -284,6 +286,11 @@ class NetSimGui:
         menu_bar.add_cascade(label="Material", menu=material_menu)
 
         physics_menu = tk.Menu(menu_bar, tearoff=False)
+        physics_menu.add_command(
+            label="Case Type…",
+            command=self._open_case_type_dialog,
+        )
+        physics_menu.add_separator()
         physics_menu.add_command(
             label="Define Pressure-Drop Model",
             command=self._open_pressure_drop_model_dialog,
@@ -659,6 +666,8 @@ class NetSimGui:
         viscosity_var = tk.StringVar(master=dialog, value=material.get("viscosity_pa_s", ""))
         api_var = tk.StringVar(master=dialog, value=material.get("api_gravity", "30.0"))
         temperature_var = tk.StringVar(master=dialog, value=material.get("temperature_c", "60.0"))
+        cp_var = tk.StringVar(master=dialog, value=material.get("specific_heat_j_per_kg_k", ""))
+        k_var = tk.StringVar(master=dialog, value=material.get("thermal_conductivity_w_per_m_k", ""))
 
         ttk.Label(frame, text="Definition").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
         mode_row = ttk.Frame(frame)
@@ -699,6 +708,16 @@ class NetSimGui:
         temperature_entry = ttk.Entry(frame, textvariable=temperature_var, width=26)
         temperature_entry.grid(row=6, column=1, sticky="ew", pady=4)
 
+        cp_label = ttk.Label(frame, text="Specific Heat cp (J/kg·K)")
+        cp_label.grid(row=7, column=0, sticky="w", padx=(0, 8), pady=4)
+        cp_entry = ttk.Entry(frame, textvariable=cp_var, width=26)
+        cp_entry.grid(row=7, column=1, sticky="ew", pady=4)
+
+        k_label = ttk.Label(frame, text="Thermal Conductivity k (W/m·K)")
+        k_label.grid(row=8, column=0, sticky="w", padx=(0, 8), pady=4)
+        k_entry = ttk.Entry(frame, textvariable=k_var, width=26)
+        k_entry.grid(row=8, column=1, sticky="ew", pady=4)
+
         frame.columnconfigure(1, weight=1)
 
         def apply_library_selection(_event: tk.Event | None = None) -> None:
@@ -706,6 +725,10 @@ class NetSimGui:
             name_var.set(preset["name"])
             density_var.set(preset["density_kg_per_m3"])
             viscosity_var.set(preset["viscosity_pa_s"])
+            cp_var.set(preset.get("specific_heat_j_per_kg_k", ""))
+            k_var.set(preset.get("thermal_conductivity_w_per_m_k", ""))
+
+        is_non_isothermal = self.scene.physics_mode == "non_isothermal"
 
         def sync_mode_state(*_args: object) -> None:
             mode = mode_var.get()
@@ -726,6 +749,16 @@ class NetSimGui:
                 api_entry.grid_remove()
                 temperature_label.grid_remove()
                 temperature_entry.grid_remove()
+            if is_non_isothermal:
+                cp_label.grid()
+                cp_entry.grid()
+                k_label.grid()
+                k_entry.grid()
+            else:
+                cp_label.grid_remove()
+                cp_entry.grid_remove()
+                k_label.grid_remove()
+                k_entry.grid_remove()
             if is_library and library_var.get():
                 apply_library_selection()
 
@@ -734,7 +767,7 @@ class NetSimGui:
         sync_mode_state()
 
         button_row = ttk.Frame(frame)
-        button_row.grid(row=7, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=9, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
         ttk.Button(
             button_row,
@@ -748,6 +781,8 @@ class NetSimGui:
                 viscosity_var,
                 api_var,
                 temperature_var,
+                cp_var,
+                k_var,
             ),
         ).pack(side="right", padx=(0, 8))
 
@@ -1108,8 +1143,11 @@ class NetSimGui:
         viscosity_var: tk.StringVar,
         api_var: tk.StringVar,
         temperature_var: tk.StringVar,
+        cp_var: tk.StringVar,
+        k_var: tk.StringVar,
     ) -> None:
         mode = mode_var.get()
+        is_non_isothermal = self.scene.physics_mode == "non_isothermal"
 
         if mode == "crude_oil":
             try:
@@ -1138,6 +1176,11 @@ class NetSimGui:
                 "density_kg_per_m3": f"{density:.4f}",
                 "viscosity_pa_s": f"{viscosity:.6f}",
             }
+            if is_non_isothermal:
+                if not self._validate_and_attach_thermal_props(
+                    material, cp_var, k_var, dialog
+                ):
+                    return
             self.scene.update_material(material)
             self._refresh_global_summaries()
             self.status_var.set(f"Material set to {material['name']}.")
@@ -1176,10 +1219,38 @@ class NetSimGui:
                 parent=dialog,
             )
             return
+        if is_non_isothermal:
+            if not self._validate_and_attach_thermal_props(
+                material, cp_var, k_var, dialog
+            ):
+                return
         self.scene.update_material(material)
         self._refresh_global_summaries()
         self.status_var.set(f"Material set to {material['name']}.")
         dialog.destroy()
+
+    def _validate_and_attach_thermal_props(
+        self,
+        material: dict,
+        cp_var: tk.StringVar,
+        k_var: tk.StringVar,
+        dialog: tk.Toplevel,
+    ) -> bool:
+        cp_text = cp_var.get().strip()
+        k_text = k_var.get().strip()
+        try:
+            float(cp_text)
+            float(k_text)
+        except ValueError:
+            messagebox.showerror(
+                "Invalid material",
+                "Specific heat (cp) and thermal conductivity (k) must be valid numbers.",
+                parent=dialog,
+            )
+            return False
+        material["specific_heat_j_per_kg_k"] = cp_text
+        material["thermal_conductivity_w_per_m_k"] = k_text
+        return True
 
     def _save_pressure_drop_model_definition(
         self,
@@ -1475,6 +1546,69 @@ class NetSimGui:
         self._unit_system_key = key
         self._redraw_scene()
         self.status_var.set(f"Unit system: {self.UNIT_SYSTEMS[key]['name']}.")
+        dialog.destroy()
+
+    def _open_case_type_dialog(self) -> None:
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Case Type")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+
+        frame = ttk.Frame(dialog, padding=16)
+        frame.pack(fill="both", expand=True)
+
+        ttk.Label(frame, text="Compressibility").grid(
+            row=0, column=0, sticky="w", pady=(0, 4)
+        )
+        ttk.Label(frame, text="Incompressible  (only option currently supported)").grid(
+            row=0, column=1, sticky="w", padx=(8, 0), pady=(0, 4)
+        )
+
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=1, column=0, columnspan=2, sticky="ew", pady=8
+        )
+
+        ttk.Label(frame, text="Energy").grid(row=2, column=0, sticky="w", pady=4)
+        mode_var = tk.StringVar(value=self.scene.physics_mode)
+        mode_frame = ttk.Frame(frame)
+        mode_frame.grid(row=2, column=1, sticky="w", padx=(8, 0))
+        ttk.Radiobutton(
+            mode_frame, text="Isothermal", variable=mode_var, value="isothermal"
+        ).pack(side="left", padx=(0, 12))
+        ttk.Radiobutton(
+            mode_frame, text="Non-isothermal", variable=mode_var, value="non_isothermal"
+        ).pack(side="left")
+
+        note = ttk.Label(
+            frame,
+            text=(
+                "Non-isothermal requires cp and k in the material,\n"
+                "inlet temperature on source nodes, and U / T_amb on pipes."
+            ),
+            foreground="gray",
+            justify="left",
+        )
+        note.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 8))
+
+        button_row = ttk.Frame(frame)
+        button_row.grid(row=4, column=0, columnspan=2, sticky="e", pady=(4, 0))
+        ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
+        ttk.Button(
+            button_row,
+            text="Apply",
+            command=lambda: self._apply_case_type(mode_var.get(), dialog),
+        ).pack(side="right", padx=(0, 8))
+
+        frame.columnconfigure(1, weight=1)
+        dialog.update_idletasks()
+        dialog.wait_visibility()
+        dialog.grab_set()
+        dialog.focus_set()
+
+    def _apply_case_type(self, mode: str, dialog: tk.Toplevel) -> None:
+        self.scene.physics_mode = mode
+        label = "Isothermal" if mode == "isothermal" else "Non-isothermal"
+        self.status_var.set(f"Case type set to: {label}.")
         dialog.destroy()
 
     def _unit_quantities(self) -> dict:
@@ -2225,6 +2359,24 @@ class NetSimGui:
                     flow_entry,
                 ),
             )
+
+            if node.node_type == "source" and self.scene.physics_mode == "non_isothermal":
+                ttk.Separator(container, orient="horizontal").grid(
+                    row=3, column=0, columnspan=2, sticky="ew", pady=(6, 2)
+                )
+                ttk.Label(
+                    container, text="— Thermal boundary —", foreground="gray"
+                ).grid(row=4, column=0, columnspan=2, pady=(0, 4))
+                ttk.Label(container, text="Inlet Temperature (°C)").grid(
+                    row=5, column=0, sticky="w", pady=4
+                )
+                t_in_var = tk.StringVar(
+                    value=node.properties.get("inlet_temperature_c", "")
+                )
+                ttk.Entry(container, textvariable=t_in_var, width=20).grid(
+                    row=5, column=1, sticky="ew", pady=4
+                )
+                entries["inlet_temperature_c"] = t_in_var
         else:
             ttk.Label(container, text="Label").grid(row=0, column=0, sticky="w", pady=4)
             label_var = tk.StringVar(value=node.properties.get("label", ""))
@@ -2664,6 +2816,38 @@ class NetSimGui:
             entries[key] = var
             row += 1
 
+        if self.scene.physics_mode == "non_isothermal":
+            ttk.Separator(properties_frame, orient="horizontal").grid(
+                row=row, column=0, columnspan=2, sticky="ew", pady=(4, 2)
+            )
+            row += 1
+            ttk.Label(
+                properties_frame, text="— Heat transfer —", foreground="gray"
+            ).grid(row=row, column=0, columnspan=2, pady=(0, 2))
+            row += 1
+            thermal_fields = [
+                ("heat_transfer_coefficient_w_per_m2k", "U — Heat transfer coeff. (W/m²K)"),
+                ("ambient_temperature_c", "T_amb — Ambient temperature (°C)"),
+                ("n_thermal_segments", "Thermal segments"),
+            ]
+            defaults = {
+                "heat_transfer_coefficient_w_per_m2k": "0.0",
+                "ambient_temperature_c": "20.0",
+                "n_thermal_segments": "10",
+            }
+            for key, label in thermal_fields:
+                ttk.Label(properties_frame, text=label).grid(
+                    row=row, column=0, sticky="w", pady=4
+                )
+                var = tk.StringVar(
+                    value=component.properties.get(key, defaults[key])
+                )
+                ttk.Entry(properties_frame, textvariable=var, width=18).grid(
+                    row=row, column=1, sticky="ew", pady=4
+                )
+                entries[key] = var
+                row += 1
+
         button_row = ttk.Frame(properties_frame)
         button_row.grid(row=row, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(
@@ -2994,13 +3178,20 @@ class NetSimGui:
                     lines.append(f"Q={self._fmt(result_data['flow_kg_per_s'] * q_factor)} {q_unit}")
                 elif condition_type == "flow" and "pressure_pa" in result_data:
                     lines.append(f"P={self._fmt(result_data['pressure_pa'] * p_factor)} {p_unit}")
+                if "temperature_c" in result_data:
+                    lines.append(f"T={result_data['temperature_c']:.1f} °C")
             return "\n".join(lines)
 
         result_data = self.latest_boundary_results.get(node.node_id)
-        if result_data and "pressure_pa" in result_data:
+        if result_data:
             _, p_factor = self._unit_quantities()["pressure"]
             p_unit = self._unit_label("pressure")
-            return f"P={self._fmt(result_data['pressure_pa'] * p_factor)} {p_unit}"
+            summary_lines = []
+            if "pressure_pa" in result_data:
+                summary_lines.append(f"P={self._fmt(result_data['pressure_pa'] * p_factor)} {p_unit}")
+            if "temperature_c" in result_data:
+                summary_lines.append(f"T={result_data['temperature_c']:.1f} °C")
+            return "\n".join(summary_lines)
         return ""
 
     def _build_network_case_from_scene(self) -> NetworkCase:
@@ -3010,6 +3201,9 @@ class NetSimGui:
         boundary_results: dict[int, dict[str, float]] = {}
         for node_id, pressure in result.node_pressures_pa.items():
             boundary_results[node_id] = {"pressure_pa": pressure}
+
+        for node_id, temp_c in result.node_temperatures_c.items():
+            boundary_results.setdefault(node_id, {})["temperature_c"] = temp_c
 
         for component, component_result in zip(case.components, result.component_flows):
             start_entry = boundary_results.setdefault(component.start_node, {"pressure_pa": result.node_pressures_pa.get(component.start_node, 0.0)})

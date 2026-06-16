@@ -48,6 +48,7 @@ class CanvasLinkComponent:
 class CanvasScene:
     active_tool: Optional[str] = None
     case_name: str = ""
+    physics_mode: str = "isothermal"
     nodes: List[CanvasNode] = field(default_factory=list)
     links: List[CanvasLink] = field(default_factory=list)
     material: Dict[str, str] = field(default_factory=dict)
@@ -258,6 +259,7 @@ class CanvasScene:
         self._next_link_id = 1
         self._next_component_id = 1
         self.active_tool = None
+        self.physics_mode = "isothermal"
 
     def update_material(self, material: Dict[str, str]) -> None:
         self.material = dict(material)
