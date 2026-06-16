@@ -13,6 +13,8 @@ class NodeState:
     is_inlet: bool = False
     is_pressure_boundary: bool = False
     prescribed_mass_flow_kg_per_s: float | None = None
+    temperature_c: float | None = None
+    is_thermal_inlet: bool = False
 
 
 @dataclass
@@ -38,6 +40,7 @@ class PipeState(PressureChangerState):
     component: Pipe
     friction_factor: float | None = None
     reynolds: float = 0.0
+    temperature_c: float = 20.0
 
 
 @dataclass

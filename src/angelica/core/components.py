@@ -56,6 +56,9 @@ class Pipe(PressureChanger):
     absolute_roughness_m: float = 0.0
     hazen_williams_c: float = 130.0
     height_change_m: float = 0.0
+    heat_transfer_coefficient_w_per_m2k: float = 0.0
+    ambient_temperature_c: float = 20.0
+    n_thermal_segments: int = 10
 
 
 @dataclass(frozen=True)

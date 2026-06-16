@@ -28,6 +28,11 @@ class SolveResult:
     laminar_metrics: list[IterationMetrics]
     turbulent_history: list[float]
     turbulent_metrics: list[IterationMetrics]
+    node_temperatures_c: dict[int, float] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.node_temperatures_c is None:
+            object.__setattr__(self, "node_temperatures_c", {})
 
     @property
     def link_mass_flows_kg_per_s(self) -> list[float]:

@@ -19,6 +19,12 @@ class FlowBoundary:
 
 
 @dataclass(frozen=True)
+class ThermalBoundary:
+    node_id: int
+    temperature_c: float
+
+
+@dataclass(frozen=True)
 class NetworkCase:
     name: str
     fluid_model: FluidModel
@@ -29,6 +35,7 @@ class NetworkCase:
     flow_outlets: tuple[FlowBoundary, ...] = field(default_factory=tuple)
     node_ids: tuple[int, ...] = field(default_factory=tuple)
     initial_node_pressures_pa: dict[int, float] = field(default_factory=dict)
+    thermal_inlets: tuple[ThermalBoundary, ...] = field(default_factory=tuple)
 
     def all_node_ids(self) -> tuple[int, ...]:
         if self.node_ids:
