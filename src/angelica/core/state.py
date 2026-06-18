@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .components import Fitting, Pipe, PressureChanger, Pump
+from .components import Fitting, HeatSource, Pipe, PressureChanger, Pump
 
 
 @dataclass
@@ -15,6 +15,7 @@ class NodeState:
     prescribed_mass_flow_kg_per_s: float | None = None
     temperature_c: float | None = None
     is_thermal_inlet: bool = False
+    thermal_gradient_dc_per_m: float | None = None
 
 
 @dataclass
@@ -53,6 +54,13 @@ class FittingState(PressureChangerState):
 class PumpState(PressureChangerState):
     component: Pump
     reynolds: float = 0.0
+
+
+@dataclass
+class HeatSourceState(PressureChangerState):
+    component: HeatSource
+    reynolds: float = 0.0
+    temperature_c: float = 20.0
 
 
 @dataclass

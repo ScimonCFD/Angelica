@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 
 from angelica.core.case import FlowBoundary, NetworkCase, PressureBoundary, ThermalBoundary
-from angelica.core.components import FITTING_PRESET_LIBRARY, Fitting, Pipe, Pump
+from angelica.core.components import FITTING_PRESET_LIBRARY, Fitting, HeatSource, Pipe, Pump
 from angelica.core.results import ComponentFlowResult, IterationMetrics
 from angelica.core.settings import SolverSettings
 from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
@@ -149,11 +149,16 @@ def _metrics_from_dict(d: dict) -> IterationMetrics:
 
 
 def _component_flow_to_dict(cf: ComponentFlowResult) -> dict:
-    return {
+    d: dict = {
         "label": cf.label,
         "mass_flow_kg_per_s": cf.mass_flow_kg_per_s,
         "volumetric_flow_m3_per_h": cf.volumetric_flow_m3_per_h,
     }
+    if cf.temperature_in_c is not None:
+        d["temperature_in_c"] = cf.temperature_in_c
+    if cf.temperature_out_c is not None:
+        d["temperature_out_c"] = cf.temperature_out_c
+    return d
 
 
 def _component_flow_from_dict(d: dict) -> ComponentFlowResult:
@@ -161,6 +166,8 @@ def _component_flow_from_dict(d: dict) -> ComponentFlowResult:
         label=str(d["label"]),
         mass_flow_kg_per_s=float(d["mass_flow_kg_per_s"]),
         volumetric_flow_m3_per_h=float(d["volumetric_flow_m3_per_h"]),
+        temperature_in_c=float(d["temperature_in_c"]) if "temperature_in_c" in d else None,
+        temperature_out_c=float(d["temperature_out_c"]) if "temperature_out_c" in d else None,
     )
 
 
@@ -223,6 +230,21 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
         raise ValueError("The material is missing viscosity_pa_s.")
 
     is_non_isothermal = scene.physics_mode == "non_isothermal"
+
+    if not is_non_isothermal:
+        heat_source_link_ids = [
+            link.link_id
+            for link in scene.links
+            for comp in link.components
+            if comp.component_type == "heat_source"
+        ]
+        if heat_source_link_ids:
+            ids = ", #".join(str(i) for i in heat_source_link_ids)
+            raise ValueError(
+                f"Connection(s) #{ids} contain a Heat Source, which requires "
+                "Non-isothermal physics mode. Change the physics mode in Settings "
+                "or remove the Heat Source component."
+            )
 
     if is_non_isothermal:
         cp_text = scene.material.get("specific_heat_j_per_kg_k", "").strip()
@@ -373,6 +395,28 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         component_id=f"link_{link.link_id}_pump_{component.component_id}",
                     )
                 )
+            elif component.component_type == "heat_source":
+                diameter = _required_float(component, "diameter_m", link.link_id)
+                power_w = _required_float(component, "power_w", link.link_id)
+                mode = component.properties.get("pressure_drop_mode", "rated").strip() or "rated"
+                dp = _optional_float(component, "pressure_drop_pa", default=0.0)
+                mdot_rated = _optional_float(component, "rated_mass_flow_kg_per_s", default=1.0)
+                n_segs = max(2, int(_optional_float(
+                    component, "n_thermal_segments", default=10.0
+                ))) if is_non_isothermal else 2
+                components.append(
+                    HeatSource(
+                        start_node=current_start,
+                        end_node=current_end,
+                        diameter_m=diameter,
+                        power_w=power_w,
+                        pressure_drop_mode=mode,
+                        pressure_drop_pa=dp,
+                        rated_mass_flow_kg_per_s=mdot_rated,
+                        n_thermal_segments=n_segs,
+                        component_id=f"link_{link.link_id}_heat_source_{component.component_id}",
+                    )
+                )
             else:
                 raise ValueError(
                     f"Unsupported component type '{component.component_type}' in connection #{link.link_id}."
@@ -391,14 +435,20 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             thermal_conductivity_w_per_m_k=float(scene.material["thermal_conductivity_w_per_m_k"]),
         )
         thermal_inlets = tuple(
-            ThermalBoundary(
-                node_id=node.node_id,
-                temperature_c=float(node.properties["inlet_temperature_c"]),
+            tb
+            for tb in (
+                _build_thermal_boundary(node)
+                for node in scene.nodes
+                if node.node_type in ("source", "sink")
             )
-            for node in scene.nodes
-            if node.node_type == "source"
-            and node.properties.get("inlet_temperature_c", "").strip()
+            if tb is not None
         )
+        if not any(tb.bc_type == "fixed_temperature" for tb in thermal_inlets):
+            raise ValueError(
+                "Non-isothermal mode requires at least one boundary node with a fixed "
+                "temperature. Open a source or sink node and set its thermal boundary "
+                "condition to 'Fixed temperature'."
+            )
     else:
         fluid_model = SingleComponentFluid(
             density_kg_per_m3=float(scene.material["density_kg_per_m3"]),
@@ -431,18 +481,72 @@ def build_solver_from_scene(scene: CanvasScene):
             f"Unsupported pipe pressure-drop model '{pressure_drop_model_key}'."
         )
 
-    settings = SolverSettings(**scene.solver_settings) if scene.solver_settings else SolverSettings()
+    _NI_KEYS = {"max_temperature_iterations", "temperature_tolerance_k", "temperature_relaxation"}
+    ni_raw = {k: scene.solver_settings[k] for k in _NI_KEYS if k in scene.solver_settings}
+    hyd_raw = {k: v for k, v in scene.solver_settings.items() if k not in _NI_KEYS}
+
+    settings = SolverSettings(**hyd_raw) if hyd_raw else SolverSettings()
 
     if scene.physics_mode == "non_isothermal":
+        ni_kwargs: dict = {}
+        if "max_temperature_iterations" in ni_raw:
+            ni_kwargs["max_temperature_iterations"] = int(ni_raw["max_temperature_iterations"])
+        if "temperature_tolerance_k" in ni_raw:
+            ni_kwargs["temperature_tolerance_k"] = float(ni_raw["temperature_tolerance_k"])
+        if "temperature_relaxation" in ni_raw:
+            ni_kwargs["temperature_relaxation"] = float(ni_raw["temperature_relaxation"])
         return SteadyNonIsothermalIncompressibleSolver(
             hydraulic_settings=settings,
-            non_isothermal_settings=NonIsothermalSolverSettings(),
+            non_isothermal_settings=NonIsothermalSolverSettings(**ni_kwargs),
             turbulent_pipe_correlation=turbulent_pipe_correlation,
         )
 
     return SteadyIsothermalIncompressibleSolver(
         settings=settings,
         turbulent_pipe_correlation=turbulent_pipe_correlation,
+    )
+
+
+def _build_thermal_boundary(node) -> ThermalBoundary | None:
+    """Return a ThermalBoundary for a source/sink node, or None if no thermal BC applies."""
+    props = node.properties
+    bc_type = props.get("thermal_bc_type", "")
+
+    # Backward-compat: old files lack thermal_bc_type; infer from inlet_temperature_c
+    if not bc_type:
+        t_text = props.get("inlet_temperature_c", "").strip()
+        if node.node_type == "source" and t_text:
+            bc_type = "fixed_temperature"
+        else:
+            bc_type = "zero_gradient"
+
+    if bc_type == "fixed_temperature":
+        t_text = props.get("inlet_temperature_c", "").strip()
+        if not t_text:
+            return None  # no temperature set — skip (no thermal BC)
+        return ThermalBoundary(
+            node_id=node.node_id,
+            temperature_c=float(t_text),
+            bc_type="fixed_temperature",
+            gradient_dc_per_m=0.0,
+        )
+
+    if bc_type == "fixed_gradient":
+        g_text = props.get("thermal_gradient_dc_per_m", "0.0").strip()
+        g = float(g_text) if g_text else 0.0
+        return ThermalBoundary(
+            node_id=node.node_id,
+            temperature_c=0.0,
+            bc_type="fixed_gradient",
+            gradient_dc_per_m=g,
+        )
+
+    # zero_gradient (or anything unrecognised): Neumann with g=0
+    return ThermalBoundary(
+        node_id=node.node_id,
+        temperature_c=0.0,
+        bc_type="zero_gradient",
+        gradient_dc_per_m=0.0,
     )
 
 

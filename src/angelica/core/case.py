@@ -21,7 +21,9 @@ class FlowBoundary:
 @dataclass(frozen=True)
 class ThermalBoundary:
     node_id: int
-    temperature_c: float
+    temperature_c: float = 0.0
+    bc_type: str = "fixed_temperature"  # "fixed_temperature" | "zero_gradient" | "fixed_gradient"
+    gradient_dc_per_m: float = 0.0
 
 
 @dataclass(frozen=True)

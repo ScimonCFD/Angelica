@@ -2,9 +2,10 @@
 
 Tutorials are grouped by solver family.
 
-The currently validated tutorial suite is:
+The tutorial suite currently includes two solver families:
 
 - `steady_isothermal_incompressible/`
+- `steady_non_isothermal_incompressible/`
 
 Run them from the repository root:
 
@@ -16,3 +17,10 @@ Run them from the repository root:
 - `python3 tutorials/steady_isothermal_incompressible/06_inlet_and_outlet_flow/run.py`
 - `python3 tutorials/steady_isothermal_incompressible/07_hanoi_epanet_darcy_benchmark/run.py`
 - `python3 tutorials/steady_isothermal_incompressible/08_epanet_pump_benchmark/run.py`
+- `python3 tutorials/steady_isothermal_incompressible/09_three_reservoir_junction/run.py`
+- `python3 tutorials/steady_isothermal_incompressible/10_laminar_poiseuille_benchmark/run.py`
+- `python3 tutorials/steady_isothermal_incompressible/11_crude_oil_pipeline/run.py`
+- `python3 tutorials/steady_non_isothermal_incompressible/01_single_pipe_heat_loss/run.py`
+- `python3 tutorials/steady_non_isothermal_incompressible/02_district_heating_branch/run.py`
+- `python3 tutorials/steady_non_isothermal_incompressible/03_looped_network/run.py`
+- `python3 tutorials/steady_non_isothermal_incompressible/04_inline_heater/run.py`

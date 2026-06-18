@@ -3,24 +3,40 @@
 This note summarises what the current `Angelica` implementation is doing at a
 high level and which equations it is solving.
 
-The scope of the current solver is:
+The scope of the current project is:
 
 - steady
-- isothermal
 - incompressible
-- single-component
-- pressure-driven pipe networks with pipes, fittings, and pumps
+- pressure-driven pipe networks with pipes, fittings, pumps, and inline heat sources
+- isothermal mode
+- non-isothermal mode with an outer temperature loop
+
+This note focuses primarily on the hydraulic core implemented in
+`src/angelica/solvers/steady_isothermal_incompressible.py`, because that same
+pressure-correction machinery is reused inside the non-isothermal solver.
 
 ## 1. High-Level Workflow
 
-The current workflow in `src/angelica/solvers/steady_isothermal_incompressible.py`
-is:
+The current isothermal workflow in
+`src/angelica/solvers/steady_isothermal_incompressible.py` is:
 
 1. Build the network state from the case definition.
 2. Initialise a pressure field for all internal nodes.
 3. Run a laminar initialisation stage.
 4. Use that state as the initial condition for the turbulent stage.
 5. Return nodal pressures and component flow rates.
+
+The non-isothermal workflow in
+`src/angelica/solvers/steady_non_isothermal_incompressible.py` wraps that
+hydraulic solve in an outer temperature loop:
+
+1. Build the network state and initialise thermal boundary conditions.
+2. Solve the hydraulic problem with the current temperature-dependent
+   properties.
+3. Solve the steady energy equation on that flow field.
+4. Update nodal and component temperatures.
+5. Repeat until the temperature change becomes sufficiently small.
+6. Run one final synchronised hydraulic + energy pass for the reported result.
 
 In more detail:
 

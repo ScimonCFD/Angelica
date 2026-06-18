@@ -130,6 +130,27 @@ class GuiIoTests(unittest.TestCase):
                 result = build_solver_from_scene(scene).solve(case)
                 self.assertTrue(result.converged, msg=f"{gui_path} did not converge")
 
+    def test_all_non_isothermal_gui_tutorial_scenes_build_and_converge(self) -> None:
+        tutorial_root = (
+            Path(__file__).resolve().parents[1]
+            / "tutorials"
+            / "steady_non_isothermal_incompressible"
+        )
+        gui_paths = sorted(tutorial_root.glob("*/*.gui.json"))
+
+        self.assertGreaterEqual(len(gui_paths), 4)
+
+        for gui_path in gui_paths:
+            with self.subTest(gui_path=gui_path.name):
+                scene = load_scene_from_file(gui_path)
+                case = build_network_case_from_scene(scene)
+                result = build_solver_from_scene(scene).solve(case)
+                self.assertTrue(result.converged, msg=f"{gui_path} did not converge")
+                self.assertTrue(
+                    result.node_temperatures_c,
+                    msg=f"{gui_path} produced no temperature results",
+                )
+
     def test_build_solver_uses_supported_default_pressure_drop_model(self) -> None:
         scene = load_scene_from_file(self._pipe_only_case_path())
 
@@ -264,6 +285,28 @@ class GuiIoTests(unittest.TestCase):
         ]
         scene.material = {"density_kg_per_m3": "998.25", "viscosity_pa_s": "0.001"}
         return scene
+
+    def test_heat_source_in_isothermal_mode_is_rejected(self) -> None:
+        scene = CanvasScene()
+        scene.nodes = [
+            CanvasNode(1, "source", 0.0, 0.0, {"condition_type": "pressure", "pressure": "200000", "flow": ""}),
+            CanvasNode(2, "sink", 100.0, 0.0, {"condition_type": "pressure", "pressure": "100000", "flow": ""}),
+        ]
+        scene.links = [
+            CanvasLink(
+                link_id=1,
+                start_node_id=1,
+                end_node_id=2,
+                components=[CanvasLinkComponent(1, "heat_source", {"diameter_m": "0.05", "power_w": "1000"})],
+            )
+        ]
+        scene.material = {"density_kg_per_m3": "998.25", "viscosity_pa_s": "0.001"}
+        scene.physics_mode = "isothermal"
+
+        with self.assertRaises(ValueError) as ctx:
+            build_network_case_from_scene(scene)
+        self.assertIn("Heat Source", str(ctx.exception))
+        self.assertIn("Non-isothermal", str(ctx.exception))
 
     def test_isolated_junction_is_rejected(self) -> None:
         # junction(2) has no connections at all

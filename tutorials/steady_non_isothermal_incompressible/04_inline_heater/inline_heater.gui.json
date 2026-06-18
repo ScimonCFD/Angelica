@@ -1,0 +1,105 @@
+{
+  "case_name": "Inline electric heater",
+  "physics_mode": "non_isothermal",
+  "material": {
+    "definition_mode": "library",
+    "library_key": "water_liquid",
+    "name": "Water",
+    "density_kg_per_m3": "998.25",
+    "viscosity_pa_s": "0.001",
+    "specific_heat_j_per_kg_k": "4182.0",
+    "thermal_conductivity_w_per_m_k": "0.6"
+  },
+  "pressure_drop_model": {
+    "library_key": "colebrook_white",
+    "name": "Colebrook-White"
+  },
+  "solver_settings": {
+    "turbulent_iterations": 200,
+    "pressure_relaxation": 1.0,
+    "pressure_correction_abs_tolerance_pa": 0.001,
+    "pressure_correction_rel_tolerance": 1e-06
+  },
+  "initial_node_pressures_pa": {},
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 60,
+      "y": 240,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "300000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "20.0",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "sink",
+      "x": 740,
+      "y": 240,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "100000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "10.0",
+            "diameter_m": "0.05",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "0.0",
+            "ambient_temperature_c": "20.0",
+            "n_thermal_segments": "2"
+          }
+        },
+        {
+          "component_id": 2,
+          "component_type": "heat_source",
+          "properties": {
+            "diameter_m": "0.05",
+            "power_w": "50000.0",
+            "pressure_drop_mode": "rated",
+            "pressure_drop_pa": "0.0",
+            "rated_mass_flow_kg_per_s": "1.0",
+            "n_thermal_segments": "10"
+          }
+        },
+        {
+          "component_id": 3,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "10.0",
+            "diameter_m": "0.05",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000045",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "0.0",
+            "ambient_temperature_c": "20.0",
+            "n_thermal_segments": "2"
+          }
+        }
+      ]
+    }
+  ]
+}

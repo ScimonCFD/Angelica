@@ -1,13 +1,35 @@
 from __future__ import annotations
 
 import math
+import warnings
 
 import numpy as np
-import scipy.sparse as sp
-import scipy.sparse.linalg as spla
 
 from angelica.closures.convection_scheme import ConvectionScheme
-from angelica.core.state import NetworkState, PipeState
+from angelica.core.state import HeatSourceState, NetworkState, PipeState
+
+
+def _load_scipy():
+    try:
+        # Some local Python environments emit a conservative compatibility
+        # warning during SciPy import even though the sparse solve path used by
+        # Angelica works correctly. Keep tutorial and GUI output clean, while
+        # still failing hard on a genuine import error.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"A NumPy version .* is required for this version of SciPy",
+                category=UserWarning,
+                module="scipy",
+            )
+            import scipy.sparse as sp
+            import scipy.sparse.linalg as spla
+    except ImportError as exc:
+        raise RuntimeError(
+            "The non-isothermal solver requires SciPy. Install the optional "
+            "energy-equation dependency set before running non-isothermal cases."
+        ) from exc
+    return sp, spla
 
 
 def solve_energy_system(
@@ -19,24 +41,25 @@ def solve_energy_system(
 
     Returns a dict mapping node_id → temperature_c for all network nodes.
 
-    Algorithm
-    ---------
-    Global unknowns:
-      - T at each network node (N_nodes)
-      - T at each internal pipe node (N_i - 1 per pipe with N_i segments)
+    Thermal BC types (from NodeState):
+      - is_thermal_inlet = True       → Dirichlet: T = T_prescribed
+      - thermal_gradient_dc_per_m = g → Neumann: dT/dx = g at boundary face
+      - neither                        → junction mixing equation (≈ zero gradient)
 
-    Equations:
-      - Thermal inlet nodes  → Dirichlet: T = T_prescribed
-      - Non-inlet network nodes → mixing: T_J = Σ(ṁ_k · T_k^upstream) / Σṁ_k
-      - Pipe internal nodes  → FV convection-diffusion (node-centred, upwind default)
+    The Neumann BC modifies the pipe FV at the boundary face:
+      - removes diffusive coupling to the junction node
+      - adds the prescribed gradient flux to the RHS
+    The junction equation for a Neumann node extrapolates from the first
+    interior node: T_junction = T_interior ± g * dx.
     """
+    sp, spla = _load_scipy()
+
     sorted_node_ids = sorted(network_state.nodes.keys())
     N_nodes = len(sorted_node_ids)
     node_index = {nid: i for i, nid in enumerate(sorted_node_ids)}
 
-    # ── index internal pipe nodes ──────────────────────────────────────────
-    # Only PipeState objects get internal thermal nodes.
-    pipe_states = [ls for ls in network_state.components if isinstance(ls, PipeState)]
+    # ── index internal pipe/heat-source nodes ─────────────────────────────
+    pipe_states = [ls for ls in network_state.components if isinstance(ls, (PipeState, HeatSourceState))]
 
     pipe_internal_offset: list[int] = []
     total_internal = 0
@@ -46,6 +69,31 @@ def solve_energy_system(
         total_internal += n_segs - 1
 
     N_total = N_nodes + total_internal
+
+    # ── collect Neumann gradient nodes ────────────────────────────────────
+    # gradient_node_map: nid -> prescribed dT/dx (°C/m) at boundary face
+    gradient_node_map: dict[int, float] = {}
+    for node in network_state.nodes.values():
+        if node.thermal_gradient_dc_per_m is not None and not node.is_thermal_inlet:
+            gradient_node_map[node.node_id] = node.thermal_gradient_dc_per_m
+
+    # For each gradient node, find the first connected pipe with n_internal > 0
+    # so we can write a junction extrapolation equation.
+    # Value: (pipe_idx, is_start_node, dx, offset, n_internal)
+    gradient_node_pipe: dict[int, tuple[int, bool, float, int, int]] = {}
+    for pipe_idx, ps in enumerate(pipe_states):
+        n_segs_p = max(ps.component.n_thermal_segments, 2)
+        n_internal_p = n_segs_p - 1
+        if n_internal_p == 0:
+            continue
+        dx_p = ps.component.length_m / n_segs_p
+        offset_p = pipe_internal_offset[pipe_idx]
+        for nid, is_start in (
+            (ps.start_node.node_id, True),
+            (ps.end_node.node_id, False),
+        ):
+            if nid in gradient_node_map and nid not in gradient_node_pipe:
+                gradient_node_pipe[nid] = (pipe_idx, is_start, dx_p, offset_p, n_internal_p)
 
     # ── build sparse matrix and RHS ───────────────────────────────────────
     rows: list[int] = []
@@ -61,7 +109,7 @@ def solve_energy_system(
     # ── FV equations for pipe internal nodes ──────────────────────────────
     for pipe_idx, ps in enumerate(pipe_states):
         n_segs = max(ps.component.n_thermal_segments, 2)
-        n_internal = n_segs - 1            # nodes strictly inside the pipe
+        n_internal = n_segs - 1
         offset = pipe_internal_offset[pipe_idx]
 
         pipe = ps.component
@@ -69,60 +117,86 @@ def solve_energy_system(
         dx = L / n_segs
         A = ps.area_m2
         D_pipe = pipe.diameter_m
-        U = pipe.heat_transfer_coefficient_w_per_m2k
-        T_amb = pipe.ambient_temperature_c
 
-        # representative temperature for property evaluation
+        if isinstance(ps, HeatSourceState):
+            U = 0.0
+            T_amb = 20.0
+        else:
+            U = pipe.heat_transfer_coefficient_w_per_m2k
+            T_amb = pipe.ambient_temperature_c
+
         T_repr = ps.temperature_c if hasattr(ps, "temperature_c") and ps.temperature_c is not None else 20.0
-        # Use a dummy link_state-like object that carries temperature
         _ls = _TempCarrier(T_repr)
 
         cp = fluid_model.specific_heat_for_link(_ls)
         k_fl = fluid_model.thermal_conductivity_for_link(_ls)
-        mdot = float(ps.mass_flow_kg_per_s)  # positive = start→end
+        mdot = float(ps.mass_flow_kg_per_s)
 
         F = mdot * cp          # convective strength (W/K), signed
         D = k_fl * A / dx      # diffusive conductance (W/K)
 
-        # source linearisation: S = U · π · D_pipe · dx · (T_amb - T)
-        #   → Sc = U πD dx T_amb  (constant part)
-        #   → Sp = -U πD dx       (coefficient of T_P, negative → adds to a_P)
+        # Moukalled source linearisation: S = Sc + Sp·T_P, Sp ≤ 0
         Sc = U * math.pi * D_pipe * dx * T_amb
-        Sp = -U * math.pi * D_pipe * dx   # negative
+        Sp = -U * math.pi * D_pipe * dx   # negative → strengthens diagonal
+
+        # Fixed power source (heater/cooler): Sc += Q/n_internal, Sp_extra = 0
+        n_internal = n_segs - 1
+        if isinstance(ps, HeatSourceState) and n_internal > 0:
+            Sc += ps.component.power_w / n_internal
 
         a_W_conv, a_E_conv = convection_scheme.face_coefficients(F, D)
 
-        # a_P = a_W + a_E - Sp (Sp is negative, so -Sp is positive)
-        a_P = a_W_conv + a_E_conv - Sp
-
-        # index helpers
         junction_start_idx = node_index[ps.start_node.node_id]
         junction_end_idx = node_index[ps.end_node.node_id]
 
-        for j in range(n_internal):  # j = 0 .. n_internal-1 (global internal node j+1)
+        # Check for Neumann BCs at this pipe's boundary nodes
+        start_nid = ps.start_node.node_id
+        end_nid = ps.end_node.node_id
+        west_neumann = gradient_node_map.get(start_nid)  # None or float
+        east_neumann = gradient_node_map.get(end_nid)    # None or float
+
+        for j in range(n_internal):
             row = offset + j
-            add(row, row, a_P)
-            rhs[row] += Sc
 
-            # west neighbour
-            if j == 0:
+            # ── west neighbour ──
+            if j == 0 and west_neumann is not None:
+                # Neumann at start node: remove diffusion to start junction
+                # a_W_eff = max(F, 0) (convection only), a_P reduced by D
+                a_W_j = max(F, 0.0)
                 w_col = junction_start_idx
+                rhs_extra = -k_fl * A * west_neumann
+            elif j == 0:
+                a_W_j = a_W_conv
+                w_col = junction_start_idx
+                rhs_extra = 0.0
             else:
+                a_W_j = a_W_conv
                 w_col = offset + j - 1
-            add(row, w_col, -a_W_conv)
+                rhs_extra = 0.0
 
-            # east neighbour
-            if j == n_internal - 1:
+            # ── east neighbour ──
+            if j == n_internal - 1 and east_neumann is not None:
+                # Neumann at end node: remove diffusion to end junction
+                # a_E_eff = max(-F, 0) (convection only), a_P reduced by D
+                a_E_j = max(-F, 0.0)
+                e_col = junction_end_idx
+                rhs_extra += k_fl * A * east_neumann
+            elif j == n_internal - 1:
+                a_E_j = a_E_conv
                 e_col = junction_end_idx
             else:
+                a_E_j = a_E_conv
                 e_col = offset + j + 1
-            add(row, e_col, -a_E_conv)
+
+            # a_P is always consistent with a_W_j + a_E_j (Neumann removes D from face)
+            a_P_j = a_W_j + a_E_j - Sp
+
+            add(row, row, a_P_j)
+            rhs[row] += Sc + rhs_extra
+            add(row, w_col, -a_W_j)
+            add(row, e_col, -a_E_j)
 
     # ── junction node equations ───────────────────────────────────────────
-    # accumulate per-node: sum of (|ṁ| · cp) entering, and which upstream T
-    # For each node: inflow_contributions = list of (global_col, weight)
-    #                outflow_total = sum of |ṁ| · cp leaving
-
     inflow: dict[int, list[tuple[int, float]]] = {i: [] for i in range(N_nodes)}
     outflow_total: dict[int, float] = {i: 0.0 for i in range(N_nodes)}
 
@@ -141,20 +215,17 @@ def solve_energy_system(
         junction_end_row = node_index[ps.end_node.node_id]
 
         if abs_mdot_cp < 1e-30:
-            continue  # no flow — pipe contributes nothing
+            continue
 
         if mdot >= 0.0:
-            # flow start→end: enters end junction from last internal node
             upstream_col = offset + n_internal - 1 if n_internal > 0 else junction_start_row
             inflow[junction_end_row].append((upstream_col, abs_mdot_cp))
             outflow_total[junction_start_row] += abs_mdot_cp
         else:
-            # flow end→start: enters start junction from first internal node
             upstream_col = offset + 0 if n_internal > 0 else junction_end_row
             inflow[junction_start_row].append((upstream_col, abs_mdot_cp))
             outflow_total[junction_end_row] += abs_mdot_cp
 
-    # build junction rows
     thermal_inlet_map = {}
     for node in network_state.nodes.values():
         if node.is_thermal_inlet and node.temperature_c is not None:
@@ -162,22 +233,55 @@ def solve_energy_system(
 
     for nid in sorted_node_ids:
         row = node_index[nid]
+
         if nid in thermal_inlet_map:
-            # Dirichlet
+            # Dirichlet: T = T_prescribed
             add(row, row, 1.0)
             rhs[row] = thermal_inlet_map[nid]
+
+        elif nid in gradient_node_map:
+            # Neumann (zero or fixed gradient): extrapolate from first interior node
+            # Nodes are spaced dx apart: T_junction = T_adjacent ± g * dx
+            pipe_info = gradient_node_pipe.get(nid)
+            if pipe_info is not None:
+                _pi, is_start, dx_p, offset_p, n_internal_p = pipe_info
+                g = gradient_node_map[nid]
+                if is_start:
+                    # Start junction: T_start = T_j0 - g * dx
+                    # (extrapolate backwards: T at x=0 given dT/dx=g and T at x=dx)
+                    j0_col = offset_p
+                    add(row, row, 1.0)
+                    add(row, j0_col, -1.0)
+                    rhs[row] = -g * dx_p
+                else:
+                    # End junction: T_end = T_last + g * dx
+                    # (extrapolate forwards: T at x=L given dT/dx=g and T at x=L-dx)
+                    last_col = offset_p + n_internal_p - 1
+                    add(row, row, 1.0)
+                    add(row, last_col, -1.0)
+                    rhs[row] = g * dx_p
+            else:
+                # No interior nodes available: fall back to mixing or 20 °C
+                total_in = sum(w for _, w in inflow[row])
+                total_out = outflow_total[row]
+                if total_in < 1e-30:
+                    add(row, row, 1.0)
+                    rhs[row] = 20.0
+                else:
+                    denom = total_out if total_out > 1e-30 else total_in
+                    add(row, row, -denom)
+                    for col, weight in inflow[row]:
+                        add(row, col, weight)
+                    rhs[row] = 0.0
+
         else:
+            # Mixing equation (default for junctions and unspecified boundary nodes)
             total_in = sum(w for _, w in inflow[row])
             total_out = outflow_total[row]
             if total_in < 1e-30:
-                # no inflow information — set T = T_amb (fallback)
                 add(row, row, 1.0)
                 rhs[row] = 20.0
             else:
-                # mixing: T_J · total_out = Σ weight · T_upstream
-                # equivalently: -total_out · T_J + Σ weight · T_upstream = 0
-                # but if total_out == 0 (pure sink): T_J = mixing of inflows
-                # → T_J · total_in = Σ weight · T_upstream
                 denom = total_out if total_out > 1e-30 else total_in
                 add(row, row, -denom)
                 for col, weight in inflow[row]:

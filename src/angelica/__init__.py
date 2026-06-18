@@ -1,7 +1,7 @@
 """Angelica: open-source platform for pipe network simulation."""
 
 from .core.case import FlowBoundary, NetworkCase, PressureBoundary, ThermalBoundary
-from .core.components import Fitting, Pipe, PressureChanger
+from .core.components import Fitting, HeatSource, Pipe, PressureChanger
 from .core.results import ComponentFlowResult, SolveResult
 from .core.settings import SolverSettings
 from .io.reporting import print_solve_result
@@ -19,6 +19,7 @@ __all__ = [
     "ComponentFlowResult",
     "FlowBoundary",
     "Fitting",
+    "HeatSource",
     "NetworkCase",
     "NonIsothermalSolverSettings",
     "Pipe",

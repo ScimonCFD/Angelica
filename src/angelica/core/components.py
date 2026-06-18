@@ -69,3 +69,22 @@ class Fitting(PressureChanger):
 @dataclass(frozen=True)
 class Pump(PressureChanger):
     curve_points_q_head: tuple[tuple[float, float], ...] = ()
+
+
+@dataclass(frozen=True)
+class HeatSource(PressureChanger):
+    """Inline heater (power_w > 0) or cooler (power_w < 0) with fixed thermal power.
+
+    Hydraulic pressure drop is controlled by pressure_drop_mode:
+      "rated"  — ΔP = ΔP_rated · (ṁ/ṁ_rated)²  (quadratic, derived from K factor)
+      "fixed"  — ΔP = pressure_drop_pa (lagged coefficient, updated each iteration)
+
+    Set pressure_drop_pa = 0 for a hydraulically transparent device.
+    """
+
+    power_w: float = 0.0
+    pressure_drop_mode: str = "rated"
+    pressure_drop_pa: float = 0.0
+    rated_mass_flow_kg_per_s: float = 1.0
+    n_thermal_segments: int = 10
+    length_m: float = 1.0

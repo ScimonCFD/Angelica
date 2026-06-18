@@ -26,6 +26,12 @@ from angelica import (
     ThermalFluid,
 )
 from angelica.closures import HybridScheme, PowerLawScheme, UpwindScheme
+from angelica.cases import (
+    build_inline_heater_fixed_flow_case,
+    build_symmetric_adiabatic_loop_case,
+    build_symmetric_heat_loss_loop_case,
+    build_thermal_mixing_junction_case,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -186,3 +192,79 @@ def test_no_flow_no_crash():
     result = SteadyNonIsothermalIncompressibleSolver().solve(case)
     # no assertion on T — just verify it doesn't raise
     assert result.node_temperatures_c is not None
+
+
+def test_adiabatic_mixing_junction_matches_exact_mixing_temperature():
+    """Two inlet streams should mix exactly at the junction in an adiabatic network."""
+    result = SteadyNonIsothermalIncompressibleSolver().solve(
+        build_thermal_mixing_junction_case()
+    )
+
+    assert result.converged
+    expected_mix_c = 40.0
+    assert result.node_temperatures_c[3] == pytest.approx(expected_mix_c, abs=0.1)
+    assert result.node_temperatures_c[4] == pytest.approx(expected_mix_c, abs=0.1)
+
+    flows = {cf.label: cf.mass_flow_kg_per_s for cf in result.component_flows}
+    assert flows["Pipe:hot_branch"] == pytest.approx(1.0, abs=1e-6)
+    assert flows["Pipe:cold_branch"] == pytest.approx(2.0, abs=1e-6)
+    assert flows["Pipe:mixed_outlet"] == pytest.approx(3.0, abs=1e-6)
+
+
+def test_inline_heater_fixed_flow_matches_exact_delta_t():
+    """With fixed mass flow and adiabatic pipes, ΔT must match Q/(ṁcp)."""
+    result = SteadyNonIsothermalIncompressibleSolver().solve(
+        build_inline_heater_fixed_flow_case()
+    )
+
+    assert result.converged
+    expected_delta_t = 50_000.0 / (1.0 * 4182.0)
+    actual_delta_t = result.node_temperatures_c[4] - result.node_temperatures_c[1]
+    assert actual_delta_t == pytest.approx(expected_delta_t, abs=0.2)
+
+    flows = {cf.label: cf.mass_flow_kg_per_s for cf in result.component_flows}
+    assert flows["Pipe:feed_pipe"] == pytest.approx(1.0, abs=1e-4)
+    assert flows["HeatSource:heater"] == pytest.approx(1.0, abs=1e-4)
+    assert flows["Pipe:exit_pipe"] == pytest.approx(1.0, abs=1e-4)
+
+
+def test_symmetric_adiabatic_loop_stays_isothermal_and_splits_flow_evenly():
+    result = SteadyNonIsothermalIncompressibleSolver().solve(
+        build_symmetric_adiabatic_loop_case()
+    )
+
+    assert result.converged
+    for node_id, temperature_c in result.node_temperatures_c.items():
+        assert temperature_c == pytest.approx(60.0, abs=0.1), node_id
+
+    flows = {cf.label: cf.mass_flow_kg_per_s for cf in result.component_flows}
+    assert flows["Pipe:upper_branch"] == pytest.approx(1.0, abs=1e-4)
+    assert flows["Pipe:lower_branch"] == pytest.approx(1.0, abs=1e-4)
+    assert flows["Pipe:upper_return"] == pytest.approx(1.0, abs=1e-4)
+    assert flows["Pipe:lower_return"] == pytest.approx(1.0, abs=1e-4)
+
+
+def test_symmetric_heat_loss_loop_matches_exact_branch_temperature():
+    result = SteadyNonIsothermalIncompressibleSolver().solve(
+        build_symmetric_heat_loss_loop_case()
+    )
+
+    assert result.converged
+    mdot_branch = 1.0
+    cp = 4182.0
+    U = 50.0
+    D = 0.025
+    L = 500.0
+    T_in = 80.0
+    T_amb = 20.0
+    ntu = U * math.pi * D * L / (mdot_branch * cp)
+    expected_branch_out = T_amb + (T_in - T_amb) * math.exp(-ntu)
+
+    assert result.node_temperatures_c[3] == pytest.approx(expected_branch_out, abs=0.3)
+    assert result.node_temperatures_c[4] == pytest.approx(expected_branch_out, abs=0.3)
+    assert result.node_temperatures_c[5] == pytest.approx(expected_branch_out, abs=0.3)
+    assert result.node_temperatures_c[6] == pytest.approx(expected_branch_out, abs=0.3)
+
+    flows = {cf.label: cf.mass_flow_kg_per_s for cf in result.component_flows}
+    assert flows["Pipe:upper_branch"] == pytest.approx(1.0, abs=1e-4)
+    assert flows["Pipe:lower_branch"] == pytest.approx(1.0, abs=1e-4)

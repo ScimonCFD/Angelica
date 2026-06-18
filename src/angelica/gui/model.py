@@ -6,7 +6,7 @@ from typing import List, Optional
 
 
 NODE_TYPES = ("source", "sink", "junction")
-LINK_COMPONENT_TYPES = ("pipe", "fitting", "pump")
+LINK_COMPONENT_TYPES = ("pipe", "fitting", "pump", "heat_source")
 DEFAULT_LIBRARY_MATERIAL = {
     "library_key": "water_liquid",
     "definition_mode": "library",
@@ -279,12 +279,18 @@ class CanvasScene:
                 "condition_type": "pressure",
                 "pressure": "",
                 "flow": "",
+                "thermal_bc_type": "fixed_temperature",
+                "inlet_temperature_c": "",
+                "thermal_gradient_dc_per_m": "0.0",
             }
         if node_type == "sink":
             return {
                 "condition_type": "pressure",
                 "pressure": "",
                 "flow": "",
+                "thermal_bc_type": "zero_gradient",
+                "inlet_temperature_c": "",
+                "thermal_gradient_dc_per_m": "0.0",
             }
         return {
             "label": "",
@@ -305,6 +311,15 @@ class CanvasScene:
             return {
                 "diameter_m": "",
                 "curve_points_q_head": "",
+            }
+        if component_type == "heat_source":
+            return {
+                "diameter_m": "",
+                "power_w": "0.0",
+                "pressure_drop_mode": "rated",
+                "pressure_drop_pa": "0.0",
+                "rated_mass_flow_kg_per_s": "1.0",
+                "n_thermal_segments": "10",
             }
         return {
             "diameter_m": "",

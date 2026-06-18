@@ -90,8 +90,9 @@ class NetSimGui:
             "plot_muted":     "#555555",
             "plot_faint":     "#999999",
             "plot_faint2":    "#666666",
-            "plot_laminar":   "#1d3557",
-            "plot_turbulent": "#c1121f",
+            "plot_laminar":     "#1d3557",
+            "plot_turbulent":   "#c1121f",
+            "plot_temperature": "#1a7a3c",
         },
         "dark": {
             "canvas_bg":      "#070c17",
@@ -111,8 +112,9 @@ class NetSimGui:
             "plot_muted":     "#7a9aaa",
             "plot_faint":     "#4a6a7a",
             "plot_faint2":    "#5a7a8a",
-            "plot_laminar":   "#3a9fd4",
-            "plot_turbulent": "#e8633a",
+            "plot_laminar":     "#3a9fd4",
+            "plot_turbulent":   "#e8633a",
+            "plot_temperature": "#4dd476",
         },
     }
 
@@ -214,6 +216,8 @@ class NetSimGui:
         self._move_pre_snapshot: dict | None = None
         self.convergence_window: tk.Toplevel | None = None
         self.convergence_canvas: tk.Canvas | None = None
+        self.temperature_canvas: tk.Canvas | None = None
+        self.temperature_history: list[float] = []
         self._dark = False
         self._unit_system_key = "si"
         self.root = tk.Tk()
@@ -458,6 +462,7 @@ class NetSimGui:
         self.view_scale = 1.0
         self.latest_result = None
         self.latest_boundary_results = {}
+        self.temperature_history = []
         self.current_file_path = None
         self._undo_stack.clear()
         self._redo_stack.clear()
@@ -506,6 +511,7 @@ class NetSimGui:
         if cached_results is not None:
             self.latest_boundary_results = cached_results["boundary_results"]
             self.convergence_history = cached_results["convergence_history"]
+            self.temperature_history = []
             if cached_results["component_flows"]:
                 node_pressures = {
                     node_id: entry["pressure_pa"]
@@ -525,6 +531,7 @@ class NetSimGui:
         else:
             self.latest_boundary_results = {}
             self.convergence_history = {"laminar": [], "turbulent": []}
+            self.temperature_history = []
             status_suffix = ""
 
         self.tool_var.set("No tool selected")
@@ -1607,6 +1614,19 @@ class NetSimGui:
 
     def _apply_case_type(self, mode: str, dialog: tk.Toplevel) -> None:
         self.scene.physics_mode = mode
+        if mode == "non_isothermal" and self.scene.material:
+            library_key = self.scene.material.get("library_key", "")
+            if library_key in self.MATERIAL_LIBRARY:
+                lib = self.MATERIAL_LIBRARY[library_key]
+                updated = dict(self.scene.material)
+                changed = False
+                for field in ("specific_heat_j_per_kg_k", "thermal_conductivity_w_per_m_k"):
+                    if not updated.get(field, "").strip() and lib.get(field, ""):
+                        updated[field] = lib[field]
+                        changed = True
+                if changed:
+                    self.scene.update_material(updated)
+                    self._refresh_global_summaries()
         label = "Isothermal" if mode == "isothermal" else "Non-isothermal"
         self.status_var.set(f"Case type set to: {label}.")
         dialog.destroy()
@@ -1852,6 +1872,7 @@ class NetSimGui:
             "laminar": list(result.laminar_metrics),
             "turbulent": list(result.turbulent_metrics),
         }
+        self.temperature_history = list(result.temperature_history)
         self._redraw_scene()
         self._redraw_convergence_plot()
 
@@ -2082,6 +2103,11 @@ class NetSimGui:
                 label="Pressure Profile",
                 command=lambda: self._show_link_pressure_profile(link),
             )
+        if self._has_temperature_results():
+            menu.add_command(
+                label="Temperature Profile",
+                command=lambda: self._show_link_temperature_profile(link),
+            )
         menu.add_separator()
         menu.add_command(
             label=f"Delete Connection #{link.link_id}",
@@ -2255,12 +2281,20 @@ class NetSimGui:
         start_x, start_y = self._scene_to_canvas(start.x, start.y)
         end_x, end_y = self._scene_to_canvas(end.x, end.y)
 
+        types = {c.component_type for c in link.components}
+        if "heat_source" in types:
+            link_color = "#c0397d"
+        elif "pump" in types:
+            link_color = self._t["plot_turbulent"]
+        else:
+            link_color = self._t["link"]
+
         self.canvas.create_line(
             start_x,
             start_y,
             end_x,
             end_y,
-            fill=self._t["link"],
+            fill=link_color,
             width=3,
             tags=("link", f"link_{link.link_id}"),
         )
@@ -2360,23 +2394,68 @@ class NetSimGui:
                 ),
             )
 
-            if node.node_type == "source" and self.scene.physics_mode == "non_isothermal":
+            if self.scene.physics_mode == "non_isothermal":
                 ttk.Separator(container, orient="horizontal").grid(
                     row=3, column=0, columnspan=2, sticky="ew", pady=(6, 2)
                 )
                 ttk.Label(
                     container, text="— Thermal boundary —", foreground="gray"
                 ).grid(row=4, column=0, columnspan=2, pady=(0, 4))
-                ttk.Label(container, text="Inlet Temperature (°C)").grid(
-                    row=5, column=0, sticky="w", pady=4
-                )
-                t_in_var = tk.StringVar(
-                    value=node.properties.get("inlet_temperature_c", "")
-                )
-                ttk.Entry(container, textvariable=t_in_var, width=20).grid(
-                    row=5, column=1, sticky="ew", pady=4
-                )
+
+                # Infer default bc_type for old files that lack the property
+                default_bc = node.properties.get("thermal_bc_type", "")
+                if not default_bc:
+                    has_t = node.properties.get("inlet_temperature_c", "").strip()
+                    default_bc = "fixed_temperature" if (node.node_type == "source" and has_t) else "zero_gradient"
+
+                thermal_bc_var = tk.StringVar(value=default_bc)
+                entries["thermal_bc_type"] = thermal_bc_var
+
+                bc_frame = ttk.Frame(container)
+                bc_frame.grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 4))
+                ttk.Radiobutton(bc_frame, text="Zero gradient  (∂T/∂x = 0)",
+                                value="zero_gradient", variable=thermal_bc_var).pack(anchor="w")
+                ttk.Radiobutton(bc_frame, text="Fixed temperature",
+                                value="fixed_temperature", variable=thermal_bc_var).pack(anchor="w")
+                ttk.Radiobutton(bc_frame, text="Fixed gradient  (∂T/∂x = g)",
+                                value="fixed_gradient", variable=thermal_bc_var).pack(anchor="w")
+
+                # Temperature entry (row 6)
+                t_label = ttk.Label(container, text="Temperature (°C)")
+                t_label.grid(row=6, column=0, sticky="w", pady=4)
+                t_in_var = tk.StringVar(value=node.properties.get("inlet_temperature_c", ""))
+                t_entry = ttk.Entry(container, textvariable=t_in_var, width=20)
+                t_entry.grid(row=6, column=1, sticky="ew", pady=4)
                 entries["inlet_temperature_c"] = t_in_var
+
+                # Gradient entry (row 7)
+                g_label = ttk.Label(container, text="Gradient g (°C/m)")
+                g_label.grid(row=7, column=0, sticky="w", pady=4)
+                g_var = tk.StringVar(value=node.properties.get("thermal_gradient_dc_per_m", "0.0"))
+                g_entry = ttk.Entry(container, textvariable=g_var, width=20)
+                g_entry.grid(row=7, column=1, sticky="ew", pady=4)
+                entries["thermal_gradient_dc_per_m"] = g_var
+
+                def _sync_thermal_bc(*_args: object) -> None:
+                    bc = thermal_bc_var.get()
+                    if bc == "fixed_temperature":
+                        t_label.grid()
+                        t_entry.grid()
+                        g_label.grid_remove()
+                        g_entry.grid_remove()
+                    elif bc == "fixed_gradient":
+                        t_label.grid_remove()
+                        t_entry.grid_remove()
+                        g_label.grid()
+                        g_entry.grid()
+                    else:  # zero_gradient
+                        t_label.grid_remove()
+                        t_entry.grid_remove()
+                        g_label.grid_remove()
+                        g_entry.grid_remove()
+
+                thermal_bc_var.trace_add("write", _sync_thermal_bc)
+                _sync_thermal_bc()
         else:
             ttk.Label(container, text="Label").grid(row=0, column=0, sticky="w", pady=4)
             label_var = tk.StringVar(value=node.properties.get("label", ""))
@@ -2464,6 +2543,18 @@ class NetSimGui:
             ),
             width=12,
         ).pack(anchor="w", pady=4)
+        if self.scene.physics_mode == "non_isothermal":
+            ttk.Button(
+                palette,
+                text="Heat Source",
+                command=lambda: self._add_component_to_link(
+                    link.link_id,
+                    "heat_source",
+                    components_list,
+                    properties_frame,
+                ),
+                width=12,
+            ).pack(anchor="w", pady=4)
 
         components_list.bind(
             "<<ListboxSelect>>",
@@ -2529,6 +2620,12 @@ class NetSimGui:
         button_row = ttk.Frame(container)
         button_row.grid(row=3, column=0, columnspan=3, sticky="e", pady=(12, 0))
         ttk.Button(button_row, text="Close", command=dialog.destroy).pack(side="right", padx=(6, 0))
+        ttk.Button(
+            button_row,
+            text="Temperature Profile",
+            command=lambda: self._show_link_temperature_profile(link),
+            state="normal" if self._has_temperature_results() else "disabled",
+        ).pack(side="right", padx=(0, 4))
         ttk.Button(
             button_row,
             text="Pressure Profile",
@@ -2681,6 +2778,7 @@ class NetSimGui:
         pipe_color = self._t["plot_laminar"]
         fitting_color = "#e69c00"
         pump_color = self._t["plot_turbulent"]
+        heater_color = "#c0397d"
 
         legend_seen: dict[str, tuple[str, tuple]] = {}
 
@@ -2697,6 +2795,9 @@ class NetSimGui:
             elif comp.component_type == "pump":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
                 legend_seen.setdefault("Pump", (pump_color, (6, 3)))
+            elif comp.component_type == "heat_source":
+                canvas.create_line(x0c, y0c, x0c, y1c, fill=heater_color, width=2, dash=(4, 4))
+                legend_seen.setdefault("Heat Source", (heater_color, (4, 4)))
 
         # markers: filled circle at start/end, × at intermediate device boundaries
         n_nodes = len(cum_dist)
@@ -2723,8 +2824,10 @@ class NetSimGui:
                                    anchor="s", font=("TkDefaultFont", 7),
                                    fill=pipe_color)
             else:
-                lbl = "pump" if comp.component_type == "pump" else "fitting"
-                clr = pump_color if comp.component_type == "pump" else fitting_color
+                lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater"}
+                clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
+                lbl = lbl_map.get(comp.component_type, comp.component_type)
+                clr = clr_map.get(comp.component_type, fitting_color)
                 mid_y = _cy(0.5 * (pressures_disp[i] + pressures_disp[i + 1]))
                 lbl_x = _cx(cum_dist[i]) + 7
                 canvas.create_text(lbl_x, mid_y, text=lbl,
@@ -2732,6 +2835,191 @@ class NetSimGui:
                                    fill=clr)
 
         # legend (top-left of plot area)
+        lx, ly = ML + 10, MT + 10
+        for label, (color, dash) in legend_seen.items():
+            canvas.create_line(lx, ly + 5, lx + 22, ly + 5, fill=color, width=2, dash=dash)
+            canvas.create_text(lx + 27, ly + 5, text=label, anchor="w",
+                                font=("TkDefaultFont", 9), fill=self._t["plot_text"])
+            ly += 20
+
+    def _has_temperature_results(self) -> bool:
+        return any(
+            "temperature_c" in v for v in self.latest_boundary_results.values()
+        )
+
+    def _show_link_temperature_profile(self, link) -> None:
+        win = tk.Toplevel(self.root)
+        win.title(f"Temperature Profile — Connection #{link.link_id}")
+        win.geometry("760x480")
+
+        frame = ttk.Frame(win, padding=10)
+        frame.pack(fill="both", expand=True)
+
+        plot_canvas = tk.Canvas(
+            frame,
+            background=self._t["plot_bg"],
+            highlightthickness=1,
+            highlightbackground=self._t["canvas_hl"],
+        )
+        plot_canvas.pack(fill="both", expand=True)
+        plot_canvas.bind(
+            "<Configure>",
+            lambda _event: self._draw_temperature_profile_plot(plot_canvas, link),
+        )
+
+        btn_row = ttk.Frame(frame)
+        btn_row.pack(fill="x", pady=(8, 0))
+        ttk.Button(btn_row, text="Edit Components…",
+                   command=lambda: self._open_link_properties_dialog(link)).pack(side="left")
+        ttk.Button(btn_row, text="Close", command=win.destroy).pack(side="right")
+
+        win.transient(self.root)
+        win.focus_set()
+        win.update_idletasks()
+        self._draw_temperature_profile_plot(plot_canvas, link)
+
+    def _draw_temperature_profile_plot(self, canvas: tk.Canvas, link) -> None:
+        canvas.delete("all")
+        W = int(canvas.winfo_width() or 720)
+        H = int(canvas.winfo_height() or 380)
+
+        ML, MR, MT, MB = 75, 20, 20, 50
+        plot_w = W - ML - MR
+        plot_h = H - MT - MB
+
+        if plot_w < 100 or plot_h < 80:
+            return
+
+        node_ids = self._link_node_sequence(link)
+        results = self.latest_boundary_results
+
+        if not results or not all(
+            nid in results and "temperature_c" in results[nid] for nid in node_ids
+        ):
+            canvas.create_text(
+                W // 2, H // 2,
+                text="Run a non-isothermal simulation first to see the temperature profile.",
+                fill=self._t["plot_muted"],
+                font=("TkDefaultFont", 11),
+                anchor="center",
+            )
+            return
+
+        temps_disp = [results[nid]["temperature_c"] for nid in node_ids]
+
+        cum_dist: list[float] = [0.0]
+        for comp in link.components:
+            if comp.component_type == "pipe":
+                try:
+                    length = float(comp.properties.get("length_m", "0") or "0")
+                except ValueError:
+                    length = 0.0
+                cum_dist.append(cum_dist[-1] + length)
+            else:
+                cum_dist.append(cum_dist[-1])
+
+        x_max = max(cum_dist) if max(cum_dist) > 0 else 1.0
+        x_min = 0.0
+
+        t_min = min(temps_disp)
+        t_max = max(temps_disp)
+        t_span = t_max - t_min
+        if t_span < 1e-10:
+            t_span = max(abs(t_max) * 0.1, 1.0)
+        pad = t_span * 0.08
+        t_lo = t_min - pad
+        t_hi = t_max + pad
+        t_span = t_hi - t_lo
+
+        def _cx(x): return ML + (x - x_min) / (x_max - x_min) * plot_w
+        def _cy(t): return MT + plot_h - (t - t_lo) / t_span * plot_h
+
+        canvas.create_rectangle(ML, MT, ML + plot_w, MT + plot_h,
+                                 outline=self._t["plot_axis"], width=1)
+
+        for i in range(6):
+            t_val = t_lo + i / 5 * t_span
+            y = _cy(t_val)
+            canvas.create_line(ML, y, ML + plot_w, y, fill=self._t["plot_grid"])
+            canvas.create_text(ML - 6, y, text=f"{t_val:.4g}", anchor="e",
+                                font=("TkDefaultFont", 8), fill=self._t["plot_text"])
+
+        for i in range(6):
+            x_val = x_min + i / 5 * (x_max - x_min)
+            x = _cx(x_val)
+            canvas.create_line(x, MT, x, MT + plot_h, fill=self._t["plot_grid"])
+            canvas.create_text(x, MT + plot_h + 4, text=f"{x_val:.4g}", anchor="n",
+                                font=("TkDefaultFont", 8), fill=self._t["plot_text"])
+
+        canvas.create_line(ML, MT, ML, MT + plot_h, fill=self._t["plot_axis"], width=1.5)
+        canvas.create_line(ML, MT + plot_h, ML + plot_w, MT + plot_h,
+                            fill=self._t["plot_axis"], width=1.5)
+
+        canvas.create_text(ML + plot_w // 2, MT + plot_h + 36,
+                            text="Cumulative distance (m)", anchor="s",
+                            font=("TkDefaultFont", 9), fill=self._t["plot_text"])
+        canvas.create_text(12, MT + plot_h // 2,
+                            text="Temperature (°C)", anchor="center",
+                            font=("TkDefaultFont", 9), fill=self._t["plot_text"],
+                            angle=90)
+
+        temp_color = self._t["plot_temperature"]
+        fitting_color = "#e69c00"
+        pump_color = self._t["plot_turbulent"]
+        heater_color = "#c0397d"
+
+        legend_seen: dict[str, tuple[str, tuple]] = {}
+
+        for i, comp in enumerate(link.components):
+            x0c, y0c = _cx(cum_dist[i]), _cy(temps_disp[i])
+            x1c, y1c = _cx(cum_dist[i + 1]), _cy(temps_disp[i + 1])
+
+            if comp.component_type == "pipe":
+                canvas.create_line(x0c, y0c, x1c, y1c, fill=temp_color, width=2)
+                legend_seen.setdefault("Pipe", (temp_color, ()))
+            elif comp.component_type == "fitting":
+                canvas.create_line(x0c, y0c, x0c, y1c, fill=fitting_color, width=2, dash=(6, 3))
+                legend_seen.setdefault("Fitting", (fitting_color, (6, 3)))
+            elif comp.component_type == "pump":
+                canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
+                legend_seen.setdefault("Pump", (pump_color, (6, 3)))
+            elif comp.component_type == "heat_source":
+                canvas.create_line(x0c, y0c, x0c, y1c, fill=heater_color, width=2, dash=(4, 4))
+                legend_seen.setdefault("Heat Source", (heater_color, (4, 4)))
+
+        n_nodes = len(cum_dist)
+        for idx, (x_m, t_d) in enumerate(zip(cum_dist, temps_disp)):
+            xc, yc = _cx(x_m), _cy(t_d)
+            if idx == 0 or idx == n_nodes - 1:
+                r = 4
+                canvas.create_oval(xc - r, yc - r, xc + r, yc + r,
+                                   fill=self._t["plot_text"],
+                                   outline=self._t["plot_axis"], width=1)
+            else:
+                r = 5
+                canvas.create_line(xc - r, yc - r, xc + r, yc + r,
+                                   fill=self._t["plot_axis"], width=2)
+                canvas.create_line(xc + r, yc - r, xc - r, yc + r,
+                                   fill=self._t["plot_axis"], width=2)
+
+        for i, comp in enumerate(link.components):
+            if comp.component_type == "pipe":
+                mid_x = _cx(0.5 * (cum_dist[i] + cum_dist[i + 1]))
+                mid_y = _cy(0.5 * (temps_disp[i] + temps_disp[i + 1]))
+                canvas.create_text(mid_x, mid_y - 9, text="pipe",
+                                   anchor="s", font=("TkDefaultFont", 7),
+                                   fill=temp_color)
+            else:
+                lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater"}
+                clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
+                lbl = lbl_map.get(comp.component_type, comp.component_type)
+                clr = clr_map.get(comp.component_type, fitting_color)
+                mid_y = _cy(0.5 * (temps_disp[i] + temps_disp[i + 1]))
+                lbl_x = _cx(cum_dist[i]) + 7
+                canvas.create_text(lbl_x, mid_y, text=lbl,
+                                   anchor="w", font=("TkDefaultFont", 7),
+                                   fill=clr)
+
         lx, ly = ML + 10, MT + 10
         for label, (color, dash) in legend_seen.items():
             canvas.create_line(lx, ly + 5, lx + 22, ly + 5, fill=color, width=2, dash=dash)
@@ -2797,6 +3085,14 @@ class NetSimGui:
             return
         if component.component_type == "pump":
             self._render_pump_component_properties(
+                component,
+                properties_frame,
+                link_id,
+                components_list,
+            )
+            return
+        if component.component_type == "heat_source":
+            self._render_heat_source_component_properties(
                 component,
                 properties_frame,
                 link_id,
@@ -3075,6 +3371,140 @@ class NetSimGui:
         self._render_link_component_properties(link_id, components_list, properties_frame)
         self.status_var.set(f"Updated component #{component_id} in connection #{link_id}.")
 
+    def _render_heat_source_component_properties(
+        self,
+        component: CanvasLinkComponent,
+        properties_frame: ttk.LabelFrame,
+        link_id: int,
+        components_list: tk.Listbox,
+    ) -> None:
+        diameter_var = tk.StringVar(value=self._field_from_si("diameter_m", component.properties.get("diameter_m", "")))
+        power_var = tk.StringVar(value=component.properties.get("power_w", "0.0"))
+        mode_var = tk.StringVar(value=component.properties.get("pressure_drop_mode", "rated"))
+        dp_var = tk.StringVar(value=component.properties.get("pressure_drop_pa", "0.0"))
+        rated_mdot_var = tk.StringVar(value=component.properties.get("rated_mass_flow_kg_per_s", "1.0"))
+        n_segs_var = tk.StringVar(value=component.properties.get("n_thermal_segments", "10"))
+
+        row = 1
+        ttk.Label(properties_frame, text=f"Diameter ({self._unit_label('diameter')})").grid(
+            row=row, column=0, sticky="w", pady=4
+        )
+        ttk.Entry(properties_frame, textvariable=diameter_var, width=18).grid(
+            row=row, column=1, sticky="ew", pady=4
+        )
+        row += 1
+
+        ttk.Label(properties_frame, text="Power (W)").grid(row=row, column=0, sticky="w", pady=4)
+        ttk.Entry(properties_frame, textvariable=power_var, width=18).grid(
+            row=row, column=1, sticky="ew", pady=4
+        )
+        row += 1
+
+        ttk.Label(properties_frame, text="ΔP mode").grid(row=row, column=0, sticky="w", pady=4)
+        mode_box = ttk.Combobox(
+            properties_frame,
+            textvariable=mode_var,
+            values=["rated", "fixed"],
+            state="readonly",
+            width=16,
+        )
+        mode_box.grid(row=row, column=1, sticky="ew", pady=4)
+        row += 1
+
+        ttk.Label(properties_frame, text="Pressure drop (Pa)").grid(row=row, column=0, sticky="w", pady=4)
+        ttk.Entry(properties_frame, textvariable=dp_var, width=18).grid(
+            row=row, column=1, sticky="ew", pady=4
+        )
+        row += 1
+
+        rated_label = ttk.Label(properties_frame, text="Rated flow (kg/s)")
+        rated_label.grid(row=row, column=0, sticky="w", pady=4)
+        rated_entry = ttk.Entry(properties_frame, textvariable=rated_mdot_var, width=18)
+        rated_entry.grid(row=row, column=1, sticky="ew", pady=4)
+        row += 1
+
+        def _sync_mode(*_args: object) -> None:
+            if mode_var.get() == "rated":
+                rated_label.grid()
+                rated_entry.grid()
+            else:
+                rated_label.grid_remove()
+                rated_entry.grid_remove()
+
+        mode_var.trace_add("write", _sync_mode)
+        _sync_mode()
+
+        if self.scene.physics_mode == "non_isothermal":
+            ttk.Separator(properties_frame, orient="horizontal").grid(
+                row=row, column=0, columnspan=2, sticky="ew", pady=(4, 2)
+            )
+            row += 1
+            ttk.Label(
+                properties_frame, text="— Heat transfer —", foreground="gray"
+            ).grid(row=row, column=0, columnspan=2, pady=(0, 2))
+            row += 1
+            ttk.Label(properties_frame, text="Thermal segments").grid(
+                row=row, column=0, sticky="w", pady=4
+            )
+            ttk.Entry(properties_frame, textvariable=n_segs_var, width=18).grid(
+                row=row, column=1, sticky="ew", pady=4
+            )
+            row += 1
+
+        button_row = ttk.Frame(properties_frame)
+        button_row.grid(row=row, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        ttk.Button(
+            button_row,
+            text="Save",
+            command=lambda: self._save_heat_source_component_properties(
+                link_id,
+                component.component_id,
+                diameter_var,
+                power_var,
+                mode_var,
+                dp_var,
+                rated_mdot_var,
+                n_segs_var,
+                components_list,
+                properties_frame,
+            ),
+        ).pack(side="right")
+
+    def _save_heat_source_component_properties(
+        self,
+        link_id: int,
+        component_id: int,
+        diameter_var: tk.StringVar,
+        power_var: tk.StringVar,
+        mode_var: tk.StringVar,
+        dp_var: tk.StringVar,
+        rated_mdot_var: tk.StringVar,
+        n_segs_var: tk.StringVar,
+        components_list: tk.Listbox,
+        properties_frame: ttk.LabelFrame,
+    ) -> None:
+        properties = {
+            "diameter_m": self._field_to_si("diameter_m", diameter_var.get().strip()),
+            "power_w": power_var.get().strip(),
+            "pressure_drop_mode": mode_var.get().strip(),
+            "pressure_drop_pa": dp_var.get().strip(),
+            "rated_mass_flow_kg_per_s": rated_mdot_var.get().strip(),
+            "n_thermal_segments": n_segs_var.get().strip(),
+        }
+        updated_link = self.scene.update_link_component_properties(
+            link_id,
+            component_id,
+            properties,
+        )
+        selection = components_list.curselection()
+        components_list.delete(0, "end")
+        for component_index, component in enumerate(updated_link.components, start=1):
+            components_list.insert("end", self._component_list_label(component, component_index))
+        if selection:
+            components_list.selection_set(selection[0])
+        self._render_link_component_properties(link_id, components_list, properties_frame)
+        self.status_var.set(f"Updated component #{component_id} in connection #{link_id}.")
+
     @staticmethod
     def _sync_boundary_entries(
         condition_var: tk.StringVar,
@@ -3134,6 +3564,8 @@ class NetSimGui:
             return f"Manual fitting #{display_index}"
         if component.component_type == "pump":
             return f"Pump #{display_index}"
+        if component.component_type == "heat_source":
+            return f"Heat Source #{display_index}"
         return f"{component.component_type.capitalize()} #{display_index}"
 
     def _pretty_field_name(self, field_name: str) -> str:
@@ -3218,7 +3650,7 @@ class NetSimGui:
             self.convergence_window = tk.Toplevel(self.root)
             self.convergence_window.title("Convergence Metrics")
             self.convergence_window.transient(self.root)
-            self.convergence_window.geometry("820x460")
+            self.convergence_window.geometry("820x520")
 
             frame = ttk.Frame(self.convergence_window, padding=12)
             frame.pack(fill="both", expand=True)
@@ -3242,7 +3674,7 @@ class NetSimGui:
                 highlightthickness=1,
                 highlightbackground=self._t["canvas_hl"],
                 width=760,
-                height=340,
+                height=300,
             )
             self.convergence_canvas.pack(fill="both", expand=True)
             self.convergence_canvas.bind(
@@ -3252,7 +3684,11 @@ class NetSimGui:
 
             legend = ttk.Frame(frame)
             legend.pack(fill="x", pady=(8, 0))
-            for label, color in (("Laminar", self._t["plot_laminar"]), ("Turbulent", self._t["plot_turbulent"])):
+            for label, color in (
+                ("Laminar", self._t["plot_laminar"]),
+                ("Turbulent", self._t["plot_turbulent"]),
+                ("Temperature (right axis)", self._t["plot_temperature"]),
+            ):
                 swatch = tk.Canvas(legend, width=16, height=10, highlightthickness=0)
                 swatch.create_line(1, 5, 15, 5, fill=color, width=3)
                 swatch.pack(side="left", padx=(0, 4))
@@ -3297,13 +3733,18 @@ class NetSimGui:
             )
             return
 
-        self._draw_history_plot(self.convergence_canvas, history_series, metric_name)
+        secondary = None
+        if self.temperature_history:
+            secondary = [("Temperature", self.temperature_history, self._t["plot_temperature"])]
+        self._draw_history_plot(self.convergence_canvas, history_series, metric_name, secondary_series=secondary)
+
 
     def _draw_history_plot(
         self,
         canvas: tk.Canvas,
         history_series: list[tuple[str, list[float], str, int]],
         metric_name: str,
+        secondary_series: list[tuple[str, list[float], str]] | None = None,
     ) -> None:
         canvas.delete("all")
         width = int(canvas.winfo_width() or canvas["width"])
@@ -3318,8 +3759,11 @@ class NetSimGui:
             )
             return
 
+        has_secondary = bool(
+            secondary_series and any(values for _, values, _ in secondary_series)
+        )
         left = 70
-        right = width - 20
+        right = width - (70 if has_secondary else 20)
         top = 20
         bottom = height - 45
         if right <= left or bottom <= top:
@@ -3436,8 +3880,77 @@ class NetSimGui:
                 x, y = points
                 canvas.create_oval(x - 2, y - 2, x + 2, y + 2, fill=color, outline=color)
 
+        if has_secondary and secondary_series:
+            sec_all_values = [
+                v for _, values, _ in secondary_series for v in values if v > 0.0
+            ]
+            if sec_all_values:
+                sec_min_log = math.log10(min(sec_all_values))
+                sec_max_log = math.log10(max(sec_all_values))
+                if math.isclose(sec_min_log, sec_max_log):
+                    sec_min_log -= 1.0
+                    sec_max_log += 1.0
+                sec_decade_min = math.floor(sec_min_log)
+                sec_decade_max = math.ceil(sec_max_log)
+                sec_num_decades = sec_decade_max - sec_decade_min
+                sec_decade_step = 1 if sec_num_decades <= 6 else 2 if sec_num_decades <= 12 else 3
+
+                temp_color = secondary_series[0][2]
+                canvas.create_line(right, top, right, bottom, fill=temp_color, width=1.5)
+
+                for decade in range(sec_decade_min, sec_decade_max + 1, sec_decade_step):
+                    if decade < sec_min_log - 0.01 or decade > sec_max_log + 0.01:
+                        continue
+                    frac = (sec_max_log - decade) / (sec_max_log - sec_min_log)
+                    y = top + (bottom - top) * frac
+                    value = 10 ** decade
+                    canvas.create_line(right, y, right + 4, y, fill=temp_color, width=1)
+                    canvas.create_text(
+                        right + 6, y, text=f"{value:.0e}", anchor="w",
+                        font=("TkDefaultFont", 8), fill=temp_color,
+                    )
+
+                canvas.create_text(
+                    width - 12,
+                    (top + bottom) / 2,
+                    text="max |ΔT| (K)",
+                    angle=90,
+                    fill=temp_color,
+                    font=("TkDefaultFont", 9),
+                )
+
+                for _label, values, color in secondary_series:
+                    if not values:
+                        continue
+                    n = len(values)  # used for x-spacing even if some values are zero
+                    # Collect only positive points (skip exact-zero "converged" entries)
+                    pos_pts = [
+                        (i, v) for i, v in enumerate(values) if v > 0.0
+                    ]
+                    if not pos_pts:
+                        continue
+                    pts: list[float] = []
+                    for i, value in pos_pts:
+                        vlog = math.log10(value)
+                        x = right if n == 1 else left + (right - left) * (i / (n - 1))
+                        y = top + (sec_max_log - vlog) * (bottom - top) / (sec_max_log - sec_min_log)
+                        pts.extend((x, y))
+                    if len(pts) >= 4:
+                        canvas.create_line(*pts, fill=color, width=2, smooth=False, dash=(6, 3))
+                    for i, value in pos_pts:
+                        vlog = math.log10(value)
+                        x = right if n == 1 else left + (right - left) * (i / (n - 1))
+                        y = top + (sec_max_log - vlog) * (bottom - top) / (sec_max_log - sec_min_log)
+                        size = 4
+                        canvas.create_polygon(
+                            x, y - size, x + size, y, x, y + size, x - size, y,
+                            fill=color, outline=color,
+                        )
+
     @staticmethod
     def _pretty_metric_name(metric_name: str) -> str:
+        if metric_name == "temperature_delta_k":
+            return "max |ΔT| (K)"
         labels = {name: label for label, name in NetSimGui.METRIC_OPTIONS}
         return labels.get(metric_name, metric_name)
 
