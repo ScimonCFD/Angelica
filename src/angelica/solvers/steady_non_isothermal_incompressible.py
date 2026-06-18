@@ -99,7 +99,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             )
 
             # 2. Solve energy equation
-            new_node_temps = solve_energy_system(
+            new_node_temps, pipe_mean_temps = solve_energy_system(
                 network_state, case.fluid_model, self.convection_scheme
             )
 
@@ -116,29 +116,31 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             temperature_history.append(max_delta_t)
 
             # 4. Update representative temperature for pipes and heat sources
-            self._update_component_temperatures(network_state, T_init)
+            # Use internal FV node mean temperatures for accurate property evaluation.
+            self._update_component_temperatures(network_state, T_init, pipe_mean_temps)
 
             if max_delta_t < settings.temperature_tolerance_k:
                 temperature_converged = True
-                # Synchronise one final hydraulic + energy pass so the reported
-                # temperature field corresponds to the reported flow field.
-                self._hydraulic_solver._initialise_pressure_field(network_state, case)
-                lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
-                    network_state,
-                    case.fluid_model,
-                )
-                turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
-                    network_state,
-                    case.fluid_model,
-                )
-                final_node_temps = solve_energy_system(
-                    network_state,
-                    case.fluid_model,
-                    self.convection_scheme,
-                )
-                self._set_node_temperatures(network_state, final_node_temps)
-                self._update_component_temperatures(network_state, T_init)
                 break
+
+        # Final synchronous pass — always runs (converged or not) so that the
+        # reported flow field and temperature field come from the same solve.
+        self._hydraulic_solver._initialise_pressure_field(network_state, case)
+        lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
+            network_state,
+            case.fluid_model,
+        )
+        turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
+            network_state,
+            case.fluid_model,
+        )
+        final_node_temps, final_pipe_mean_temps = solve_energy_system(
+            network_state,
+            case.fluid_model,
+            self.convection_scheme,
+        )
+        self._set_node_temperatures(network_state, final_node_temps)
+        self._update_component_temperatures(network_state, T_init, final_pipe_mean_temps)
 
         converged = hydraulic_converged and temperature_converged
 
@@ -198,15 +200,22 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
                 node_state.temperature_c = temperature_c
 
     @staticmethod
-    def _update_component_temperatures(network_state, default_temperature_c: float) -> None:
+    def _update_component_temperatures(
+        network_state,
+        default_temperature_c: float,
+        pipe_mean_temps: dict[int, float] | None = None,
+    ) -> None:
         for component_state in network_state.components:
             if isinstance(component_state, (PipeState, HeatSourceState)):
-                start_temp = (
-                    network_state.nodes[component_state.start_node.node_id].temperature_c
-                    or default_temperature_c
-                )
-                end_temp = (
-                    network_state.nodes[component_state.end_node.node_id].temperature_c
-                    or default_temperature_c
-                )
-                component_state.temperature_c = 0.5 * (start_temp + end_temp)
+                if pipe_mean_temps is not None and id(component_state) in pipe_mean_temps:
+                    component_state.temperature_c = pipe_mean_temps[id(component_state)]
+                else:
+                    start_temp = (
+                        network_state.nodes[component_state.start_node.node_id].temperature_c
+                        or default_temperature_c
+                    )
+                    end_temp = (
+                        network_state.nodes[component_state.end_node.node_id].temperature_c
+                        or default_temperature_c
+                    )
+                    component_state.temperature_c = 0.5 * (start_temp + end_temp)

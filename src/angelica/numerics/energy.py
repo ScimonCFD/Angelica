@@ -36,10 +36,14 @@ def solve_energy_system(
     network_state: NetworkState,
     fluid_model,
     convection_scheme: ConvectionScheme,
-) -> dict[int, float]:
+) -> tuple[dict[int, float], dict[int, float]]:
     """Solve the steady-state energy equation for the pipe network.
 
-    Returns a dict mapping node_id → temperature_c for all network nodes.
+    Returns:
+        (node_temperatures, component_mean_temperatures) where:
+        - node_temperatures: maps node_id → temperature_c for all network nodes.
+        - component_mean_temperatures: maps id(pipe_state) → mean temperature_c
+          computed from the internal FV nodes, used for fluid property evaluation.
 
     Thermal BC types (from NodeState):
       - is_thermal_inlet = True       → Dirichlet: T = T_prescribed
@@ -292,7 +296,22 @@ def solve_energy_system(
     A_mat = sp.csr_matrix((vals, (rows, cols)), shape=(N_total, N_total))
     T_vec = spla.spsolve(A_mat, rhs)
 
-    return {nid: float(T_vec[node_index[nid]]) for nid in sorted_node_ids}
+    # Mean temperature of each pipe's internal FV nodes — more accurate than
+    # averaging the two boundary junction temperatures for property evaluation.
+    component_mean_temps: dict[int, float] = {}
+    for pipe_idx, ps in enumerate(pipe_states):
+        n_segs = max(ps.component.n_thermal_segments, 2)
+        n_internal = n_segs - 1
+        offset = pipe_internal_offset[pipe_idx]
+        if n_internal > 0:
+            component_mean_temps[id(ps)] = float(np.mean(T_vec[offset:offset + n_internal]))
+        else:
+            si = node_index[ps.start_node.node_id]
+            ei = node_index[ps.end_node.node_id]
+            component_mean_temps[id(ps)] = float(0.5 * (T_vec[si] + T_vec[ei]))
+
+    node_temps = {nid: float(T_vec[node_index[nid]]) for nid in sorted_node_ids}
+    return node_temps, component_mean_temps
 
 
 class _TempCarrier:

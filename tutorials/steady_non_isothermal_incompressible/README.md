@@ -14,6 +14,13 @@ Available cases:
 - `03_looped_network` — looped network with ambient heat loss and temperature convergence
 - `04_inline_heater` — inline electric heater, energy balance verification
 
+Additional validation cases currently covered by the automated test suite:
+
+- `thermal_mixing_junction` — exact adiabatic junction mixing benchmark
+- `inline_heater_fixed_flow` — exact `ΔT = Q / (ṁ cₚ)` benchmark with prescribed mass flow
+- `symmetric_adiabatic_loop` — looped network with exact 50/50 split and uniform temperature
+- `symmetric_heat_loss_loop` — looped network with symmetric NTU heat loss and exact mixed outlet temperature
+
 ## Running a tutorial
 
 ```bash

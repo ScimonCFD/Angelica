@@ -8,7 +8,13 @@ SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from angelica.properties.dead_oil import dead_oil_density_kg_per_m3, dead_oil_viscosity_pa_s
+from angelica.properties.dead_oil import (
+    build_thermal_dead_oil,
+    dead_oil_density_kg_per_m3,
+    dead_oil_specific_heat_j_per_kg_k,
+    dead_oil_thermal_conductivity_w_per_m_k,
+    dead_oil_viscosity_pa_s,
+)
 
 
 class DeadOilDensityTests(unittest.TestCase):
@@ -67,3 +73,78 @@ class DeadOilViscosityTests(unittest.TestCase):
     def test_invalid_temperature_raises(self) -> None:
         with self.assertRaises(ValueError):
             dead_oil_viscosity_pa_s(30.0, -300.0)
+
+
+class DeadOilSpecificHeatTests(unittest.TestCase):
+    def test_specific_heat_is_positive(self) -> None:
+        self.assertGreater(dead_oil_specific_heat_j_per_kg_k(30.0, 60.0), 0.0)
+
+    def test_specific_heat_increases_with_temperature(self) -> None:
+        cp_cold = dead_oil_specific_heat_j_per_kg_k(30.0, 20.0)
+        cp_hot = dead_oil_specific_heat_j_per_kg_k(30.0, 100.0)
+        self.assertGreater(cp_hot, cp_cold)
+
+    def test_specific_heat_increases_with_api(self) -> None:
+        # Lighter crude (higher API) has higher cp
+        cp_heavy = dead_oil_specific_heat_j_per_kg_k(20.0, 60.0)
+        cp_light = dead_oil_specific_heat_j_per_kg_k(45.0, 60.0)
+        self.assertGreater(cp_light, cp_heavy)
+
+    def test_30api_at_60c_in_expected_range(self) -> None:
+        # Watson-Nelson: typical crude oil cp is 1600–2500 J/(kg·K)
+        cp = dead_oil_specific_heat_j_per_kg_k(30.0, 60.0)
+        self.assertGreater(cp, 1600.0)
+        self.assertLess(cp, 2500.0)
+
+
+class DeadOilThermalConductivityTests(unittest.TestCase):
+    def test_thermal_conductivity_is_positive(self) -> None:
+        self.assertGreater(dead_oil_thermal_conductivity_w_per_m_k(30.0, 60.0), 0.0)
+
+    def test_thermal_conductivity_decreases_with_temperature(self) -> None:
+        k_cold = dead_oil_thermal_conductivity_w_per_m_k(30.0, 20.0)
+        k_hot = dead_oil_thermal_conductivity_w_per_m_k(30.0, 100.0)
+        self.assertGreater(k_cold, k_hot)
+
+    def test_30api_at_20c_in_expected_range(self) -> None:
+        # Cragoe (1929): typical crude oil k is 0.10–0.16 W/(m·K)
+        k = dead_oil_thermal_conductivity_w_per_m_k(30.0, 20.0)
+        self.assertGreater(k, 0.08)
+        self.assertLess(k, 0.20)
+
+
+class BuildThermalDeadOilTests(unittest.TestCase):
+    def test_returns_thermal_fluid(self) -> None:
+        from angelica.properties.thermal_fluid import ThermalFluid
+        fluid = build_thermal_dead_oil(32.0)
+        self.assertIsInstance(fluid, ThermalFluid)
+
+    def test_density_matches_standard_correlation(self) -> None:
+        fluid = build_thermal_dead_oil(32.0)
+        # density is constant w.r.t. T (incompressible)
+        rho_ref = dead_oil_density_kg_per_m3(32.0)
+
+        class _FakeLink:
+            temperature_c = 40.0
+
+        self.assertAlmostEqual(fluid.density_for_link(_FakeLink()), rho_ref, places=3)
+
+    def test_viscosity_decreases_with_temperature(self) -> None:
+        fluid = build_thermal_dead_oil(32.0)
+
+        class _Link:
+            def __init__(self, t): self.temperature_c = t
+
+        self.assertGreater(
+            fluid.viscosity_for_link(_Link(20.0)),
+            fluid.viscosity_for_link(_Link(80.0)),
+        )
+
+    def test_specific_heat_and_conductivity_accessible(self) -> None:
+        fluid = build_thermal_dead_oil(32.0)
+
+        class _Link:
+            temperature_c = 60.0
+
+        self.assertGreater(fluid.specific_heat_for_link(_Link()), 0.0)
+        self.assertGreater(fluid.thermal_conductivity_for_link(_Link()), 0.0)

@@ -9,6 +9,7 @@ from angelica.core.components import FITTING_PRESET_LIBRARY, Fitting, HeatSource
 from angelica.core.results import ComponentFlowResult, IterationMetrics
 from angelica.core.settings import SolverSettings
 from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
+from angelica.closures.convection_scheme import HybridScheme, PowerLawScheme, UpwindScheme
 from angelica.properties.single_component import SingleComponentFluid
 from angelica.properties.thermal_fluid import ThermalFluid
 from angelica.solvers import (
@@ -481,7 +482,12 @@ def build_solver_from_scene(scene: CanvasScene):
             f"Unsupported pipe pressure-drop model '{pressure_drop_model_key}'."
         )
 
-    _NI_KEYS = {"max_temperature_iterations", "temperature_tolerance_k", "temperature_relaxation"}
+    _NI_KEYS = {
+        "max_temperature_iterations",
+        "temperature_tolerance_k",
+        "temperature_relaxation",
+        "convection_scheme",
+    }
     ni_raw = {k: scene.solver_settings[k] for k in _NI_KEYS if k in scene.solver_settings}
     hyd_raw = {k: v for k, v in scene.solver_settings.items() if k not in _NI_KEYS}
 
@@ -495,10 +501,20 @@ def build_solver_from_scene(scene: CanvasScene):
             ni_kwargs["temperature_tolerance_k"] = float(ni_raw["temperature_tolerance_k"])
         if "temperature_relaxation" in ni_raw:
             ni_kwargs["temperature_relaxation"] = float(ni_raw["temperature_relaxation"])
+
+        _CONVECTION_SCHEMES = {
+            "upwind": UpwindScheme,
+            "hybrid": HybridScheme,
+            "power_law": PowerLawScheme,
+        }
+        scheme_key = str(ni_raw.get("convection_scheme", "upwind"))
+        convection_scheme = _CONVECTION_SCHEMES.get(scheme_key, UpwindScheme)()
+
         return SteadyNonIsothermalIncompressibleSolver(
             hydraulic_settings=settings,
             non_isothermal_settings=NonIsothermalSolverSettings(**ni_kwargs),
             turbulent_pipe_correlation=turbulent_pipe_correlation,
+            convection_scheme=convection_scheme,
         )
 
     return SteadyIsothermalIncompressibleSolver(

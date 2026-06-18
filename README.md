@@ -71,7 +71,8 @@ angelica-gui
 
 ## Tutorials and Benchmarks
 
-Fifteen cases are included across two solver folders.
+Fifteen GUI/tutorial cases are included across two solver folders, plus
+additional automated non-isothermal validation benchmarks in the test suite.
 
 **Isothermal** — [`tutorials/steady_isothermal_incompressible/`](tutorials/steady_isothermal_incompressible/)
 
@@ -97,6 +98,13 @@ Fifteen cases are included across two solver folders.
 | 13 | Branched district-heating network with two thermal loads | Tutorial |
 | 14 | Looped network with ambient heat loss | Tutorial |
 | 15 | Inline electric heater — energy balance verification | Benchmark (ΔT = Q/ṁcₚ) |
+
+Additional non-isothermal validation cases in the automated test suite:
+
+- adiabatic junction mixing with exact energy balance
+- fixed-flow inline heater with exact `ΔT = Q / (ṁ cₚ)`
+- symmetric adiabatic loop with exact 50/50 flow split
+- symmetric heat-loss loop with NTU-based exact branch temperature
 
 ## Roadmap
 

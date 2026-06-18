@@ -901,6 +901,17 @@ class NetSimGui:
         current_dp_tol = self._fmt_sci(self.scene.solver_settings.get("pressure_correction_abs_tolerance_pa", 1e-3))
         current_continuity_tol = self._fmt_sci(self.scene.solver_settings.get("nodal_mass_imbalance_rel_tolerance", 1e-3))
 
+        # Non-isothermal energy settings
+        current_convection_scheme = str(self.scene.solver_settings.get("convection_scheme", "upwind"))
+        current_max_temp_iter = str(self.scene.solver_settings.get("max_temperature_iterations", "50"))
+        current_temp_tol = self._fmt_sci(self.scene.solver_settings.get("temperature_tolerance_k", 0.01))
+        current_temp_relax = str(self.scene.solver_settings.get("temperature_relaxation", "1.0"))
+
+        convection_scheme_var = tk.StringVar(master=dialog, value=current_convection_scheme)
+        max_temp_iter_var = tk.StringVar(master=dialog, value=current_max_temp_iter)
+        temp_tol_var = tk.StringVar(master=dialog, value=current_temp_tol)
+        temp_relax_var = tk.StringVar(master=dialog, value=current_temp_relax)
+
         alpha_var = tk.StringVar(master=dialog, value=current_alpha)
         friction_max_iterations_var = tk.StringVar(
             master=dialog,
@@ -1091,6 +1102,45 @@ class NetSimGui:
             row=16, column=1, sticky="ew", pady=4
         )
 
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=17, column=0, columnspan=2, sticky="ew", pady=(6, 2)
+        )
+        ttk.Label(frame, text="— Non-isothermal energy —", foreground="gray").grid(
+            row=18, column=0, columnspan=2, pady=(0, 4)
+        )
+
+        ttk.Label(frame, text="Convection Scheme").grid(
+            row=19, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Combobox(
+            frame,
+            textvariable=convection_scheme_var,
+            state="readonly",
+            values=("upwind", "hybrid", "power_law"),
+            width=24,
+        ).grid(row=19, column=1, sticky="ew", pady=4)
+
+        ttk.Label(frame, text="Max Temperature Iterations").grid(
+            row=20, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=max_temp_iter_var, width=26).grid(
+            row=20, column=1, sticky="ew", pady=4
+        )
+
+        ttk.Label(frame, text="Temperature Tol (K)").grid(
+            row=21, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=temp_tol_var, width=26).grid(
+            row=21, column=1, sticky="ew", pady=4
+        )
+
+        ttk.Label(frame, text="Temperature Relaxation").grid(
+            row=22, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=temp_relax_var, width=26).grid(
+            row=22, column=1, sticky="ew", pady=4
+        )
+
         def apply_velocity_method_selection(_event: tk.Event | None = None) -> None:
             velocity_name_var.set(
                 self.VELOCITY_LOOP_METHOD_LIBRARY[velocity_method_var.get()]["name"]
@@ -1111,7 +1161,7 @@ class NetSimGui:
         friction_method_box.bind("<<ComboboxSelected>>", apply_friction_method_selection)
 
         button_row = ttk.Frame(frame)
-        button_row.grid(row=17, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=23, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
         ttk.Button(
             button_row,
@@ -1130,6 +1180,10 @@ class NetSimGui:
                 velocity_loop_tol_var,
                 dp_tol_var,
                 continuity_tol_var,
+                convection_scheme_var,
+                max_temp_iter_var,
+                temp_tol_var,
+                temp_relax_var,
             ),
         ).pack(side="right", padx=(0, 8))
 
@@ -1297,6 +1351,10 @@ class NetSimGui:
         velocity_loop_tol_var: tk.StringVar,
         dp_tol_var: tk.StringVar,
         continuity_tol_var: tk.StringVar,
+        convection_scheme_var: tk.StringVar,
+        max_temp_iter_var: tk.StringVar,
+        temp_tol_var: tk.StringVar,
+        temp_relax_var: tk.StringVar,
     ) -> None:
         laminar_iterations_text = laminar_iterations_var.get().strip()
         if laminar_iterations_text.lower() in ("", "auto"):
@@ -1490,6 +1548,66 @@ class NetSimGui:
             )
             return
 
+        convection_scheme = convection_scheme_var.get().strip()
+        if convection_scheme not in ("upwind", "hybrid", "power_law"):
+            messagebox.showerror(
+                "Invalid numerics",
+                "Select a valid convection scheme (upwind, hybrid, power_law).",
+                parent=dialog,
+            )
+            return
+
+        try:
+            max_temp_iter = int(max_temp_iter_var.get().strip())
+        except ValueError:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Max temperature iterations must be an integer.",
+                parent=dialog,
+            )
+            return
+        if max_temp_iter <= 0:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Max temperature iterations must be greater than zero.",
+                parent=dialog,
+            )
+            return
+
+        try:
+            temp_tol = float(temp_tol_var.get().strip())
+        except ValueError:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Temperature tolerance must be a valid number.",
+                parent=dialog,
+            )
+            return
+        if temp_tol <= 0.0:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Temperature tolerance must be greater than zero.",
+                parent=dialog,
+            )
+            return
+
+        try:
+            temp_relax = float(temp_relax_var.get().strip())
+        except ValueError:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Temperature relaxation must be a valid number.",
+                parent=dialog,
+            )
+            return
+        if temp_relax <= 0.0:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Temperature relaxation must be greater than zero.",
+                parent=dialog,
+            )
+            return
+
         self.scene.update_solver_settings(
             {
                 "laminar_iterations": laminar_iterations,
@@ -1504,6 +1622,10 @@ class NetSimGui:
                 "velocity_loop_tolerance": velocity_loop_tol,
                 "pressure_correction_abs_tolerance_pa": dp_tol,
                 "nodal_mass_imbalance_rel_tolerance": continuity_tol,
+                "convection_scheme": convection_scheme,
+                "max_temperature_iterations": max_temp_iter,
+                "temperature_tolerance_k": temp_tol,
+                "temperature_relaxation": temp_relax,
             }
         )
         self._refresh_global_summaries()

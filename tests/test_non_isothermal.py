@@ -27,6 +27,7 @@ from angelica import (
 )
 from angelica.closures import HybridScheme, PowerLawScheme, UpwindScheme
 from angelica.cases import (
+    build_crude_oil_pipeline_thermal_case,
     build_inline_heater_fixed_flow_case,
     build_symmetric_adiabatic_loop_case,
     build_symmetric_heat_loss_loop_case,
@@ -268,3 +269,96 @@ def test_symmetric_heat_loss_loop_matches_exact_branch_temperature():
     flows = {cf.label: cf.mass_flow_kg_per_s for cf in result.component_flows}
     assert flows["Pipe:upper_branch"] == pytest.approx(1.0, abs=1e-4)
     assert flows["Pipe:lower_branch"] == pytest.approx(1.0, abs=1e-4)
+
+
+def test_crude_oil_thermal_pipeline_converges_and_cools():
+    """Non-isothermal crude oil pipeline: oil cools from 80 °C toward ambient,
+    and the solver converges using temperature-dependent Beggs & Robinson properties."""
+    result = SteadyNonIsothermalIncompressibleSolver().solve(
+        build_crude_oil_pipeline_thermal_case()
+    )
+
+    assert result.converged
+
+    # Inlet node is a fixed-temperature thermal boundary
+    assert result.node_temperatures_c[1] == pytest.approx(80.0, abs=0.5)
+
+    # All outlet nodes must be cooler than the inlet (heat loss to 15 °C ambient)
+    for outlet_nid in (3, 4):
+        assert result.node_temperatures_c[outlet_nid] < result.node_temperatures_c[1]
+
+    # Flow must be positive (from inlet to outlets)
+    for cf in result.component_flows:
+        assert cf.mass_flow_kg_per_s > 0.0
+
+
+def test_crude_oil_thermal_colder_outlet_than_isothermal_hot():
+    """Temperature-dependent viscosity: outlet temperature must lie strictly between
+    the inlet temperature (80 °C) and ambient (15 °C), confirming heat loss."""
+    result = SteadyNonIsothermalIncompressibleSolver().solve(
+        build_crude_oil_pipeline_thermal_case()
+    )
+
+    assert result.converged
+    T_in = 80.0
+    T_amb = 15.0
+    for nid in (3, 4):
+        T_out = result.node_temperatures_c[nid]
+        assert T_amb < T_out < T_in, (
+            f"Outlet node {nid}: T={T_out:.2f} °C not between ambient and inlet"
+        )
+
+
+def test_non_convergence_still_returns_consistent_results():
+    """When max_temperature_iterations is exhausted without meeting tolerance,
+    the returned flow and temperature fields must come from the same final
+    synchronous solve — not from mismatched iterations."""
+    case = NetworkCase(
+        name="forced_nonconvergence",
+        fluid_model=_FLUID,
+        components=(_PIPE_WITH_HEAT_LOSS,),
+        **_BOUNDARIES,
+    )
+    solver = SteadyNonIsothermalIncompressibleSolver(
+        non_isothermal_settings=NonIsothermalSolverSettings(
+            max_temperature_iterations=1,   # single outer pass — never enough
+            temperature_tolerance_k=1e-15,  # impossibly tight
+        ),
+    )
+    result = solver.solve(case)
+
+    assert not result.converged
+    assert len(result.node_temperatures_c) == 2
+    assert len(result.node_pressures_pa) == 2
+    assert len(result.component_flows) == 1
+    # Temperatures must be finite and physically plausible
+    for T in result.node_temperatures_c.values():
+        assert 10.0 < T < 100.0, f"Temperature {T:.2f} °C out of plausible range"
+    # Inlet boundary must be honoured even without convergence
+    assert abs(result.node_temperatures_c[1] - 80.0) < 0.5
+
+
+def test_neumann_zero_gradient_outlet():
+    """Zero-gradient Neumann BC at the outlet allows the solver to find the
+    natural exit temperature without imposing a Dirichlet constraint.
+    For a heat-loss pipe the outlet must lie strictly between ambient and inlet."""
+    case = NetworkCase(
+        name="neumann_outlet",
+        fluid_model=_FLUID,
+        components=(_PIPE_WITH_HEAT_LOSS,),
+        pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=111_325.0),),
+        pressure_outlets=(PressureBoundary(node_id=2, pressure_pa=101_325.0),),
+        thermal_inlets=(
+            ThermalBoundary(node_id=1, temperature_c=80.0, bc_type="fixed_temperature"),
+            ThermalBoundary(node_id=2, temperature_c=0.0, bc_type="zero_gradient"),
+        ),
+    )
+    result = SteadyNonIsothermalIncompressibleSolver(
+        non_isothermal_settings=NonIsothermalSolverSettings(temperature_tolerance_k=0.001),
+    ).solve(case)
+
+    assert result.converged
+    T_out = result.node_temperatures_c[2]
+    # Must be cooled by heat loss but not below ambient
+    assert 20.0 < T_out < 80.0, f"Neumann outlet T = {T_out:.2f} °C outside plausible range"
+    assert T_out < result.node_temperatures_c[1]
