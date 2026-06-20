@@ -81,7 +81,7 @@ The published EPANET report at `0:00` provides:
 - link flows
 
 The script
-[benchmark_tables.py](/home/simon/Documents/Angelica/tesisIca/ClasesTesis/Angelica/Angelica/tutorials/steady_isothermal_incompressible/08_epanet_pump_benchmark/benchmark_tables.py)
+[`benchmark_tables.py`](benchmark_tables.py)
 prints:
 
 - expected node pressures vs `Angelica`
@@ -112,5 +112,5 @@ then use:
 
 - `File -> Open`
 - open
-  [epanet_pump_benchmark.gui.json](/home/simon/Documents/Angelica/tesisIca/ClasesTesis/Angelica/Angelica/tutorials/steady_isothermal_incompressible/08_epanet_pump_benchmark/epanet_pump_benchmark.gui.json)
+  [`epanet_pump_benchmark.gui.json`](epanet_pump_benchmark.gui.json)
 - press `Run`

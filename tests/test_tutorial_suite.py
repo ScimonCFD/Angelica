@@ -10,6 +10,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from angelica.cases import (
     build_crude_oil_pipeline_case,
+    build_laminar_parallel_pipes_case,
     build_steady_water_network_aggressive_elevation_case,
     build_steady_water_network_aggressive_elevation_outlet_flow_case,
     build_steady_water_network_case,
@@ -17,10 +18,18 @@ from angelica.cases import (
     build_steady_water_network_no_fittings_case,
     build_steady_water_network_two_flow_boundaries_case,
     build_three_reservoir_junction_case,
+    build_hot_water_pipe_heat_loss_case,
+    build_district_heating_branch_case,
+    build_looped_network_heat_loss_case,
+    build_inline_heater_case,
 )
 from angelica.closures import ColebrookPipeCorrelation
 from angelica.core.settings import SolverSettings
-from angelica.solvers import SteadyIsothermalIncompressibleSolver
+from angelica.solvers import (
+    SteadyIsothermalIncompressibleSolver,
+    SteadyNonIsothermalIncompressibleSolver,
+    NonIsothermalSolverSettings,
+)
 
 
 def solve(case, settings: SolverSettings):
@@ -143,3 +152,84 @@ class TutorialSuiteSmokeTests(unittest.TestCase):
         self.assertAlmostEqual(flows["Pipe 1->2"], 112.35, delta=0.1)
         self.assertAlmostEqual(flows["Pipe 2->3"], 62.36, delta=0.1)
         self.assertAlmostEqual(flows["Pipe 2->4"], 49.99, delta=0.1)
+
+    def test_laminar_parallel_pipes_match_poiseuille(self) -> None:
+        result = solve(
+            build_laminar_parallel_pipes_case(),
+            SolverSettings(
+                laminar_iterations=50,
+                turbulent_iterations=0,
+                pressure_relaxation=1.0,
+                pressure_correction_abs_tolerance_pa=1e-9,
+                pressure_correction_rel_tolerance=1e-12,
+                nodal_mass_imbalance_rel_tolerance=1e-12,
+            ),
+        )
+        flows = {cf.label: cf.volumetric_flow_m3_per_h for cf in result.component_flows}
+        self.assertAlmostEqual(flows["Pipe:pipe_1"], 0.706858347, delta=1e-6)
+        self.assertAlmostEqual(flows["Pipe:pipe_2"], 0.279567712, delta=1e-6)
+        self.assertAlmostEqual(flows["Pipe:pipe_3"], 1.438106675, delta=1e-6)
+
+    def test_hot_water_pipe_heat_loss_converges(self) -> None:
+        solver = SteadyNonIsothermalIncompressibleSolver()
+        result = solver.solve(build_hot_water_pipe_heat_loss_case())
+        self.assertTrue(result.converged)
+        self.assertAlmostEqual(result.node_temperatures_c[1], 80.0, delta=0.01)
+        # Outlet should be significantly cooled (well below 60 °C)
+        self.assertLess(result.node_temperatures_c[2], 60.0)
+        self.assertGreater(result.node_temperatures_c[2], 20.0)
+
+    def test_district_heating_branch_converges(self) -> None:
+        solver = SteadyNonIsothermalIncompressibleSolver()
+        result = solver.solve(build_district_heating_branch_case())
+        self.assertTrue(result.converged)
+        self.assertAlmostEqual(result.node_temperatures_c[1], 85.0, delta=0.01)
+        # Junction must be cooler than supply
+        self.assertLess(result.node_temperatures_c[2], 85.0)
+        # Long branch (node 3) must be cooler than short branch (node 4)
+        self.assertLess(result.node_temperatures_c[3], result.node_temperatures_c[4])
+
+    def test_inline_heater_converges(self) -> None:
+        solver = SteadyNonIsothermalIncompressibleSolver(
+            hydraulic_settings=SolverSettings(
+                turbulent_iterations=200,
+                pressure_relaxation=1.0,
+                pressure_correction_abs_tolerance_pa=1e-3,
+                pressure_correction_rel_tolerance=1e-6,
+            ),
+        )
+        result = solver.solve(build_inline_heater_case())
+        self.assertTrue(result.converged)
+        # Inlet fixed at 20 °C
+        self.assertAlmostEqual(result.node_temperatures_c[1], 20.0, delta=0.01)
+        # Heater adds 50 kW — outlet must be warmer than inlet
+        self.assertGreater(result.node_temperatures_c[4], result.node_temperatures_c[1])
+        # Energy balance: ΔT = Q / (ṁ·cₚ) — tolerance 0.5 K
+        mdot = next(cf for cf in result.component_flows if "HeatSource" in cf.label).mass_flow_kg_per_s
+        cp = 4182.0
+        expected_delta_t = 50_000.0 / (mdot * cp)
+        actual_delta_t = result.node_temperatures_c[4] - result.node_temperatures_c[1]
+        self.assertAlmostEqual(actual_delta_t, expected_delta_t, delta=0.5)
+
+    def test_looped_network_heat_loss_converges(self) -> None:
+        solver = SteadyNonIsothermalIncompressibleSolver(
+            hydraulic_settings=SolverSettings(
+                turbulent_iterations=200,
+                pressure_relaxation=0.7,
+                pressure_correction_abs_tolerance_pa=1e-3,
+                pressure_correction_rel_tolerance=1e-8,
+            ),
+            non_isothermal_settings=NonIsothermalSolverSettings(
+                temperature_relaxation=0.5,
+                max_temperature_iterations=50,
+            ),
+        )
+        result = solver.solve(build_looped_network_heat_loss_case())
+        self.assertTrue(result.converged)
+        self.assertAlmostEqual(result.node_temperatures_c[1], 95.0, delta=0.01)
+        # Long path (node 3) loses almost all heat — must arrive near ambient (5 °C)
+        self.assertLess(result.node_temperatures_c[3], 30.0)
+        # Bypass keeps heat — junction C (node 4) must be well above ambient
+        self.assertGreater(result.node_temperatures_c[4], 50.0)
+        # Outer loop requires multiple iterations with relax=0.5
+        self.assertGreater(len(result.temperature_history), 5)

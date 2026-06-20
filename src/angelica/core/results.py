@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -8,6 +8,8 @@ class ComponentFlowResult:
     label: str
     mass_flow_kg_per_s: float
     volumetric_flow_m3_per_h: float
+    temperature_in_c: float | None = None
+    temperature_out_c: float | None = None
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,8 @@ class SolveResult:
     laminar_metrics: list[IterationMetrics]
     turbulent_history: list[float]
     turbulent_metrics: list[IterationMetrics]
+    node_temperatures_c: dict[int, float] = field(default_factory=dict)
+    temperature_history: list[float] = field(default_factory=list)
 
     @property
     def link_mass_flows_kg_per_s(self) -> list[float]:

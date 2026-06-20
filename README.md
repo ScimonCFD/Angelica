@@ -10,7 +10,7 @@
 
 </div>
 
-Angelica solves **steady, incompressible, isothermal pipe networks** — computing nodal pressures and component flow rates for systems with pipes, fittings, and pumps. A graphical interface means there is nothing to script: define sources and sinks, connect them through junctions, assign components, and run.
+Angelica solves **steady, incompressible pipe networks** — computing nodal pressures, flow rates, and (in non-isothermal mode) temperatures for systems with pipes, fittings, pumps, and heat sources. A graphical interface means there is nothing to script: define sources and sinks, connect them through junctions, assign components, and run.
 
 ## Features
 
@@ -19,9 +19,11 @@ Angelica solves **steady, incompressible, isothermal pipe networks** — computi
 | **Pipes** | Darcy-Weisbach with Colebrook-White or Hazen-Williams closure. Arbitrary length, diameter, and wall roughness. |
 | **Fittings** | Local-loss accessories from a built-in library or a custom K coefficient. |
 | **Pumps** | Single-point EPANET model and piecewise-linear multi-point curves. |
+| **Heat sources** | Inline heaters and coolers with fixed power (W) and optional pressure drop. Non-isothermal mode only. |
 | **Boundaries** | Pressure and mass-flow boundaries on any node. Mixed types on the same network. |
+| **Non-isothermal** | Outer temperature loop with NTU-based pipe heat loss, source-term linearisation (Moukalled), and temperature-dependent fluid properties. |
 | **GUI** | Graphical network editor with convergence monitor and spreadsheet report export. |
-| **Validation** | Results benchmarked against published EPANET reference solutions. |
+| **Validation** | Results benchmarked against published EPANET reference solutions and NTU analytical solutions. |
 
 ## Installation
 
@@ -69,7 +71,10 @@ angelica-gui
 
 ## Tutorials and Benchmarks
 
-Ten cases are included under [`tutorials/steady_isothermal_incompressible/`](tutorials/steady_isothermal_incompressible/):
+Fifteen GUI/tutorial cases are included across two solver folders, plus
+additional automated non-isothermal validation benchmarks in the test suite.
+
+**Isothermal** — [`tutorials/steady_isothermal_incompressible/`](tutorials/steady_isothermal_incompressible/)
 
 | # | Case | Type |
 |---|------|------|
@@ -85,14 +90,31 @@ Ten cases are included under [`tutorials/steady_isothermal_incompressible/`](tut
 | 10 | Laminar Poiseuille parallel pipes | Benchmark (exact closed-form) |
 | 11 | Crude oil gathering pipeline — 32°API, 65°C | Demo (Beggs & Robinson properties) |
 
+**Non-isothermal** — [`tutorials/steady_non_isothermal_incompressible/`](tutorials/steady_non_isothermal_incompressible/)
+
+| # | Case | Type |
+|---|------|------|
+| 12 | Single pipe with heat loss to ambient | Benchmark (NTU analytical) |
+| 13 | Branched district-heating network with two thermal loads | Tutorial |
+| 14 | Looped network with ambient heat loss | Tutorial |
+| 15 | Inline electric heater — energy balance verification | Benchmark (ΔT = Q/ṁcₚ) |
+
+Additional non-isothermal validation cases in the automated test suite:
+
+- adiabatic junction mixing with exact energy balance
+- fixed-flow inline heater with exact `ΔT = Q / (ṁ cₚ)`
+- symmetric adiabatic loop with exact 50/50 flow split
+- symmetric heat-loss loop with NTU-based exact branch temperature
+- **Cengel & Ghajar Example 8-3** (oil through icy lake, McGraw-Hill): T_out = 19.74 °C ± 0.05 K
+
 ## Roadmap
 
-The incompressible solver is the first stage of a platform designed to grow:
+Two solver modes are live; the platform is designed to grow:
 
 ```
-Steady isothermal  →  Non-isothermal  →  Compressible  →  Multiphase  →  Multicomponent
-                                                                               ↑
-                                                               Long-term: Transient
+Steady isothermal ✓  →  Non-isothermal ✓  →  Compressible  →  Multiphase  →  Multicomponent
+                                                                                    ↑
+                                                                    Long-term: Transient
 ```
 
 ## Repository Layout

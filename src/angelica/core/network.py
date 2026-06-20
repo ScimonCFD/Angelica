@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from .case import NetworkCase
-from .components import Fitting, Pipe, Pump
-from .state import FittingState, NetworkState, NodeState, PipeState, PumpState
+from .components import Fitting, HeatSource, Pipe, Pump
+from .state import FittingState, HeatSourceState, NetworkState, NodeState, PipeState, PumpState
 
 
 def build_network_state(case: NetworkCase) -> NetworkState:
@@ -48,7 +48,34 @@ def build_network_state(case: NetworkCase) -> NetworkState:
             components.append(FittingState(component=component, start_node=start_node, end_node=end_node))
         elif isinstance(component, Pump):
             components.append(PumpState(component=component, start_node=start_node, end_node=end_node))
+        elif isinstance(component, HeatSource):
+            components.append(HeatSourceState(component=component, start_node=start_node, end_node=end_node))
         else:
             raise TypeError(f"Unsupported component type: {type(component).__name__}")
 
+    _check_network_connectivity(nodes, components)
     return NetworkState(nodes=nodes, components=components)
+
+
+def _check_network_connectivity(nodes: dict, components: list) -> None:
+    if not nodes:
+        return
+    adjacency: dict[int, set[int]] = {nid: set() for nid in nodes}
+    for comp in components:
+        a, b = comp.start_node.node_id, comp.end_node.node_id
+        adjacency[a].add(b)
+        adjacency[b].add(a)
+    start = next(iter(nodes))
+    visited: set[int] = set()
+    stack = [start]
+    while stack:
+        nid = stack.pop()
+        if nid in visited:
+            continue
+        visited.add(nid)
+        stack.extend(adjacency[nid] - visited)
+    unreachable = set(nodes) - visited
+    if unreachable:
+        raise ValueError(
+            f"Network is not fully connected. Unreachable nodes: {sorted(unreachable)}"
+        )

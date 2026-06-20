@@ -3,24 +3,40 @@
 This note summarises what the current `Angelica` implementation is doing at a
 high level and which equations it is solving.
 
-The scope of the current solver is:
+The scope of the current project is:
 
 - steady
-- isothermal
 - incompressible
-- single-component
-- pressure-driven pipe networks with pipes, fittings, and pumps
+- pressure-driven pipe networks with pipes, fittings, pumps, and inline heat sources
+- isothermal mode
+- non-isothermal mode with an outer temperature loop
+
+This note focuses primarily on the hydraulic core implemented in
+`src/angelica/solvers/steady_isothermal_incompressible.py`, because that same
+pressure-correction machinery is reused inside the non-isothermal solver.
 
 ## 1. High-Level Workflow
 
-The current workflow in `src/angelica/solvers/steady_isothermal_incompressible.py`
-is:
+The current isothermal workflow in
+`src/angelica/solvers/steady_isothermal_incompressible.py` is:
 
 1. Build the network state from the case definition.
 2. Initialise a pressure field for all internal nodes.
 3. Run a laminar initialisation stage.
 4. Use that state as the initial condition for the turbulent stage.
 5. Return nodal pressures and component flow rates.
+
+The non-isothermal workflow in
+`src/angelica/solvers/steady_non_isothermal_incompressible.py` wraps that
+hydraulic solve in an outer temperature loop:
+
+1. Build the network state and initialise thermal boundary conditions.
+2. Solve the hydraulic problem with the current temperature-dependent
+   properties.
+3. Solve the steady energy equation on that flow field.
+4. Update nodal and component temperatures.
+5. Repeat until the temperature change becomes sufficiently small.
+6. Run one final synchronised hydraulic + energy pass for the reported result.
 
 In more detail:
 
@@ -305,3 +321,76 @@ p' = 0
 ```
 
 at those nodes.
+
+## 3. Non-Isothermal Thermal Model
+
+### 3.1 Governing assumptions
+
+The non-isothermal solver retains the **incompressible** assumption from the
+hydraulic core.  Concretely:
+
+- Fluid density is **not** a function of pressure.  ρ, μ, cₚ, and k may all
+  vary with temperature, but they are evaluated at the local pipe temperature
+  only — not at the local pressure.
+- This is the correct model for **liquids** (water, thermal oils, crude oil)
+  under pressures typical of building and pipeline networks (up to a few tens
+  of bar), where pressure-induced property changes are negligible compared to
+  temperature-induced ones.
+- **Compressible gases** — where ρ = ρ(P, T) — are outside the scope of this
+  solver.  Using it for a gas network would give incorrect density and mass
+  flow results.
+- Only **steady-state** conditions are modelled.  Thermal capacitance, pipe
+  wall heat storage, and hydraulic inertia are not included.
+
+### 3.2 Energy equation (pipe FV discretisation)
+
+For each pipe segment the solver assembles the steady convection–diffusion
+energy equation:
+
+```text
+ṁ cₚ (T_E - T_W) = k A / Δx (T_E - T_P) - k A / Δx (T_P - T_W)
+                  + U π D Δx (T_amb - T_P)
+```
+
+where the last term is the Moukalled-style source linearisation for heat loss
+to the surroundings:
+
+```text
+S = Sc + Sp · T_P
+Sc = U π D Δx T_amb
+Sp = -U π D Δx   (≤ 0, strengthens the diagonal)
+```
+
+For inline heat sources the wall heat-loss term is replaced by the fixed power
+source `Q / n_segments`.
+
+### 3.3 Convection scheme
+
+Three face-interpolation schemes are available (selectable via `convection_scheme`):
+
+| Scheme | Face coefficients |
+|--------|-------------------|
+| Upwind (default) | `a_W = max(ṁ cₚ, 0)`, `a_E = max(-ṁ cₚ, 0)` |
+| Hybrid | blend of central and upwind depending on Peclet number |
+| Power Law | Patankar power-law blend |
+
+Upwind is unconditionally stable and first-order accurate in space.  For
+networks where diffusion is negligible compared to convection (Pe ≫ 1, which
+is typical of pipe flow), all three schemes give essentially the same answer.
+
+### 3.4 Analytical reference solution (NTU method)
+
+For a single pipe with uniform U, ṁ, and cₚ, the exact steady-state solution is:
+
+```text
+T_out = T_amb + (T_in - T_amb) · exp(-NTU)
+NTU = U π D L / (ṁ cₚ)
+```
+
+The automated test suite verifies that the FV solver converges to this
+solution as the number of segments increases (`test_mesh_convergence_approaches_ntu_analytical`).
+
+An external textbook benchmark (Cengel & Ghajar, *Heat and Mass Transfer*,
+5th ed., McGraw-Hill, Example 8-3 — oil through an icy lake) provides an
+independent reference with published result T_out = 19.74 °C, reproduced by
+Angelica within 0.05 K.

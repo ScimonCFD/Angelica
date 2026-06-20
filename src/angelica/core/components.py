@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 
 
 FITTING_PRESET_LIBRARY = {
@@ -56,13 +56,51 @@ class Pipe(PressureChanger):
     absolute_roughness_m: float = 0.0
     hazen_williams_c: float = 130.0
     height_change_m: float = 0.0
+    heat_transfer_coefficient_w_per_m2k: float = 0.0
+    ambient_temperature_c: float = 20.0
+    n_thermal_segments: int = 10
+
+    def __post_init__(self) -> None:
+        if self.length_m <= 0.0:
+            raise ValueError(f"Pipe length_m must be positive (got {self.length_m})")
 
 
 @dataclass(frozen=True)
 class Fitting(PressureChanger):
-    loss_coefficient: float = 0.0
+    loss_coefficient: float = float("nan")
+
+    def __post_init__(self) -> None:
+        if math.isnan(self.loss_coefficient):
+            raise ValueError("Fitting requires loss_coefficient (e.g. loss_coefficient=2.0)")
+        if self.loss_coefficient <= 0.0:
+            raise ValueError(
+                f"Fitting loss_coefficient must be positive (got {self.loss_coefficient})"
+            )
 
 
 @dataclass(frozen=True)
 class Pump(PressureChanger):
     curve_points_q_head: tuple[tuple[float, float], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.curve_points_q_head:
+            raise ValueError("Pump curve_points_q_head must contain at least one (Q, head) point")
+
+
+@dataclass(frozen=True)
+class HeatSource(PressureChanger):
+    """Inline heater (power_w > 0) or cooler (power_w < 0) with fixed thermal power.
+
+    Hydraulic pressure drop is controlled by pressure_drop_mode:
+      "rated"  — ΔP = ΔP_rated · (ṁ/ṁ_rated)²  (quadratic, derived from K factor)
+      "fixed"  — ΔP = pressure_drop_pa (lagged coefficient, updated each iteration)
+
+    Set pressure_drop_pa = 0 for a hydraulically transparent device.
+    """
+
+    power_w: float = 0.0
+    pressure_drop_mode: str = "rated"
+    pressure_drop_pa: float = 0.0
+    rated_mass_flow_kg_per_s: float = 1.0
+    n_thermal_segments: int = 10
+    length_m: float = 1.0

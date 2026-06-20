@@ -3,11 +3,14 @@ message: "If you use Angelica in your work, please cite it using the metadata be
 type: software
 title: "Angelica"
 abstract: >
-  Angelica is an open-source platform for steady, incompressible, isothermal
-  pipe network simulation. It solves for nodal pressures and component flow
-  rates in networks of pipes, fittings, and pumps using a pressure-correction
-  algorithm (modified SIMPLE) with Colebrook-White, Hazen-Williams, or
-  Poiseuille closures. A graphical network editor is included.
+  Angelica is an open-source platform for steady, incompressible pipe network
+  simulation. It computes nodal pressures, flow rates, and (in non-isothermal
+  mode) temperatures in networks of pipes, fittings, pumps, and inline heat
+  sources. The hydraulic solver uses a pressure-correction algorithm (modified
+  SIMPLE) with Colebrook-White, Hazen-Williams, or Poiseuille closures. The
+  non-isothermal extension wraps the hydraulic solver in an outer temperature
+  loop, solving the energy equation with NTU-based heat loss and Moukalled
+  source-term linearisation. A graphical network editor is included.
 authors:
   - family-names: Rodriguez
     given-names: Simon
@@ -24,4 +27,7 @@ keywords:
   - SIMPLE algorithm
   - Colebrook-White
   - Hazen-Williams
+  - non-isothermal
+  - heat transfer
+  - heat source
   - open source

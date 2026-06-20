@@ -25,10 +25,3 @@ class MinorLossModel(PressureDropCorrelation):
             * max(abs(link_state.velocity_m_per_s), 1e-12)
         )
 
-    def velocity_from_pressure_drop(self, delta_p: float, density: float, loss_coefficient: float) -> float:
-        if delta_p > 0.0:
-            return math.sqrt(2.0 * delta_p / (loss_coefficient * density))
-        return -math.sqrt(-2.0 * delta_p / (loss_coefficient * density))
-
-    def coupling_coefficient(self, area_m2: float, loss_coefficient: float, velocity_m_per_s: float) -> float:
-        return -2.0 * area_m2 / (loss_coefficient * max(abs(velocity_m_per_s), 1e-12))

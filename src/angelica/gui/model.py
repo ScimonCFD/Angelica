@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Dict
-from typing import List, Optional
 
 
 NODE_TYPES = ("source", "sink", "junction")
-LINK_COMPONENT_TYPES = ("pipe", "fitting", "pump")
+LINK_COMPONENT_TYPES = ("pipe", "fitting", "pump", "heat_source")
 DEFAULT_LIBRARY_MATERIAL = {
     "library_key": "water_liquid",
     "definition_mode": "library",
@@ -26,7 +24,7 @@ class CanvasNode:
     node_type: str
     x: float
     y: float
-    properties: Dict[str, str]
+    properties: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -34,31 +32,32 @@ class CanvasLink:
     link_id: int
     start_node_id: int
     end_node_id: int
-    components: List["CanvasLinkComponent"]
+    components: list[CanvasLinkComponent]
 
 
 @dataclass(frozen=True)
 class CanvasLinkComponent:
     component_id: int
     component_type: str
-    properties: Dict[str, str]
+    properties: dict[str, str]
 
 
 @dataclass
 class CanvasScene:
-    active_tool: Optional[str] = None
+    active_tool: str | None = None
     case_name: str = ""
-    nodes: List[CanvasNode] = field(default_factory=list)
-    links: List[CanvasLink] = field(default_factory=list)
-    material: Dict[str, str] = field(default_factory=dict)
-    pressure_drop_model: Dict[str, str] = field(default_factory=lambda: dict(DEFAULT_PRESSURE_DROP_MODEL))
-    solver_settings: Dict[str, float | int] = field(default_factory=dict)
-    initial_node_pressures_pa: Dict[int, float] = field(default_factory=dict)
+    physics_mode: str = "isothermal"
+    nodes: list[CanvasNode] = field(default_factory=list)
+    links: list[CanvasLink] = field(default_factory=list)
+    material: dict[str, str] = field(default_factory=dict)
+    pressure_drop_model: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_PRESSURE_DROP_MODEL))
+    solver_settings: dict[str, float | int] = field(default_factory=dict)
+    initial_node_pressures_pa: dict[int, float] = field(default_factory=dict)
     _next_node_id: int = 1
     _next_link_id: int = 1
     _next_component_id: int = 1
 
-    def set_active_tool(self, tool: Optional[str]) -> None:
+    def set_active_tool(self, tool: str | None) -> None:
         if tool is not None and tool not in NODE_TYPES:
             raise ValueError(f"Unsupported tool: {tool}")
         self.active_tool = tool
@@ -108,7 +107,7 @@ class CanvasScene:
                 return updated_node
         raise ValueError(f"Node {node_id} does not exist.")
 
-    def update_node_properties(self, node_id: int, properties: Dict[str, str]) -> CanvasNode:
+    def update_node_properties(self, node_id: int, properties: dict[str, str]) -> CanvasNode:
         for index, node in enumerate(self.nodes):
             if node.node_id == node_id:
                 updated_node = replace(node, properties=dict(properties))
@@ -116,7 +115,7 @@ class CanvasScene:
                 return updated_node
         raise ValueError(f"Node {node_id} does not exist.")
 
-    def get_link(self, link_id: int) -> Optional[CanvasLink]:
+    def get_link(self, link_id: int) -> CanvasLink | None:
         for link in self.links:
             if link.link_id == link_id:
                 return link
@@ -146,13 +145,13 @@ class CanvasScene:
         self,
         link_id: int,
         component_id: int,
-        properties: Dict[str, str],
+        properties: dict[str, str],
     ) -> CanvasLink:
         for link_index, link in enumerate(self.links):
             if link.link_id != link_id:
                 continue
 
-            updated_components: List[CanvasLinkComponent] = []
+            updated_components: list[CanvasLinkComponent] = []
             updated_component_found = False
             for component in link.components:
                 if component.component_id == component_id:
@@ -170,7 +169,7 @@ class CanvasScene:
 
         raise ValueError(f"Link {link_id} does not exist.")
 
-    def get_node(self, node_id: int) -> Optional[CanvasNode]:
+    def get_node(self, node_id: int) -> CanvasNode | None:
         for node in self.nodes:
             if node.node_id == node_id:
                 return node
@@ -258,38 +257,45 @@ class CanvasScene:
         self._next_link_id = 1
         self._next_component_id = 1
         self.active_tool = None
+        self.physics_mode = "isothermal"
 
-    def update_material(self, material: Dict[str, str]) -> None:
+    def update_material(self, material: dict[str, str]) -> None:
         self.material = dict(material)
 
-    def update_pressure_drop_model(self, pressure_drop_model: Dict[str, str]) -> None:
+    def update_pressure_drop_model(self, pressure_drop_model: dict[str, str]) -> None:
         self.pressure_drop_model = dict(pressure_drop_model)
 
-    def update_solver_settings(self, settings: Dict[str, float | int | str]) -> None:
+    def update_solver_settings(self, settings: dict[str, float | int | str]) -> None:
         updated_settings = dict(self.solver_settings)
         updated_settings.update(settings)
         self.solver_settings = updated_settings
 
     @staticmethod
-    def _default_properties(node_type: str) -> Dict[str, str]:
+    def _default_properties(node_type: str) -> dict[str, str]:
         if node_type == "source":
             return {
                 "condition_type": "pressure",
                 "pressure": "",
                 "flow": "",
+                "thermal_bc_type": "fixed_temperature",
+                "inlet_temperature_c": "",
+                "thermal_gradient_dc_per_m": "0.0",
             }
         if node_type == "sink":
             return {
                 "condition_type": "pressure",
                 "pressure": "",
                 "flow": "",
+                "thermal_bc_type": "zero_gradient",
+                "inlet_temperature_c": "",
+                "thermal_gradient_dc_per_m": "0.0",
             }
         return {
             "label": "",
         }
 
     @staticmethod
-    def _default_link_component_properties(component_type: str) -> Dict[str, str]:
+    def _default_link_component_properties(component_type: str) -> dict[str, str]:
         if component_type == "pipe":
             return {
                 "length_m": "",
@@ -303,6 +309,15 @@ class CanvasScene:
             return {
                 "diameter_m": "",
                 "curve_points_q_head": "",
+            }
+        if component_type == "heat_source":
+            return {
+                "diameter_m": "",
+                "power_w": "0.0",
+                "pressure_drop_mode": "rated",
+                "pressure_drop_pa": "0.0",
+                "rated_mass_flow_kg_per_s": "1.0",
+                "n_thermal_segments": "10",
             }
         return {
             "diameter_m": "",

@@ -9,25 +9,53 @@ def export_solve_result_csv(result, output_path: str) -> None:
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
+    has_temperatures = bool(result.node_temperatures_c)
+    has_component_temps = any(
+        cf.temperature_in_c is not None for cf in result.component_flows
+    )
+
     with output.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["case", result.case_name])
         writer.writerow(["converged", result.converged])
         writer.writerow([])
-        writer.writerow(["Node", "Pressure (Pa)", "Pressure (kPa)"])
-        for node_id in sorted(result.node_pressures_pa):
-            pressure_pa = result.node_pressures_pa[node_id]
-            writer.writerow([node_id, round(pressure_pa, 2), round(pressure_pa / 1000.0, 4)])
+        if has_temperatures:
+            writer.writerow(["Node", "Pressure (Pa)", "Pressure (kPa)", "Temperature (°C)"])
+            for node_id in sorted(result.node_pressures_pa):
+                pressure_pa = result.node_pressures_pa[node_id]
+                temp_c = result.node_temperatures_c.get(node_id)
+                writer.writerow([
+                    node_id,
+                    round(pressure_pa, 2),
+                    round(pressure_pa / 1000.0, 4),
+                    round(temp_c, 4) if temp_c is not None else "",
+                ])
+        else:
+            writer.writerow(["Node", "Pressure (Pa)", "Pressure (kPa)"])
+            for node_id in sorted(result.node_pressures_pa):
+                pressure_pa = result.node_pressures_pa[node_id]
+                writer.writerow([node_id, round(pressure_pa, 2), round(pressure_pa / 1000.0, 4)])
         writer.writerow([])
-        writer.writerow(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"])
-        for component in result.component_flows:
-            writer.writerow(
-                [
+        if has_component_temps:
+            writer.writerow(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)", "T_in (°C)", "T_out (°C)"])
+            for component in result.component_flows:
+                writer.writerow([
                     component.label,
                     round(component.mass_flow_kg_per_s, 4),
                     round(component.volumetric_flow_m3_per_h, 4),
-                ]
-            )
+                    round(component.temperature_in_c, 4) if component.temperature_in_c is not None else "",
+                    round(component.temperature_out_c, 4) if component.temperature_out_c is not None else "",
+                ])
+        else:
+            writer.writerow(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"])
+            for component in result.component_flows:
+                writer.writerow(
+                    [
+                        component.label,
+                        round(component.mass_flow_kg_per_s, 4),
+                        round(component.volumetric_flow_m3_per_h, 4),
+                    ]
+                )
 
 
 def export_solve_result_workbook(result, output_path: str) -> None:
@@ -36,25 +64,53 @@ def export_solve_result_workbook(result, output_path: str) -> None:
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
+    has_temperatures = bool(result.node_temperatures_c)
+    has_component_temps = any(
+        cf.temperature_in_c is not None for cf in result.component_flows
+    )
+
     workbook = Workbook()
 
     pressures_sheet = workbook.active
     pressures_sheet.title = "Pressures"
-    pressures_sheet.append(["Node", "Pressure (Pa)", "Pressure (kPa)"])
-    for node_id in sorted(result.node_pressures_pa):
-        pressure_pa = result.node_pressures_pa[node_id]
-        pressures_sheet.append([node_id, round(pressure_pa, 2), round(pressure_pa / 1000.0, 4)])
+    if has_temperatures:
+        pressures_sheet.append(["Node", "Pressure (Pa)", "Pressure (kPa)", "Temperature (°C)"])
+        for node_id in sorted(result.node_pressures_pa):
+            pressure_pa = result.node_pressures_pa[node_id]
+            temp_c = result.node_temperatures_c.get(node_id)
+            pressures_sheet.append([
+                node_id,
+                round(pressure_pa, 2),
+                round(pressure_pa / 1000.0, 4),
+                round(temp_c, 4) if temp_c is not None else None,
+            ])
+    else:
+        pressures_sheet.append(["Node", "Pressure (Pa)", "Pressure (kPa)"])
+        for node_id in sorted(result.node_pressures_pa):
+            pressure_pa = result.node_pressures_pa[node_id]
+            pressures_sheet.append([node_id, round(pressure_pa, 2), round(pressure_pa / 1000.0, 4)])
 
     flows_sheet = workbook.create_sheet("Flows")
-    flows_sheet.append(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"])
-    for component in result.component_flows:
-        flows_sheet.append(
-            [
+    if has_component_temps:
+        flows_sheet.append(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)", "T_in (°C)", "T_out (°C)"])
+        for component in result.component_flows:
+            flows_sheet.append([
                 component.label,
                 round(component.mass_flow_kg_per_s, 4),
                 round(component.volumetric_flow_m3_per_h, 4),
-            ]
-        )
+                round(component.temperature_in_c, 4) if component.temperature_in_c is not None else None,
+                round(component.temperature_out_c, 4) if component.temperature_out_c is not None else None,
+            ])
+    else:
+        flows_sheet.append(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"])
+        for component in result.component_flows:
+            flows_sheet.append(
+                [
+                    component.label,
+                    round(component.mass_flow_kg_per_s, 4),
+                    round(component.volumetric_flow_m3_per_h, 4),
+                ]
+            )
 
     workbook.save(output)
 
@@ -65,7 +121,7 @@ def print_solve_result(result, detailed: bool = False) -> None:
     print("")
     _print_iteration_summary(result)
     print("")
-    _print_node_table(result.node_pressures_pa)
+    _print_node_table(result.node_pressures_pa, result.node_temperatures_c or None)
     print("")
     _print_component_table(result.component_flows)
     if result.turbulent_metrics:
@@ -105,23 +161,44 @@ def save_convergence_plot(result, output_path: str) -> None:
     plt.close(fig)
 
 
-def _print_node_table(node_pressures_pa) -> None:
+def _print_node_table(node_pressures_pa, node_temperatures_c=None) -> None:
     print("Node Pressures")
-    print(f"{'Node':>6}  {'Pressure (Pa)':>14}  {'Pressure (kPa)':>14}")
-    for node_id in sorted(node_pressures_pa):
-        pressure_pa = node_pressures_pa[node_id]
-        print(f"{node_id:>6}  {pressure_pa:>14.2f}  {pressure_pa / 1000.0:>14.4f}")
+    if node_temperatures_c:
+        print(f"{'Node':>6}  {'Pressure (Pa)':>14}  {'Pressure (kPa)':>14}  {'Temp (°C)':>10}")
+        for node_id in sorted(node_pressures_pa):
+            pressure_pa = node_pressures_pa[node_id]
+            temp = node_temperatures_c.get(node_id)
+            temp_str = f"{temp:>10.4f}" if temp is not None else f"{'—':>10}"
+            print(f"{node_id:>6}  {pressure_pa:>14.2f}  {pressure_pa / 1000.0:>14.4f}  {temp_str}")
+    else:
+        print(f"{'Node':>6}  {'Pressure (Pa)':>14}  {'Pressure (kPa)':>14}")
+        for node_id in sorted(node_pressures_pa):
+            pressure_pa = node_pressures_pa[node_id]
+            print(f"{node_id:>6}  {pressure_pa:>14.2f}  {pressure_pa / 1000.0:>14.4f}")
 
 
 def _print_component_table(component_flows) -> None:
     print("Component Flows")
-    print(f"{'Component':<20}  {'Mass flow (kg/s)':>16}  {'Vol. flow (m^3/h)':>18}")
-    for component in component_flows:
-        print(
-            f"{component.label:<20}  "
-            f"{component.mass_flow_kg_per_s:>16.4f}  "
-            f"{component.volumetric_flow_m3_per_h:>18.4f}"
-        )
+    has_temps = any(cf.temperature_in_c is not None for cf in component_flows)
+    if has_temps:
+        print(f"{'Component':<20}  {'Mass flow (kg/s)':>16}  {'Vol. flow (m^3/h)':>18}  {'T_in (°C)':>10}  {'T_out (°C)':>10}")
+        for component in component_flows:
+            t_in = f"{component.temperature_in_c:>10.4f}" if component.temperature_in_c is not None else f"{'—':>10}"
+            t_out = f"{component.temperature_out_c:>10.4f}" if component.temperature_out_c is not None else f"{'—':>10}"
+            print(
+                f"{component.label:<20}  "
+                f"{component.mass_flow_kg_per_s:>16.4f}  "
+                f"{component.volumetric_flow_m3_per_h:>18.4f}  "
+                f"{t_in}  {t_out}"
+            )
+    else:
+        print(f"{'Component':<20}  {'Mass flow (kg/s)':>16}  {'Vol. flow (m^3/h)':>18}")
+        for component in component_flows:
+            print(
+                f"{component.label:<20}  "
+                f"{component.mass_flow_kg_per_s:>16.4f}  "
+                f"{component.volumetric_flow_m3_per_h:>18.4f}"
+            )
 
 
 def _print_iteration_summary(result) -> None:

@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import math
 
+from .gravity import GRAVITY_M_PER_S2
 from .pressure_drop import PressureDropCorrelation
-
-
-GRAVITY_M_PER_S2 = 9.81
 
 
 class PumpCurveModel(PressureDropCorrelation):

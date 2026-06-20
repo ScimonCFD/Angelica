@@ -4,7 +4,7 @@ import math
 
 from angelica.numerics import NonlinearProblem, build_nonlinear_solver
 
-from .gravity import elevation_pressure_term
+from .gravity import GRAVITY_M_PER_S2, elevation_pressure_term
 from .pressure_drop import PressureDropCorrelation
 
 
@@ -405,7 +405,7 @@ class HazenWilliamsPipeCorrelation(PressureDropCorrelation):
             return 0.0
 
         resistance = self._hazen_williams_resistance(pipe_state)
-        headloss_m = abs(driving_term_pa) / (density * 9.81)
+        headloss_m = abs(driving_term_pa) / (density * GRAVITY_M_PER_S2)
         volumetric_flow_m3_per_s = (
             headloss_m / resistance
         ) ** (1.0 / self.HAZEN_WILLIAMS_EXPONENT)
@@ -420,7 +420,7 @@ class HazenWilliamsPipeCorrelation(PressureDropCorrelation):
             1e-12,
         )
         derivative = 1.0 / (
-            9.81
+            GRAVITY_M_PER_S2
             * resistance
             * self.HAZEN_WILLIAMS_EXPONENT
             * volumetric_flow_m3_per_s ** (self.HAZEN_WILLIAMS_EXPONENT - 1.0)
