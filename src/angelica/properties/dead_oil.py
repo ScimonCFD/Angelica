@@ -40,6 +40,11 @@ def build_thermal_dead_oil(api_gravity: float):
     Specific heat: Watson-Nelson (API Technical Data Book).
     Thermal conductivity: Cragoe (1929).
 
+    No range checking is performed beyond the hard limit on API gravity in
+    dead_oil_density_kg_per_m3. The caller is responsible for ensuring that
+    operating temperatures and API values lie within the stated validity ranges
+    of each underlying correlation.
+
     Args:
         api_gravity: API gravity of the dead oil (°API). Typical range 10–58.
 

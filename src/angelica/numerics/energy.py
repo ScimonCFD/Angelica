@@ -26,8 +26,8 @@ def _load_scipy():
             import scipy.sparse.linalg as spla
     except ImportError as exc:
         raise RuntimeError(
-            "The non-isothermal solver requires SciPy. Install the optional "
-            "energy-equation dependency set before running non-isothermal cases."
+            "The non-isothermal solver requires SciPy, which is not installed. "
+            "Install it with: pip install scipy"
         ) from exc
     return sp, spla
 
@@ -36,13 +36,14 @@ def solve_energy_system(
     network_state: NetworkState,
     fluid_model,
     convection_scheme: ConvectionScheme,
+    T_ref: float = 20.0,
 ) -> tuple[dict[int, float], dict[int, float]]:
     """Solve the steady-state energy equation for the pipe network.
 
     Returns:
         (node_temperatures, component_mean_temperatures) where:
         - node_temperatures: maps node_id → temperature_c for all network nodes.
-        - component_mean_temperatures: maps id(pipe_state) → mean temperature_c
+        - component_mean_temperatures: maps pipe_states list index → mean temperature_c
           computed from the internal FV nodes, used for fluid property evaluation.
 
     Thermal BC types (from NodeState):
@@ -124,12 +125,12 @@ def solve_energy_system(
 
         if isinstance(ps, HeatSourceState):
             U = 0.0
-            T_amb = 20.0
+            T_amb = T_ref  # U=0 so this is unused; kept for structural symmetry with pipe branch
         else:
             U = pipe.heat_transfer_coefficient_w_per_m2k
             T_amb = pipe.ambient_temperature_c
 
-        T_repr = ps.temperature_c if hasattr(ps, "temperature_c") and ps.temperature_c is not None else 20.0
+        T_repr = ps.temperature_c if hasattr(ps, "temperature_c") and ps.temperature_c is not None else T_ref
         _ls = _TempCarrier(T_repr)
 
         cp = fluid_model.specific_heat_for_link(_ls)
@@ -209,7 +210,7 @@ def solve_energy_system(
         n_internal = n_segs - 1
         offset = pipe_internal_offset[pipe_idx]
 
-        T_repr = ps.temperature_c if hasattr(ps, "temperature_c") and ps.temperature_c is not None else 20.0
+        T_repr = ps.temperature_c if hasattr(ps, "temperature_c") and ps.temperature_c is not None else T_ref
         _ls = _TempCarrier(T_repr)
         cp = fluid_model.specific_heat_for_link(_ls)
         mdot = float(ps.mass_flow_kg_per_s)
@@ -270,7 +271,7 @@ def solve_energy_system(
                 total_out = outflow_total[row]
                 if total_in < 1e-30:
                     add(row, row, 1.0)
-                    rhs[row] = 20.0
+                    rhs[row] = T_ref
                 else:
                     denom = total_out if total_out > 1e-30 else total_in
                     add(row, row, -denom)
@@ -284,7 +285,7 @@ def solve_energy_system(
             total_out = outflow_total[row]
             if total_in < 1e-30:
                 add(row, row, 1.0)
-                rhs[row] = 20.0
+                rhs[row] = T_ref
             else:
                 denom = total_out if total_out > 1e-30 else total_in
                 add(row, row, -denom)
@@ -304,11 +305,11 @@ def solve_energy_system(
         n_internal = n_segs - 1
         offset = pipe_internal_offset[pipe_idx]
         if n_internal > 0:
-            component_mean_temps[id(ps)] = float(np.mean(T_vec[offset:offset + n_internal]))
+            component_mean_temps[pipe_idx] = float(np.mean(T_vec[offset:offset + n_internal]))
         else:
             si = node_index[ps.start_node.node_id]
             ei = node_index[ps.end_node.node_id]
-            component_mean_temps[id(ps)] = float(0.5 * (T_vec[si] + T_vec[ei]))
+            component_mean_temps[pipe_idx] = float(0.5 * (T_vec[si] + T_vec[ei]))
 
     node_temps = {nid: float(T_vec[node_index[nid]]) for nid in sorted_node_ids}
     return node_temps, component_mean_temps

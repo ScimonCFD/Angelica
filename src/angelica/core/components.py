@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 
 
 FITTING_PRESET_LIBRARY = {
@@ -60,15 +60,31 @@ class Pipe(PressureChanger):
     ambient_temperature_c: float = 20.0
     n_thermal_segments: int = 10
 
+    def __post_init__(self) -> None:
+        if self.length_m <= 0.0:
+            raise ValueError(f"Pipe length_m must be positive (got {self.length_m})")
+
 
 @dataclass(frozen=True)
 class Fitting(PressureChanger):
-    loss_coefficient: float = 0.0
+    loss_coefficient: float = float("nan")
+
+    def __post_init__(self) -> None:
+        if math.isnan(self.loss_coefficient):
+            raise ValueError("Fitting requires loss_coefficient (e.g. loss_coefficient=2.0)")
+        if self.loss_coefficient <= 0.0:
+            raise ValueError(
+                f"Fitting loss_coefficient must be positive (got {self.loss_coefficient})"
+            )
 
 
 @dataclass(frozen=True)
 class Pump(PressureChanger):
     curve_points_q_head: tuple[tuple[float, float], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.curve_points_q_head:
+            raise ValueError("Pump curve_points_q_head must contain at least one (Q, head) point")
 
 
 @dataclass(frozen=True)

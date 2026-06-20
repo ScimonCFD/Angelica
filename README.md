@@ -105,6 +105,7 @@ Additional non-isothermal validation cases in the automated test suite:
 - fixed-flow inline heater with exact `ΔT = Q / (ṁ cₚ)`
 - symmetric adiabatic loop with exact 50/50 flow split
 - symmetric heat-loss loop with NTU-based exact branch temperature
+- **Cengel & Ghajar Example 8-3** (oil through icy lake, McGraw-Hill): T_out = 19.74 °C ± 0.05 K
 
 ## Roadmap
 

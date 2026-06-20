@@ -33,6 +33,19 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
     The inner hydraulic solver is the existing
     SteadyIsothermalIncompressibleSolver — it runs to full convergence on
     every outer iteration.
+
+    Applicability and assumptions
+    ------------------------------
+    - **Incompressible fluid**: density is not a function of pressure.
+      Density and all other fluid properties (μ, cp, k) may vary with
+      temperature but are evaluated at the local temperature only, not at the
+      local pressure.  This is appropriate for liquids (water, thermal oils,
+      crude oil) under moderate pressures.
+    - **Not valid for compressible gases** where ρ = ρ(P, T), or for
+      liquids at pressures high enough that pressure-induced property changes
+      are significant.
+    - **Steady-state only**: transient effects (thermal capacitance, hydraulic
+      inertia) are not modelled.
     """
 
     def __init__(
@@ -51,7 +64,10 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         )
 
     def solve(self, case, progress_callback=None) -> SolveResult:
+        from dataclasses import replace as _replace
+
         from angelica.numerics.energy import solve_energy_system
+        from angelica.properties.thermal_fluid import ThermalFluid
 
         network_state = build_network_state(case)
 
@@ -63,12 +79,18 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             if tb.bc_type == "fixed_temperature":
                 node_st.temperature_c = tb.temperature_c
                 node_st.is_thermal_inlet = True
-            elif tb.bc_type in ("zero_gradient", "fixed_gradient"):
+            else:
+                # "zero_gradient" and "fixed_gradient" both set the Neumann
+                # gradient; zero_gradient is the special case gradient = 0.
                 node_st.thermal_gradient_dc_per_m = tb.gradient_dc_per_m
 
         # ── initialise temperature field ───────────────────────────────────
         # Use the temperature of the inlet with the most prescribed T as seed.
         T_init = self._initial_temperature(case, network_state)
+        fluid_model = case.fluid_model
+        if isinstance(fluid_model, ThermalFluid) and fluid_model.reference_temperature_c != T_init:
+            fluid_model = _replace(fluid_model, reference_temperature_c=T_init)
+
         for node in network_state.nodes.values():
             if node.temperature_c is None:
                 node.temperature_c = T_init
@@ -91,16 +113,16 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             self._hydraulic_solver._initialise_pressure_field(network_state, case)
             lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
                 network_state,
-                case.fluid_model,
+                fluid_model,
             )
             turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
                 network_state,
-                case.fluid_model,
+                fluid_model,
             )
 
             # 2. Solve energy equation
             new_node_temps, pipe_mean_temps = solve_energy_system(
-                network_state, case.fluid_model, self.convection_scheme
+                network_state, fluid_model, self.convection_scheme, T_ref=T_init
             )
 
             # 3. Check convergence and update temperatures
@@ -128,16 +150,17 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
         lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
             network_state,
-            case.fluid_model,
+            fluid_model,
         )
         turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
             network_state,
-            case.fluid_model,
+            fluid_model,
         )
         final_node_temps, final_pipe_mean_temps = solve_energy_system(
             network_state,
-            case.fluid_model,
+            fluid_model,
             self.convection_scheme,
+            T_ref=T_init,
         )
         self._set_node_temperatures(network_state, final_node_temps)
         self._update_component_temperatures(network_state, T_init, final_pipe_mean_temps)
@@ -156,7 +179,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         from angelica.core.results import ComponentFlowResult
         component_flows = []
         for link in network_state.components:
-            density = case.fluid_model.density_for_link(link)
+            density = fluid_model.density_for_link(link)
             component_flows.append(
                 ComponentFlowResult(
                     label=self._hydraulic_solver._component_label(link),
@@ -184,8 +207,9 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
 
     @staticmethod
     def _initial_temperature(case, _network_state) -> float:
-        if case.thermal_inlets:
-            return case.thermal_inlets[0].temperature_c
+        for tb in case.thermal_inlets:
+            if tb.bc_type == "fixed_temperature":
+                return tb.temperature_c
         # fallback: ambient of first pipe, or 20 °C
         for comp in case.components:
             if hasattr(comp, "ambient_temperature_c"):
@@ -205,10 +229,11 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         default_temperature_c: float,
         pipe_mean_temps: dict[int, float] | None = None,
     ) -> None:
+        pipe_idx = 0
         for component_state in network_state.components:
             if isinstance(component_state, (PipeState, HeatSourceState)):
-                if pipe_mean_temps is not None and id(component_state) in pipe_mean_temps:
-                    component_state.temperature_c = pipe_mean_temps[id(component_state)]
+                if pipe_mean_temps is not None and pipe_idx in pipe_mean_temps:
+                    component_state.temperature_c = pipe_mean_temps[pipe_idx]
                 else:
                     start_temp = (
                         network_state.nodes[component_state.start_node.node_id].temperature_c
@@ -219,3 +244,4 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
                         or default_temperature_c
                     )
                     component_state.temperature_c = 0.5 * (start_temp + end_temp)
+                pipe_idx += 1

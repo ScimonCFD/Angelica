@@ -205,7 +205,7 @@ class TutorialSuiteSmokeTests(unittest.TestCase):
         # Heater adds 50 kW — outlet must be warmer than inlet
         self.assertGreater(result.node_temperatures_c[4], result.node_temperatures_c[1])
         # Energy balance: ΔT = Q / (ṁ·cₚ) — tolerance 0.5 K
-        mdot = result.component_flows[1].mass_flow_kg_per_s  # HeatSource flow
+        mdot = next(cf for cf in result.component_flows if "HeatSource" in cf.label).mass_flow_kg_per_s
         cp = 4182.0
         expected_delta_t = 50_000.0 / (mdot * cp)
         actual_delta_t = result.node_temperatures_c[4] - result.node_temperatures_c[1]

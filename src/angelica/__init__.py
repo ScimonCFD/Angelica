@@ -2,7 +2,7 @@
 
 from .closures.convection_scheme import ConvectionScheme, HybridScheme, PowerLawScheme, UpwindScheme
 from .core.case import FlowBoundary, NetworkCase, PressureBoundary, ThermalBoundary
-from .core.components import Fitting, HeatSource, Pipe, PressureChanger
+from .core.components import Fitting, HeatSource, Pipe, PressureChanger, Pump
 from .core.results import ComponentFlowResult, SolveResult
 from .core.settings import SolverSettings
 from .io.reporting import print_solve_result
@@ -29,6 +29,7 @@ __all__ = [
     "NonIsothermalSolverSettings",
     "Pipe",
     "PressureBoundary",
+    "Pump",
     "PressureChanger",
     "SolveResult",
     "SingleComponentFluid",

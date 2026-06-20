@@ -1,4 +1,4 @@
-GRAVITY_M_PER_S2 = 9.807
+GRAVITY_M_PER_S2 = 9.81
 
 
 def elevation_pressure_term(density: float, height_change_m: float) -> float:

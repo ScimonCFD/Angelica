@@ -53,4 +53,29 @@ def build_network_state(case: NetworkCase) -> NetworkState:
         else:
             raise TypeError(f"Unsupported component type: {type(component).__name__}")
 
+    _check_network_connectivity(nodes, components)
     return NetworkState(nodes=nodes, components=components)
+
+
+def _check_network_connectivity(nodes: dict, components: list) -> None:
+    if not nodes:
+        return
+    adjacency: dict[int, set[int]] = {nid: set() for nid in nodes}
+    for comp in components:
+        a, b = comp.start_node.node_id, comp.end_node.node_id
+        adjacency[a].add(b)
+        adjacency[b].add(a)
+    start = next(iter(nodes))
+    visited: set[int] = set()
+    stack = [start]
+    while stack:
+        nid = stack.pop()
+        if nid in visited:
+            continue
+        visited.add(nid)
+        stack.extend(adjacency[nid] - visited)
+    unreachable = set(nodes) - visited
+    if unreachable:
+        raise ValueError(
+            f"Network is not fully connected. Unreachable nodes: {sorted(unreachable)}"
+        )

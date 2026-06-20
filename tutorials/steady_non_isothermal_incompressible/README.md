@@ -7,6 +7,12 @@ solver: hydraulics are solved with the current density and viscosity, then
 the energy equation is solved on the resulting flow field, and temperatures
 are updated until convergence.
 
+**Scope:** This solver is designed for **incompressible liquids** (water,
+thermal oils, crude oil) where fluid properties depend on temperature but not
+on pressure.  It is not valid for compressible gases, where density is a
+function of both pressure and temperature.  Transient effects are not
+modelled.
+
 Available cases:
 
 - `01_single_pipe_heat_loss` — single pipe analytical benchmark (NTU method)

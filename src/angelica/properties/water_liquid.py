@@ -4,6 +4,10 @@ Density:    Kell (1975) formula, error < 0.1 kg/m³ over 0–100 °C.
 Viscosity:  Vogel equation, matches IAPWS 2008 within 1 %.
 Specific heat: constant 4182 J/kg·K (varies < 1 % between 15 and 80 °C).
 Thermal conductivity: quadratic fit to IAPWS data, error < 0.5 % over 0–100 °C.
+
+No range checking is performed on the temperature input. The caller is
+responsible for ensuring that operating temperatures lie within the stated
+validity ranges of each correlation.
 """
 from __future__ import annotations
 

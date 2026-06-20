@@ -41,7 +41,7 @@ class PipeState(PressureChangerState):
     component: Pipe
     friction_factor: float | None = None
     reynolds: float = 0.0
-    temperature_c: float = 20.0
+    temperature_c: float | None = None
 
 
 @dataclass
@@ -60,7 +60,7 @@ class PumpState(PressureChangerState):
 class HeatSourceState(PressureChangerState):
     component: HeatSource
     reynolds: float = 0.0
-    temperature_c: float = 20.0
+    temperature_c: float | None = None
 
 
 @dataclass
