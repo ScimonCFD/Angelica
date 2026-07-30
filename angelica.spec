@@ -17,12 +17,17 @@ a = Analysis(
         "openpyxl",
         "openpyxl.cell._writer",
         "openpyxl.styles.builtins",
+        "scipy.sparse",
+        "scipy.sparse.linalg",
+        "scipy.sparse._csr",
+        "scipy.sparse.linalg._dsolve",
+        "scipy.sparse.linalg._dsolve.linsolve",
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     # matplotlib is only used by the optional CLI reporting function, not the GUI
-    excludes=["matplotlib", "scipy", "IPython", "pandas"],
+    excludes=["matplotlib", "IPython", "pandas"],
     noarchive=False,
 )
 
