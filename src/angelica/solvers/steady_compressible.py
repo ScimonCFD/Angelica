@@ -73,8 +73,10 @@ class SteadyCompressibleSolver(BaseSolver):
             settings=self.hydraulic_settings,
             turbulent_pipe_correlation=turbulent_pipe_correlation,
         )
+        self.settings = self._hydraulic_solver.settings
+        self.turbulent_pipe_correlation = self._hydraulic_solver.turbulent_pipe_correlation
 
-    def solve(self, case, progress_callback=None) -> SolveResult:
+    def solve(self, case, _progress_callback=None) -> SolveResult:
         network_state = build_network_state(case)
         settings = self.compressible_settings
         fluid_model = case.fluid_model
