@@ -675,6 +675,7 @@ class NetSimGui:
         temperature_var = tk.StringVar(master=dialog, value=material.get("temperature_c", "60.0"))
         cp_var = tk.StringVar(master=dialog, value=material.get("specific_heat_j_per_kg_k", ""))
         k_var = tk.StringVar(master=dialog, value=material.get("thermal_conductivity_w_per_m_k", ""))
+        mw_var = tk.StringVar(master=dialog, value=material.get("molecular_weight_kg_per_mol", ""))
 
         ttk.Label(frame, text="Definition").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
         mode_row = ttk.Frame(frame)
@@ -682,6 +683,7 @@ class NetSimGui:
         ttk.Radiobutton(mode_row, text="Library", variable=mode_var, value="library").pack(side="left")
         ttk.Radiobutton(mode_row, text="Custom", variable=mode_var, value="custom").pack(side="left", padx=(8, 0))
         ttk.Radiobutton(mode_row, text="Crude oil", variable=mode_var, value="crude_oil").pack(side="left", padx=(8, 0))
+        ttk.Radiobutton(mode_row, text="Gas (ideal)", variable=mode_var, value="gas").pack(side="left", padx=(8, 0))
 
         ttk.Label(frame, text="Material Library").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=4)
         library_box = ttk.Combobox(
@@ -697,9 +699,15 @@ class NetSimGui:
         name_entry = ttk.Entry(frame, textvariable=name_var, width=26)
         name_entry.grid(row=2, column=1, sticky="ew", pady=4)
 
-        ttk.Label(frame, text="Density (kg/m³)").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=4)
+        density_label = ttk.Label(frame, text="Density (kg/m³)")
+        density_label.grid(row=3, column=0, sticky="w", padx=(0, 8), pady=4)
         density_entry = ttk.Entry(frame, textvariable=density_var, width=26)
         density_entry.grid(row=3, column=1, sticky="ew", pady=4)
+
+        mw_label = ttk.Label(frame, text="Molecular Weight M (kg/mol)")
+        mw_label.grid(row=3, column=0, sticky="w", padx=(0, 8), pady=4)
+        mw_entry = ttk.Entry(frame, textvariable=mw_var, width=26)
+        mw_entry.grid(row=3, column=1, sticky="ew", pady=4)
 
         ttk.Label(frame, text="Viscosity (Pa·s)").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=4)
         viscosity_entry = ttk.Entry(frame, textvariable=viscosity_var, width=26)
@@ -736,16 +744,30 @@ class NetSimGui:
             k_var.set(preset.get("thermal_conductivity_w_per_m_k", ""))
 
         is_non_isothermal = self.scene.physics_mode == "non_isothermal"
+        is_compressible = self.scene.physics_mode == "compressible"
 
         def sync_mode_state(*_args: object) -> None:
             mode = mode_var.get()
             is_library = mode == "library"
             is_crude_oil = mode == "crude_oil"
+            is_gas = mode == "gas"
             library_box.configure(state="readonly" if is_library else "disabled")
             std_state = "normal" if mode == "custom" else "disabled"
-            name_entry.configure(state=std_state)
-            density_entry.configure(state=std_state)
-            viscosity_entry.configure(state=std_state)
+            name_entry.configure(state=std_state if not is_gas else "normal")
+            viscosity_entry.configure(state=std_state if not is_gas else "normal")
+            # density vs molecular weight
+            if is_gas:
+                density_label.grid_remove()
+                density_entry.grid_remove()
+                mw_label.grid()
+                mw_entry.grid()
+                mw_entry.configure(state="normal")
+            else:
+                mw_label.grid_remove()
+                mw_entry.grid_remove()
+                density_label.grid()
+                density_entry.grid()
+                density_entry.configure(state=std_state)
             if is_crude_oil:
                 api_label.grid()
                 api_entry.grid()
@@ -756,11 +778,13 @@ class NetSimGui:
                 api_entry.grid_remove()
                 temperature_label.grid_remove()
                 temperature_entry.grid_remove()
-            if is_non_isothermal:
+            if is_non_isothermal or is_gas:
                 cp_label.grid()
                 cp_entry.grid()
                 k_label.grid()
                 k_entry.grid()
+                cp_entry.configure(state="normal" if is_gas else std_state)
+                k_entry.configure(state="normal" if is_gas else std_state)
             else:
                 cp_label.grid_remove()
                 cp_entry.grid_remove()
@@ -790,6 +814,7 @@ class NetSimGui:
                 temperature_var,
                 cp_var,
                 k_var,
+                mw_var,
             ),
         ).pack(side="right", padx=(0, 8))
 
@@ -1206,9 +1231,49 @@ class NetSimGui:
         temperature_var: tk.StringVar,
         cp_var: tk.StringVar,
         k_var: tk.StringVar,
+        mw_var: tk.StringVar | None = None,
     ) -> None:
         mode = mode_var.get()
         is_non_isothermal = self.scene.physics_mode == "non_isothermal"
+
+        if mode == "gas":
+            mw_text = (mw_var.get() if mw_var else "").strip()
+            visc_text = viscosity_var.get().strip()
+            try:
+                mw = float(mw_text)
+                visc = float(visc_text)
+            except ValueError:
+                messagebox.showerror(
+                    "Invalid material",
+                    "Molecular weight and viscosity must be valid numbers.",
+                    parent=dialog,
+                )
+                return
+            if mw <= 0:
+                messagebox.showerror(
+                    "Invalid material",
+                    "Molecular weight must be positive.",
+                    parent=dialog,
+                )
+                return
+            material: dict = {
+                "definition_mode": "gas",
+                "library_key": "",
+                "name": name_var.get().strip() or "Gas",
+                "molecular_weight_kg_per_mol": str(mw),
+                "viscosity_pa_s": str(visc),
+            }
+            cp_text = cp_var.get().strip()
+            k_text = k_var.get().strip()
+            if cp_text:
+                material["specific_heat_j_per_kg_k"] = cp_text
+            if k_text:
+                material["thermal_conductivity_w_per_m_k"] = k_text
+            self.scene.update_material(material)
+            self._refresh_global_summaries()
+            self.status_var.set(f"Material set to {material['name']}.")
+            dialog.destroy()
+            return
 
         if mode == "crude_oil":
             try:
@@ -1686,38 +1751,61 @@ class NetSimGui:
         frame = ttk.Frame(dialog, padding=16)
         frame.pack(fill="both", expand=True)
 
-        ttk.Label(frame, text="Compressibility").grid(
-            row=0, column=0, sticky="w", pady=(0, 4)
+        current_mode = self.scene.physics_mode
+        is_currently_compressible = current_mode == "compressible"
+
+        compressibility_var = tk.StringVar(
+            value="compressible" if is_currently_compressible else "incompressible"
         )
-        ttk.Label(frame, text="Incompressible  (only option currently supported)").grid(
-            row=0, column=1, sticky="w", padx=(8, 0), pady=(0, 4)
+        energy_var = tk.StringVar(
+            value="non_isothermal" if current_mode == "non_isothermal" else "isothermal"
         )
+
+        ttk.Label(frame, text="Compressibility").grid(row=0, column=0, sticky="w", pady=(0, 4))
+        comp_frame = ttk.Frame(frame)
+        comp_frame.grid(row=0, column=1, sticky="w", padx=(8, 0), pady=(0, 4))
+        ttk.Radiobutton(
+            comp_frame, text="Incompressible", variable=compressibility_var, value="incompressible"
+        ).pack(side="left", padx=(0, 12))
+        ttk.Radiobutton(
+            comp_frame, text="Compressible (ideal gas)", variable=compressibility_var, value="compressible"
+        ).pack(side="left")
 
         ttk.Separator(frame, orient="horizontal").grid(
             row=1, column=0, columnspan=2, sticky="ew", pady=8
         )
 
         ttk.Label(frame, text="Energy").grid(row=2, column=0, sticky="w", pady=4)
-        mode_var = tk.StringVar(value=self.scene.physics_mode)
-        mode_frame = ttk.Frame(frame)
-        mode_frame.grid(row=2, column=1, sticky="w", padx=(8, 0))
-        ttk.Radiobutton(
-            mode_frame, text="Isothermal", variable=mode_var, value="isothermal"
-        ).pack(side="left", padx=(0, 12))
-        ttk.Radiobutton(
-            mode_frame, text="Non-isothermal", variable=mode_var, value="non_isothermal"
-        ).pack(side="left")
+        energy_frame = ttk.Frame(frame)
+        energy_frame.grid(row=2, column=1, sticky="w", padx=(8, 0))
+        rb_isothermal = ttk.Radiobutton(
+            energy_frame, text="Isothermal", variable=energy_var, value="isothermal"
+        )
+        rb_isothermal.pack(side="left", padx=(0, 12))
+        rb_non_isothermal = ttk.Radiobutton(
+            energy_frame, text="Non-isothermal", variable=energy_var, value="non_isothermal"
+        )
+        rb_non_isothermal.pack(side="left")
 
-        note = ttk.Label(
+        note_ni = ttk.Label(
             frame,
             text=(
                 "Non-isothermal requires cp and k in the material,\n"
-                "inlet temperature on source nodes, and U / T_amb on pipes."
+                "inlet temperature on source nodes, and U / T_amb on pipes.\n"
+                "Compressible requires molecular weight (M) in the material."
             ),
             foreground="gray",
             justify="left",
         )
-        note.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 8))
+        note_ni.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 8))
+
+        def _sync_energy_state(*_args: object) -> None:
+            state = "disabled" if compressibility_var.get() == "compressible" else "normal"
+            rb_isothermal.configure(state=state)
+            rb_non_isothermal.configure(state=state)
+
+        compressibility_var.trace_add("write", _sync_energy_state)
+        _sync_energy_state()
 
         button_row = ttk.Frame(frame)
         button_row.grid(row=4, column=0, columnspan=2, sticky="e", pady=(4, 0))
@@ -1725,7 +1813,9 @@ class NetSimGui:
         ttk.Button(
             button_row,
             text="Apply",
-            command=lambda: self._apply_case_type(mode_var.get(), dialog),
+            command=lambda: self._apply_case_type(
+                compressibility_var.get(), energy_var.get(), dialog
+            ),
         ).pack(side="right", padx=(0, 8))
 
         frame.columnconfigure(1, weight=1)
@@ -1734,7 +1824,16 @@ class NetSimGui:
         dialog.grab_set()
         dialog.focus_set()
 
-    def _apply_case_type(self, mode: str, dialog: tk.Toplevel) -> None:
+    def _apply_case_type(
+        self, compressibility: str, energy: str, dialog: tk.Toplevel
+    ) -> None:
+        if compressibility == "compressible":
+            mode = "compressible"
+        elif energy == "non_isothermal":
+            mode = "non_isothermal"
+        else:
+            mode = "isothermal"
+
         self.scene.physics_mode = mode
         if mode == "non_isothermal" and self.scene.material:
             library_key = self.scene.material.get("library_key", "")
@@ -1749,8 +1848,13 @@ class NetSimGui:
                 if changed:
                     self.scene.update_material(updated)
                     self._refresh_global_summaries()
-        label = "Isothermal" if mode == "isothermal" else "Non-isothermal"
-        self.status_var.set(f"Case type set to: {label}.")
+
+        _LABELS = {
+            "isothermal": "Isothermal",
+            "non_isothermal": "Non-isothermal",
+            "compressible": "Compressible (ideal gas)",
+        }
+        self.status_var.set(f"Case type set to: {_LABELS.get(mode, mode)}.")
         dialog.destroy()
 
     def _unit_quantities(self) -> dict:
@@ -1846,13 +1950,21 @@ class NetSimGui:
             return "Not defined"
 
         name = self.scene.material.get("name", "Unnamed")
-        density = self.scene.material.get("density_kg_per_m3", "").strip()
-        viscosity = self.scene.material.get("viscosity_pa_s", "").strip()
         lines = [name]
-        if density:
-            lines.append(f"rho={density} kg/m^3")
-        if viscosity:
-            lines.append(f"mu={viscosity} Pa·s")
+        if self.scene.physics_mode == "compressible":
+            mw = self.scene.material.get("molecular_weight_kg_per_mol", "").strip()
+            viscosity = self.scene.material.get("viscosity_pa_s", "").strip()
+            if mw:
+                lines.append(f"M={mw} kg/mol")
+            if viscosity:
+                lines.append(f"mu={viscosity} Pa·s")
+        else:
+            density = self.scene.material.get("density_kg_per_m3", "").strip()
+            viscosity = self.scene.material.get("viscosity_pa_s", "").strip()
+            if density:
+                lines.append(f"rho={density} kg/m^3")
+            if viscosity:
+                lines.append(f"mu={viscosity} Pa·s")
         return "\n".join(lines)
 
     def _pressure_drop_summary_text(self) -> str:

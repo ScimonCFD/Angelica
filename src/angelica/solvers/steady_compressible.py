@@ -62,7 +62,12 @@ class SteadyCompressibleSolver(BaseSolver):
         compressible_settings: CompressibleSolverSettings | None = None,
         turbulent_pipe_correlation: PressureDropCorrelation | None = None,
     ) -> None:
-        self.hydraulic_settings = hydraulic_settings or SolverSettings()
+        # Gas systems operate at 100 kPa – 10 MPa; a 10 Pa absolute correction
+        # tolerance is < 0.01 % of the lowest typical pressure — tight enough
+        # in practice while avoiding oscillation near convergence.
+        self.hydraulic_settings = hydraulic_settings or SolverSettings(
+            pressure_correction_abs_tolerance_pa=10.0
+        )
         self.compressible_settings = compressible_settings or CompressibleSolverSettings()
         self._hydraulic_solver = SteadyIsothermalIncompressibleSolver(
             settings=self.hydraulic_settings,
