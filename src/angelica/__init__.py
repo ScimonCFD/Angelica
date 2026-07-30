@@ -6,7 +6,9 @@ from .core.components import Fitting, HeatSource, Pipe, PressureChanger, Pump
 from .core.results import ComponentFlowResult, SolveResult
 from .core.settings import SolverSettings
 from .io.reporting import print_solve_result
+from .properties.compressible_fluid import CompressibleFluid
 from .properties.dead_oil import build_thermal_dead_oil
+from .properties.eos import EquationOfState, IdealGasEOS
 from .properties.single_component import SingleComponentFluid
 from .properties.thermal_fluid import ThermalFluid
 from .solvers import (
@@ -19,11 +21,14 @@ from .solvers import (
 __all__ = [
     "BaseSolver",
     "ComponentFlowResult",
+    "CompressibleFluid",
     "ConvectionScheme",
+    "EquationOfState",
     "FlowBoundary",
     "Fitting",
     "HeatSource",
     "HybridScheme",
+    "IdealGasEOS",
     "NetworkCase",
     "PowerLawScheme",
     "NonIsothermalSolverSettings",
