@@ -10,10 +10,14 @@ from angelica.core.results import ComponentFlowResult, IterationMetrics
 from angelica.core.settings import SolverSettings
 from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
 from angelica.closures.convection_scheme import HybridScheme, PowerLawScheme, UpwindScheme
+from angelica.properties.compressible_fluid import CompressibleFluid
+from angelica.properties.eos import IdealGasEOS
 from angelica.properties.single_component import SingleComponentFluid
 from angelica.properties.thermal_fluid import ThermalFluid
 from angelica.solvers import (
+    CompressibleSolverSettings,
     NonIsothermalSolverSettings,
+    SteadyCompressibleSolver,
     SteadyIsothermalIncompressibleSolver,
     SteadyNonIsothermalIncompressibleSolver,
 )
@@ -225,12 +229,23 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
         raise ValueError("The scene has no links. Add at least one connection before running.")
     if not scene.material:
         raise ValueError("No material is defined. Use Material → Define Material before running.")
-    if not scene.material.get("density_kg_per_m3", "").strip():
-        raise ValueError("The material is missing density_kg_per_m3.")
-    if not scene.material.get("viscosity_pa_s", "").strip():
-        raise ValueError("The material is missing viscosity_pa_s.")
 
+    is_compressible = scene.physics_mode == "compressible"
     is_non_isothermal = scene.physics_mode == "non_isothermal"
+
+    if is_compressible:
+        if not scene.material.get("molecular_weight_kg_per_mol", "").strip():
+            raise ValueError(
+                "Compressible mode requires Molecular Weight (M) in the material. "
+                "Open Material → Define Material."
+            )
+        if not scene.material.get("viscosity_pa_s", "").strip():
+            raise ValueError("The material is missing viscosity_pa_s.")
+    else:
+        if not scene.material.get("density_kg_per_m3", "").strip():
+            raise ValueError("The material is missing density_kg_per_m3.")
+        if not scene.material.get("viscosity_pa_s", "").strip():
+            raise ValueError("The material is missing viscosity_pa_s.")
 
     if not is_non_isothermal:
         heat_source_link_ids = [
@@ -428,7 +443,18 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
     visible_node_ids = {node.node_id for node in scene.nodes}
     all_node_ids = visible_node_ids.union(range(max(visible_node_ids) + 1, next_internal_node_id))
 
-    if is_non_isothermal:
+    if is_compressible:
+        m_text = scene.material.get("molecular_weight_kg_per_mol", "0.028964").strip()
+        cp_text = scene.material.get("specific_heat_j_per_kg_k", "1000.0").strip()
+        k_text = scene.material.get("thermal_conductivity_w_per_m_k", "0.025").strip()
+        fluid_model = CompressibleFluid.from_constants(
+            eos=IdealGasEOS(float(m_text)),
+            viscosity_pa_s=float(scene.material["viscosity_pa_s"]),
+            specific_heat_j_per_kg_k=float(cp_text) if cp_text else 1000.0,
+            thermal_conductivity_w_per_m_k=float(k_text) if k_text else 0.025,
+        )
+        thermal_inlets = ()
+    elif is_non_isothermal:
         fluid_model = ThermalFluid.from_constants(
             density_kg_per_m3=float(scene.material["density_kg_per_m3"]),
             viscosity_pa_s=float(scene.material["viscosity_pa_s"]),
@@ -488,10 +514,25 @@ def build_solver_from_scene(scene: CanvasScene):
         "temperature_relaxation",
         "convection_scheme",
     }
+    _COMP_KEYS = {"max_density_iterations", "density_rel_tolerance"}
+    _OUTER_KEYS = _NI_KEYS | _COMP_KEYS
     ni_raw = {k: scene.solver_settings[k] for k in _NI_KEYS if k in scene.solver_settings}
-    hyd_raw = {k: v for k, v in scene.solver_settings.items() if k not in _NI_KEYS}
+    comp_raw = {k: scene.solver_settings[k] for k in _COMP_KEYS if k in scene.solver_settings}
+    hyd_raw = {k: v for k, v in scene.solver_settings.items() if k not in _OUTER_KEYS}
 
     settings = SolverSettings(**hyd_raw) if hyd_raw else SolverSettings()
+
+    if scene.physics_mode == "compressible":
+        comp_kwargs: dict = {}
+        if "max_density_iterations" in comp_raw:
+            comp_kwargs["max_density_iterations"] = int(comp_raw["max_density_iterations"])
+        if "density_rel_tolerance" in comp_raw:
+            comp_kwargs["density_rel_tolerance"] = float(comp_raw["density_rel_tolerance"])
+        return SteadyCompressibleSolver(
+            hydraulic_settings=settings if hyd_raw else None,
+            compressible_settings=CompressibleSolverSettings(**comp_kwargs),
+            turbulent_pipe_correlation=turbulent_pipe_correlation,
+        )
 
     if scene.physics_mode == "non_isothermal":
         ni_kwargs: dict = {}
