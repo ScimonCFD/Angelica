@@ -13,7 +13,9 @@ from .properties.single_component import SingleComponentFluid
 from .properties.thermal_fluid import ThermalFluid
 from .solvers import (
     BaseSolver,
+    CompressibleSolverSettings,
     NonIsothermalSolverSettings,
+    SteadyCompressibleSolver,
     SteadyIsothermalIncompressibleSolver,
     SteadyNonIsothermalIncompressibleSolver,
 )
@@ -22,6 +24,7 @@ __all__ = [
     "BaseSolver",
     "ComponentFlowResult",
     "CompressibleFluid",
+    "CompressibleSolverSettings",
     "ConvectionScheme",
     "EquationOfState",
     "FlowBoundary",
@@ -39,6 +42,7 @@ __all__ = [
     "SolveResult",
     "SingleComponentFluid",
     "SolverSettings",
+    "SteadyCompressibleSolver",
     "SteadyIsothermalIncompressibleSolver",
     "SteadyNonIsothermalIncompressibleSolver",
     "ThermalBoundary",

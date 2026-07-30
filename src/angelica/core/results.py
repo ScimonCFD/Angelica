@@ -32,6 +32,7 @@ class SolveResult:
     turbulent_metrics: list[IterationMetrics]
     node_temperatures_c: dict[int, float] = field(default_factory=dict)
     temperature_history: list[float] = field(default_factory=list)
+    density_history: list[float] = field(default_factory=list)
 
     @property
     def link_mass_flows_kg_per_s(self) -> list[float]:
