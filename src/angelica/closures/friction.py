@@ -342,22 +342,17 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
         pipe_state,
         transformed_friction: float,
     ) -> float:
-        delta_t = 1e-7
-        base_value = self.evaluate_colebrook(
-            pipe_state,
-            math.exp(transformed_friction),
-        )
-        shifted_value = self.evaluate_colebrook(
-            pipe_state,
-            math.exp(transformed_friction + delta_t),
-        )
-        return (shifted_value - base_value) / delta_t
+        f = max(math.exp(transformed_friction), 1e-8)
+        re = max(pipe_state.reynolds, 1e-12)
+        g = (pipe_state.component.absolute_roughness_m / pipe_state.component.diameter_m) / 3.7 + 2.51 / (re * math.sqrt(f))
+        # dR/dt = dR/df * f; simplifies to -(1/(2√f) + 2.51/(ln10·Re·√f·g))
+        return -(1.0 / (2.0 * math.sqrt(f))) - 2.51 / (math.log(10) * re * math.sqrt(f) * g)
 
     def _colebrook_derivative(self, pipe_state, friction_factor: float) -> float:
-        delta_f = 1e-7
-        base_value = self.evaluate_colebrook(pipe_state, friction_factor)
-        shifted_value = self.evaluate_colebrook(pipe_state, friction_factor + delta_f)
-        return (shifted_value - base_value) / delta_f
+        f = max(friction_factor, 1e-8)
+        re = max(pipe_state.reynolds, 1e-12)
+        g = (pipe_state.component.absolute_roughness_m / pipe_state.component.diameter_m) / 3.7 + 2.51 / (re * math.sqrt(f))
+        return -(1.0 / (2.0 * f ** 1.5)) - 2.51 / (math.log(10) * re * f ** 1.5 * g)
 
     def evaluate_colebrook(self, pipe_state, friction_factor: float) -> float:
         friction_factor = max(friction_factor, 1e-8)
