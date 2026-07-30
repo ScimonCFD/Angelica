@@ -233,6 +233,7 @@ class NetSimGui:
             master=self.root,
             value=self.metric_name_to_label["pressure_correction_abs_pa"],
         )
+        self.show_hydraulic_detail_var = tk.BooleanVar(master=self.root, value=False)
         self.convergence_history = {"laminar": [], "turbulent": []}
         self.status_var = tk.StringVar(value="Select a node type from the palette.")
         self.tool_var = tk.StringVar(value="No tool selected")
@@ -3902,6 +3903,13 @@ class NetSimGui:
             metric_box.pack(side="left")
             metric_box.bind("<<ComboboxSelected>>", lambda _event: self._redraw_convergence_plot())
 
+            ttk.Checkbutton(
+                control_row,
+                text="Show hydraulic detail",
+                variable=self.show_hydraulic_detail_var,
+                command=self._redraw_convergence_plot,
+            ).pack(side="left", padx=(16, 0))
+
             self.convergence_canvas = tk.Canvas(
                 frame,
                 background=self._t["plot_bg"],
@@ -3915,18 +3923,7 @@ class NetSimGui:
                 "<Configure>",
                 lambda _event: self._redraw_convergence_plot(),
             )
-
-            legend = ttk.Frame(frame)
-            legend.pack(fill="x", pady=(8, 0))
-            for label, color in (
-                ("Laminar", self._t["plot_laminar"]),
-                ("Turbulent", self._t["plot_turbulent"]),
-                ("Temperature (right axis)", self._t["plot_temperature"]),
-            ):
-                swatch = tk.Canvas(legend, width=16, height=10, highlightthickness=0)
-                swatch.create_line(1, 5, 15, 5, fill=color, width=3)
-                swatch.pack(side="left", padx=(0, 4))
-                ttk.Label(legend, text=label).pack(side="left", padx=(0, 12))
+            # Legend is drawn inside the canvas by _draw_history_plot
         else:
             self.convergence_window.deiconify()
             self.convergence_window.lift()
@@ -3946,6 +3943,20 @@ class NetSimGui:
         if self.convergence_canvas is None:
             return
 
+        show_detail = self.show_hydraulic_detail_var.get()
+
+        # Simple view: temperature only (one point per outer iteration)
+        if not show_detail and self.temperature_history:
+            self._draw_history_plot(
+                self.convergence_canvas,
+                [("ΔT convergence", self.temperature_history, self._t["plot_temperature"], 0)],
+                "temperature_delta_k",
+                secondary_series=None,
+                x_label="Outer iteration",
+            )
+            return
+
+        # Detail view (or isothermal): hydraulic series + optional temperature overlay
         metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
         history_series: list[tuple[str, list[float], str, int]] = []
         laminar_values = [getattr(metric, metric_name) for metric in self.convergence_history["laminar"]]
@@ -3970,7 +3981,9 @@ class NetSimGui:
         secondary = None
         if self.temperature_history:
             secondary = [("Temperature", self.temperature_history, self._t["plot_temperature"])]
-        self._draw_history_plot(self.convergence_canvas, history_series, metric_name, secondary_series=secondary)
+        self._draw_history_plot(
+            self.convergence_canvas, history_series, metric_name, secondary_series=secondary
+        )
 
 
     def _draw_history_plot(
@@ -3979,6 +3992,7 @@ class NetSimGui:
         history_series: list[tuple[str, list[float], str, int]],
         metric_name: str,
         secondary_series: list[tuple[str, list[float], str]] | None = None,
+        x_label: str = "Iteration",
     ) -> None:
         canvas.delete("all")
         width = int(canvas.winfo_width() or canvas["width"])
@@ -4077,7 +4091,7 @@ class NetSimGui:
                     dash=(4, 3),
                 )
 
-        canvas.create_text((left + right) / 2, height - 10, text="Iteration", anchor="s", fill=self._t["plot_text"])
+        canvas.create_text((left + right) / 2, height - 10, text=x_label, anchor="s", fill=self._t["plot_text"])
         canvas.create_text(
             16,
             (top + bottom) / 2,
@@ -4180,6 +4194,27 @@ class NetSimGui:
                             x, y - size, x + size, y, x, y + size, x - size, y,
                             fill=color, outline=color,
                         )
+
+        # Canvas legend (bottom-left, inside plot area)
+        legend_items: list[tuple[str, str, str]] = []  # (label, color, style)
+        for label, _values, color, _offset in history_series:
+            legend_items.append((label, color, "line"))
+        if has_secondary and secondary_series:
+            for label, _values, color in secondary_series:
+                legend_items.append((label + " (right axis)", color, "dashed"))
+        if legend_items:
+            lx = left + 8
+            ly = top + 8
+            for leg_label, leg_color, leg_style in legend_items:
+                if leg_style == "dashed":
+                    canvas.create_line(lx, ly + 5, lx + 20, ly + 5, fill=leg_color, width=2, dash=(5, 3))
+                else:
+                    canvas.create_line(lx, ly + 5, lx + 20, ly + 5, fill=leg_color, width=2)
+                canvas.create_text(
+                    lx + 24, ly + 5, anchor="w", text=leg_label,
+                    fill=self._t["plot_text"], font=("TkDefaultFont", 8),
+                )
+                ly += 16
 
     @staticmethod
     def _pretty_metric_name(metric_name: str) -> str:
