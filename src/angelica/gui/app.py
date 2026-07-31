@@ -218,6 +218,7 @@ class NetSimGui:
         self.convergence_canvas: tk.Canvas | None = None
         self.temperature_canvas: tk.Canvas | None = None
         self.temperature_history: list[float] = []
+        self.density_history: list[float] = []
         self._dark = False
         self._unit_system_key = "si"
         self.root = tk.Tk()
@@ -464,6 +465,7 @@ class NetSimGui:
         self.latest_result = None
         self.latest_boundary_results = {}
         self.temperature_history = []
+        self.density_history = []
         self.current_file_path = None
         self._undo_stack.clear()
         self._redo_stack.clear()
@@ -513,6 +515,7 @@ class NetSimGui:
             self.latest_boundary_results = cached_results["boundary_results"]
             self.convergence_history = cached_results["convergence_history"]
             self.temperature_history = []
+            self.density_history = []
             if cached_results["component_flows"]:
                 node_pressures = {
                     node_id: entry["pressure_pa"]
@@ -533,6 +536,7 @@ class NetSimGui:
             self.latest_boundary_results = {}
             self.convergence_history = {"laminar": [], "turbulent": []}
             self.temperature_history = []
+            self.density_history = []
             status_suffix = ""
 
         self.tool_var.set("No tool selected")
@@ -2108,6 +2112,7 @@ class NetSimGui:
             "turbulent": list(result.turbulent_metrics),
         }
         self.temperature_history = list(result.temperature_history)
+        self.density_history = list(result.density_history)
         self._redraw_scene()
         self._redraw_convergence_plot()
 
@@ -3945,12 +3950,21 @@ class NetSimGui:
 
         show_detail = self.show_hydraulic_detail_var.get()
 
-        # Simple view: temperature only (one point per outer iteration)
+        # Simple view: one point per outer iteration
         if not show_detail and self.temperature_history:
             self._draw_history_plot(
                 self.convergence_canvas,
                 [("ΔT convergence", self.temperature_history, self._t["plot_temperature"], 0)],
                 "temperature_delta_k",
+                secondary_series=None,
+                x_label="Outer iteration",
+            )
+            return
+        if not show_detail and self.density_history:
+            self._draw_history_plot(
+                self.convergence_canvas,
+                [("Δρ/ρ convergence", self.density_history, self._t["plot_temperature"], 0)],
+                "density_rel_change",
                 secondary_series=None,
                 x_label="Outer iteration",
             )
@@ -4220,6 +4234,8 @@ class NetSimGui:
     def _pretty_metric_name(metric_name: str) -> str:
         if metric_name == "temperature_delta_k":
             return "max |ΔT| (K)"
+        if metric_name == "density_rel_change":
+            return "max |Δρ/ρ|"
         labels = {name: label for label, name in NetSimGui.METRIC_OPTIONS}
         return labels.get(metric_name, metric_name)
 
