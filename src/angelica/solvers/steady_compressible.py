@@ -82,6 +82,11 @@ class SteadyCompressibleSolver(BaseSolver):
         fluid_model = case.fluid_model
 
         density_history: list[float] = []
+        all_lam_hist: list[float] = []
+        all_lam_metrics = []
+        all_turb_hist: list[float] = []
+        all_turb_metrics = []
+        outer_turb_final = []
         lam_hist: list[float] = []
         lam_metrics = []
         turb_hist: list[float] = []
@@ -99,6 +104,12 @@ class SteadyCompressibleSolver(BaseSolver):
             turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
                 network_state, fluid_model
             )
+            all_lam_hist.extend(lam_hist)
+            all_lam_metrics.extend(lam_metrics)
+            all_turb_hist.extend(turb_hist)
+            all_turb_metrics.extend(turb_metrics)
+            if turb_metrics:
+                outer_turb_final.append(turb_metrics[-1])
 
             new_densities = [fluid_model.density_for_link(link) for link in network_state.components]
 
@@ -132,9 +143,10 @@ class SteadyCompressibleSolver(BaseSolver):
             converged=hydraulic_converged and density_converged,
             node_pressures_pa=node_pressures,
             component_flows=component_flows,
-            laminar_history=lam_hist,
-            laminar_metrics=lam_metrics,
-            turbulent_history=turb_hist,
-            turbulent_metrics=turb_metrics,
+            laminar_history=all_lam_hist,
+            laminar_metrics=all_lam_metrics,
+            turbulent_history=all_turb_hist,
+            turbulent_metrics=all_turb_metrics,
             density_history=density_history,
+            outer_turbulent_final_metrics=tuple(outer_turb_final),
         )

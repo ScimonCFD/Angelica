@@ -75,6 +75,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             laminar_metrics=laminar_metrics,
             turbulent_history=turbulent_history,
             turbulent_metrics=turbulent_metrics,
+            outer_turbulent_final_metrics=(turbulent_metrics[-1],) if turbulent_metrics else (),
         )
 
     def _component_label(self, link_state) -> str:

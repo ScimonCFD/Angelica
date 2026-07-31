@@ -102,6 +102,11 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         settings = self.non_isothermal_settings
         temperature_converged = False
         temperature_history: list[float] = []
+        all_lam_hist: list[float] = []
+        all_lam_metrics = []
+        all_turb_hist: list[float] = []
+        all_turb_metrics = []
+        outer_turb_final = []
         lam_hist: list[float] = []
         lam_metrics = []
         turb_hist: list[float] = []
@@ -119,6 +124,12 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
                 network_state,
                 fluid_model,
             )
+            all_lam_hist.extend(lam_hist)
+            all_lam_metrics.extend(lam_metrics)
+            all_turb_hist.extend(turb_hist)
+            all_turb_metrics.extend(turb_metrics)
+            if turb_metrics:
+                outer_turb_final.append(turb_metrics[-1])
 
             # 2. Solve energy equation
             new_node_temps, pipe_mean_temps = solve_energy_system(
@@ -156,6 +167,12 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             network_state,
             fluid_model,
         )
+        all_lam_hist.extend(lam_hist)
+        all_lam_metrics.extend(lam_metrics)
+        all_turb_hist.extend(turb_hist)
+        all_turb_metrics.extend(turb_metrics)
+        if turb_metrics:
+            outer_turb_final.append(turb_metrics[-1])
         final_node_temps, final_pipe_mean_temps = solve_energy_system(
             network_state,
             fluid_model,
@@ -198,11 +215,12 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             node_pressures_pa=node_pressures,
             node_temperatures_c=node_temperatures,
             component_flows=component_flows,
-            laminar_history=lam_hist,
-            laminar_metrics=lam_metrics,
-            turbulent_history=turb_hist,
-            turbulent_metrics=turb_metrics,
+            laminar_history=all_lam_hist,
+            laminar_metrics=all_lam_metrics,
+            turbulent_history=all_turb_hist,
+            turbulent_metrics=all_turb_metrics,
             temperature_history=temperature_history,
+            outer_turbulent_final_metrics=tuple(outer_turb_final),
         )
 
     @staticmethod
