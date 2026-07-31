@@ -453,7 +453,15 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             specific_heat_j_per_kg_k=float(cp_text) if cp_text else 1000.0,
             thermal_conductivity_w_per_m_k=float(k_text) if k_text else 0.025,
         )
-        thermal_inlets = ()
+        thermal_inlets = tuple(
+            tb
+            for tb in (
+                _build_thermal_boundary(node)
+                for node in scene.nodes
+                if node.node_type in ("source", "sink")
+            )
+            if tb is not None
+        )
     elif is_non_isothermal:
         fluid_model = ThermalFluid.from_constants(
             density_kg_per_m3=float(scene.material["density_kg_per_m3"]),
@@ -514,7 +522,10 @@ def build_solver_from_scene(scene: CanvasScene):
         "temperature_relaxation",
         "convection_scheme",
     }
-    _COMP_KEYS = {"max_density_iterations", "density_rel_tolerance"}
+    _COMP_KEYS = {
+        "max_density_iterations", "density_rel_tolerance",
+        "temperature_tolerance_k", "temperature_relaxation", "convection_scheme",
+    }
     _OUTER_KEYS = _NI_KEYS | _COMP_KEYS
     ni_raw = {k: scene.solver_settings[k] for k in _NI_KEYS if k in scene.solver_settings}
     comp_raw = {k: scene.solver_settings[k] for k in _COMP_KEYS if k in scene.solver_settings}
@@ -523,15 +534,27 @@ def build_solver_from_scene(scene: CanvasScene):
     settings = SolverSettings(**hyd_raw) if hyd_raw else SolverSettings()
 
     if scene.physics_mode == "compressible":
+        _CONVECTION_SCHEMES = {
+            "upwind": UpwindScheme,
+            "hybrid": HybridScheme,
+            "power_law": PowerLawScheme,
+        }
         comp_kwargs: dict = {}
         if "max_density_iterations" in comp_raw:
             comp_kwargs["max_density_iterations"] = int(comp_raw["max_density_iterations"])
         if "density_rel_tolerance" in comp_raw:
             comp_kwargs["density_rel_tolerance"] = float(comp_raw["density_rel_tolerance"])
+        if "temperature_tolerance_k" in comp_raw:
+            comp_kwargs["temperature_tolerance_k"] = float(comp_raw["temperature_tolerance_k"])
+        if "temperature_relaxation" in comp_raw:
+            comp_kwargs["temperature_relaxation"] = float(comp_raw["temperature_relaxation"])
+        scheme_key = str(comp_raw.get("convection_scheme", "hybrid"))
+        convection_scheme = _CONVECTION_SCHEMES.get(scheme_key, HybridScheme)()
         return SteadyCompressibleSolver(
             hydraulic_settings=settings if hyd_raw else None,
             compressible_settings=CompressibleSolverSettings(**comp_kwargs),
             turbulent_pipe_correlation=turbulent_pipe_correlation,
+            convection_scheme=convection_scheme,
         )
 
     if scene.physics_mode == "non_isothermal":

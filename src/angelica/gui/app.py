@@ -3993,8 +3993,10 @@ class NetSimGui:
             return
 
         secondary = None
-        if self.temperature_history:
-            secondary = [("Temperature", self.temperature_history, self._t["plot_temperature"])]
+        if self.scene.physics_mode == "compressible" and self.density_history:
+            secondary = [("Δρ/ρ", self.density_history, self._t["plot_temperature"])]
+        elif self.temperature_history:
+            secondary = [("ΔT (K)", self.temperature_history, self._t["plot_temperature"])]
         self._draw_history_plot(
             self.convergence_canvas, history_series, metric_name, secondary_series=secondary
         )
