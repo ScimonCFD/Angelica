@@ -160,7 +160,7 @@ class CompressibleFluidTests(unittest.TestCase):
             fluid.density_for_link(link_low),
         )
 
-    def test_viscosity_independent_of_pressure(self):
+    def test_viscosity_constant_when_using_from_constants(self):
         fluid = _air_fluid()
         link_low  = _FakeLinkState(_FakeNode(100_000.0), _FakeNode(90_000.0))
         link_high = _FakeLinkState(_FakeNode(500_000.0), _FakeNode(490_000.0))

@@ -12,9 +12,11 @@ class CompressibleFluid(FluidModel):
     """Fluid model for compressible single-component gas simulation.
 
     Density is computed from an EquationOfState using the local pressure and
-    temperature. Viscosity, specific heat, and thermal conductivity are
-    treated as functions of temperature only (pressure correction is
-    negligible for most gas pipeline applications).
+    temperature.  Viscosity, specific heat, and thermal conductivity are
+    supplied as callables of (pressure_pa, temperature_c), following the
+    standard non-compositional approach where transport properties come from
+    empirical correlations rather than the EOS.  For ideal-gas applications
+    the pressure argument can simply be ignored inside the callable.
 
     The local pressure is taken as the average of the link's inlet and outlet
     node pressures. If neither is available yet (early in the iteration),
@@ -29,17 +31,15 @@ class CompressibleFluid(FluidModel):
     """
 
     eos: EquationOfState
-    _viscosity_fn: Callable[[float], float]
-    _specific_heat_fn: Callable[[float], float]
-    _thermal_conductivity_fn: Callable[[float], float]
+    _viscosity_fn: Callable[[float, float], float]
+    _specific_heat_fn: Callable[[float, float], float]
+    _thermal_conductivity_fn: Callable[[float, float], float]
     reference_pressure_pa: float = 101_325.0
     reference_temperature_c: float = 20.0
 
     @staticmethod
-    def _wrap(value: float | Callable[[float], float]) -> Callable[[float], float]:
-        if callable(value):
-            return value
-        return lambda _t: float(value)
+    def _wrap(value: float) -> Callable[[float, float], float]:
+        return lambda _p, _t: float(value)
 
     @classmethod
     def from_constants(
@@ -64,12 +64,13 @@ class CompressibleFluid(FluidModel):
     def from_functions(
         cls,
         eos: EquationOfState,
-        viscosity_fn: Callable[[float], float],
-        specific_heat_fn: Callable[[float], float],
-        thermal_conductivity_fn: Callable[[float], float],
+        viscosity_fn: Callable[[float, float], float],
+        specific_heat_fn: Callable[[float, float], float],
+        thermal_conductivity_fn: Callable[[float, float], float],
         reference_pressure_pa: float = 101_325.0,
         reference_temperature_c: float = 20.0,
     ) -> CompressibleFluid:
+        """Construct with callables of the form f(pressure_pa, temperature_c)."""
         return cls(
             eos=eos,
             _viscosity_fn=viscosity_fn,
@@ -80,8 +81,10 @@ class CompressibleFluid(FluidModel):
         )
 
     def _pressure(self, link_state) -> float:
-        p_start = getattr(link_state.start_node, "pressure_pa", None)
-        p_end = getattr(link_state.end_node, "pressure_pa", None)
+        start = getattr(link_state, "start_node", None)
+        end = getattr(link_state, "end_node", None)
+        p_start = getattr(start, "pressure_pa", None) if start is not None else None
+        p_end = getattr(end, "pressure_pa", None) if end is not None else None
         if p_start is not None and p_end is not None:
             return 0.5 * (p_start + p_end)
         return p_start if p_start is not None else (p_end if p_end is not None else self.reference_pressure_pa)
@@ -94,10 +97,10 @@ class CompressibleFluid(FluidModel):
         return self.eos.density(self._pressure(link_state), self._temperature(link_state))
 
     def viscosity_for_link(self, link_state) -> float:
-        return self._viscosity_fn(self._temperature(link_state))
+        return self._viscosity_fn(self._pressure(link_state), self._temperature(link_state))
 
     def specific_heat_for_link(self, link_state) -> float:
-        return self._specific_heat_fn(self._temperature(link_state))
+        return self._specific_heat_fn(self._pressure(link_state), self._temperature(link_state))
 
     def thermal_conductivity_for_link(self, link_state) -> float:
-        return self._thermal_conductivity_fn(self._temperature(link_state))
+        return self._thermal_conductivity_fn(self._pressure(link_state), self._temperature(link_state))
