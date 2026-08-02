@@ -685,6 +685,9 @@ class NetSimGui:
         cp_var = tk.StringVar(master=dialog, value=material.get("specific_heat_j_per_kg_k", ""))
         k_var = tk.StringVar(master=dialog, value=material.get("thermal_conductivity_w_per_m_k", ""))
         mw_var = tk.StringVar(master=dialog, value=material.get("molecular_weight_kg_per_mol", ""))
+        tc_var = tk.StringVar(master=dialog, value=material.get("critical_temperature_k", ""))
+        pc_var = tk.StringVar(master=dialog, value=material.get("critical_pressure_pa", ""))
+        omega_var = tk.StringVar(master=dialog, value=material.get("acentric_factor", ""))
 
         ttk.Label(frame, text="Definition").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
         mode_row = ttk.Frame(frame)
@@ -693,6 +696,7 @@ class NetSimGui:
         ttk.Radiobutton(mode_row, text="Custom", variable=mode_var, value="custom").pack(side="left", padx=(8, 0))
         ttk.Radiobutton(mode_row, text="Crude oil", variable=mode_var, value="crude_oil").pack(side="left", padx=(8, 0))
         ttk.Radiobutton(mode_row, text="Gas (ideal)", variable=mode_var, value="gas").pack(side="left", padx=(8, 0))
+        ttk.Radiobutton(mode_row, text="Gas (PR)", variable=mode_var, value="gas_pr").pack(side="left", padx=(8, 0))
 
         ttk.Label(frame, text="Material Library").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=4)
         library_box = ttk.Combobox(
@@ -727,20 +731,35 @@ class NetSimGui:
         api_entry = ttk.Entry(frame, textvariable=api_var, width=26)
         api_entry.grid(row=5, column=1, sticky="ew", pady=4)
 
+        tc_label = ttk.Label(frame, text="Critical Temperature Tc (K)")
+        tc_label.grid(row=5, column=0, sticky="w", padx=(0, 8), pady=4)
+        tc_entry = ttk.Entry(frame, textvariable=tc_var, width=26)
+        tc_entry.grid(row=5, column=1, sticky="ew", pady=4)
+
         temperature_label = ttk.Label(frame, text="Temperature (°C)")
         temperature_label.grid(row=6, column=0, sticky="w", padx=(0, 8), pady=4)
         temperature_entry = ttk.Entry(frame, textvariable=temperature_var, width=26)
         temperature_entry.grid(row=6, column=1, sticky="ew", pady=4)
 
+        pc_label = ttk.Label(frame, text="Critical Pressure Pc (Pa)")
+        pc_label.grid(row=6, column=0, sticky="w", padx=(0, 8), pady=4)
+        pc_entry = ttk.Entry(frame, textvariable=pc_var, width=26)
+        pc_entry.grid(row=6, column=1, sticky="ew", pady=4)
+
+        omega_label = ttk.Label(frame, text="Acentric Factor ω")
+        omega_label.grid(row=7, column=0, sticky="w", padx=(0, 8), pady=4)
+        omega_entry = ttk.Entry(frame, textvariable=omega_var, width=26)
+        omega_entry.grid(row=7, column=1, sticky="ew", pady=4)
+
         cp_label = ttk.Label(frame, text="Specific Heat cp (J/kg·K)")
-        cp_label.grid(row=7, column=0, sticky="w", padx=(0, 8), pady=4)
+        cp_label.grid(row=8, column=0, sticky="w", padx=(0, 8), pady=4)
         cp_entry = ttk.Entry(frame, textvariable=cp_var, width=26)
-        cp_entry.grid(row=7, column=1, sticky="ew", pady=4)
+        cp_entry.grid(row=8, column=1, sticky="ew", pady=4)
 
         k_label = ttk.Label(frame, text="Thermal Conductivity k (W/m·K)")
-        k_label.grid(row=8, column=0, sticky="w", padx=(0, 8), pady=4)
+        k_label.grid(row=9, column=0, sticky="w", padx=(0, 8), pady=4)
         k_entry = ttk.Entry(frame, textvariable=k_var, width=26)
-        k_entry.grid(row=8, column=1, sticky="ew", pady=4)
+        k_entry.grid(row=9, column=1, sticky="ew", pady=4)
 
         frame.columnconfigure(1, weight=1)
 
@@ -760,12 +779,14 @@ class NetSimGui:
             is_library = mode == "library"
             is_crude_oil = mode == "crude_oil"
             is_gas = mode == "gas"
+            is_gas_pr = mode == "gas_pr"
+            is_any_gas = is_gas or is_gas_pr
             library_box.configure(state="readonly" if is_library else "disabled")
             std_state = "normal" if mode == "custom" else "disabled"
-            name_entry.configure(state=std_state if not is_gas else "normal")
-            viscosity_entry.configure(state=std_state if not is_gas else "normal")
+            name_entry.configure(state=std_state if not is_any_gas else "normal")
+            viscosity_entry.configure(state=std_state if not is_any_gas else "normal")
             # density vs molecular weight
-            if is_gas:
+            if is_any_gas:
                 density_label.grid_remove()
                 density_entry.grid_remove()
                 mw_label.grid()
@@ -787,13 +808,30 @@ class NetSimGui:
                 api_entry.grid_remove()
                 temperature_label.grid_remove()
                 temperature_entry.grid_remove()
-            if is_non_isothermal or is_gas:
+            if is_gas_pr:
+                tc_label.grid()
+                tc_entry.grid()
+                tc_entry.configure(state="normal")
+                pc_label.grid()
+                pc_entry.grid()
+                pc_entry.configure(state="normal")
+                omega_label.grid()
+                omega_entry.grid()
+                omega_entry.configure(state="normal")
+            else:
+                tc_label.grid_remove()
+                tc_entry.grid_remove()
+                pc_label.grid_remove()
+                pc_entry.grid_remove()
+                omega_label.grid_remove()
+                omega_entry.grid_remove()
+            if is_non_isothermal or is_any_gas:
                 cp_label.grid()
                 cp_entry.grid()
                 k_label.grid()
                 k_entry.grid()
-                cp_entry.configure(state="normal" if is_gas else std_state)
-                k_entry.configure(state="normal" if is_gas else std_state)
+                cp_entry.configure(state="normal" if is_any_gas else std_state)
+                k_entry.configure(state="normal" if is_any_gas else std_state)
             else:
                 cp_label.grid_remove()
                 cp_entry.grid_remove()
@@ -807,7 +845,7 @@ class NetSimGui:
         sync_mode_state()
 
         button_row = ttk.Frame(frame)
-        button_row.grid(row=9, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=10, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
         ttk.Button(
             button_row,
@@ -824,6 +862,9 @@ class NetSimGui:
                 cp_var,
                 k_var,
                 mw_var,
+                tc_var,
+                pc_var,
+                omega_var,
             ),
         ).pack(side="right", padx=(0, 8))
 
@@ -1241,6 +1282,9 @@ class NetSimGui:
         cp_var: tk.StringVar,
         k_var: tk.StringVar,
         mw_var: tk.StringVar | None = None,
+        tc_var: tk.StringVar | None = None,
+        pc_var: tk.StringVar | None = None,
+        omega_var: tk.StringVar | None = None,
     ) -> None:
         mode = mode_var.get()
         is_non_isothermal = self.scene.physics_mode == "non_isothermal"
@@ -1278,6 +1322,54 @@ class NetSimGui:
                 material["specific_heat_j_per_kg_k"] = cp_text
             if k_text:
                 material["thermal_conductivity_w_per_m_k"] = k_text
+            self.scene.update_material(material)
+            self._refresh_global_summaries()
+            self.status_var.set(f"Material set to {material['name']}.")
+            dialog.destroy()
+            return
+
+        if mode == "gas_pr":
+            mw_text = (mw_var.get() if mw_var else "").strip()
+            visc_text = viscosity_var.get().strip()
+            tc_text = (tc_var.get() if tc_var else "").strip()
+            pc_text = (pc_var.get() if pc_var else "").strip()
+            omega_text = (omega_var.get() if omega_var else "").strip()
+            try:
+                mw = float(mw_text)
+                visc = float(visc_text)
+                tc = float(tc_text)
+                pc = float(pc_text)
+                omega = float(omega_text)
+            except ValueError:
+                messagebox.showerror(
+                    "Invalid material",
+                    "Molecular weight, viscosity, Tc, Pc and ω must be valid numbers.",
+                    parent=dialog,
+                )
+                return
+            if mw <= 0 or tc <= 0 or pc <= 0:
+                messagebox.showerror(
+                    "Invalid material",
+                    "Molecular weight, Tc and Pc must be positive.",
+                    parent=dialog,
+                )
+                return
+            material = {
+                "definition_mode": "gas_pr",
+                "library_key": "",
+                "name": name_var.get().strip() or "Gas (PR)",
+                "molecular_weight_kg_per_mol": str(mw),
+                "viscosity_pa_s": str(visc),
+                "critical_temperature_k": str(tc),
+                "critical_pressure_pa": str(pc),
+                "acentric_factor": str(omega),
+            }
+            cp_text2 = cp_var.get().strip()
+            k_text2 = k_var.get().strip()
+            if cp_text2:
+                material["specific_heat_j_per_kg_k"] = cp_text2
+            if k_text2:
+                material["thermal_conductivity_w_per_m_k"] = k_text2
             self.scene.update_material(material)
             self._refresh_global_summaries()
             self.status_var.set(f"Material set to {material['name']}.")
@@ -1777,7 +1869,7 @@ class NetSimGui:
             comp_frame, text="Incompressible", variable=compressibility_var, value="incompressible"
         ).pack(side="left", padx=(0, 12))
         ttk.Radiobutton(
-            comp_frame, text="Compressible (ideal gas)", variable=compressibility_var, value="compressible"
+            comp_frame, text="Compressible", variable=compressibility_var, value="compressible"
         ).pack(side="left")
 
         ttk.Separator(frame, orient="horizontal").grid(
@@ -1861,7 +1953,7 @@ class NetSimGui:
         _LABELS = {
             "isothermal": "Isothermal",
             "non_isothermal": "Non-isothermal",
-            "compressible": "Compressible (ideal gas)",
+            "compressible": "Compressible",
         }
         self.status_var.set(f"Case type set to: {_LABELS.get(mode, mode)}.")
         dialog.destroy()

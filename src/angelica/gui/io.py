@@ -11,7 +11,7 @@ from angelica.core.settings import SolverSettings
 from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
 from angelica.closures.convection_scheme import HybridScheme, PowerLawScheme, UpwindScheme
 from angelica.properties.compressible_fluid import CompressibleFluid
-from angelica.properties.eos import IdealGasEOS
+from angelica.properties.eos import IdealGasEOS, PengRobinsonEOS
 from angelica.properties.single_component import SingleComponentFluid
 from angelica.properties.thermal_fluid import ThermalFluid
 from angelica.solvers import (
@@ -447,8 +447,17 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
         m_text = scene.material.get("molecular_weight_kg_per_mol", "0.028964").strip()
         cp_text = scene.material.get("specific_heat_j_per_kg_k", "1000.0").strip()
         k_text = scene.material.get("thermal_conductivity_w_per_m_k", "0.025").strip()
+        if scene.material.get("definition_mode") == "gas_pr":
+            eos = PengRobinsonEOS(
+                molecular_weight_kg_per_mol=float(m_text),
+                critical_temperature_k=float(scene.material["critical_temperature_k"]),
+                critical_pressure_pa=float(scene.material["critical_pressure_pa"]),
+                acentric_factor=float(scene.material["acentric_factor"]),
+            )
+        else:
+            eos = IdealGasEOS(float(m_text))
         fluid_model = CompressibleFluid.from_constants(
-            eos=IdealGasEOS(float(m_text)),
+            eos=eos,
             viscosity_pa_s=float(scene.material["viscosity_pa_s"]),
             specific_heat_j_per_kg_k=float(cp_text) if cp_text else 1000.0,
             thermal_conductivity_w_per_m_k=float(k_text) if k_text else 0.025,
