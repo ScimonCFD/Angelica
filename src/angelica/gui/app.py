@@ -4085,8 +4085,13 @@ class NetSimGui:
             return
 
         secondary = None
-        if self.scene.physics_mode == "compressible" and self.density_history:
-            secondary = [("Δρ/ρ", self.density_history, self._t["plot_temperature"])]
+        if self.scene.physics_mode == "compressible":
+            sec = []
+            if self.temperature_history:
+                sec.append(("ΔT (K)", self.temperature_history, self._t["plot_temperature"]))
+            if self.density_history:
+                sec.append(("Δρ/ρ", self.density_history, self._t["plot_faint2"]))
+            secondary = sec or None
         elif self.temperature_history:
             secondary = [("ΔT (K)", self.temperature_history, self._t["plot_temperature"])]
         self._draw_history_plot(
