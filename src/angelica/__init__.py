@@ -10,7 +10,7 @@ from .core.settings import SolverSettings
 from .io.reporting import print_solve_result
 from .properties.compressible_fluid import CompressibleFluid
 from .properties.dead_oil import build_thermal_dead_oil
-from .properties.eos import EquationOfState, IdealGasEOS
+from .properties.eos import EquationOfState, IdealGasEOS, PengRobinsonEOS
 from .properties.single_component import SingleComponentFluid
 from .properties.thermal_fluid import ThermalFluid
 from .solvers import (
@@ -34,6 +34,7 @@ __all__ = [
     "HeatSource",
     "HybridScheme",
     "IdealGasEOS",
+    "PengRobinsonEOS",
     "NetworkCase",
     "PowerLawScheme",
     "NonIsothermalSolverSettings",

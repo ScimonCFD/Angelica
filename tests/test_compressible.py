@@ -14,10 +14,17 @@ from angelica import (
     IdealGasEOS,
     NetworkCase,
     Pipe,
+    PengRobinsonEOS,
     PressureBoundary,
     SteadyCompressibleSolver,
 )
 from angelica.solvers import CompressibleSolverSettings
+
+# Methane critical properties (NIST)
+_TC_CH4 = 190.564       # K
+_PC_CH4 = 4_599_200.0   # Pa
+_W_CH4  = 0.01141       # acentric factor
+_M_CH4  = 0.016043      # kg/mol
 
 _R = 8.314          # J/(mol·K)
 _M_AIR = 0.028964   # kg/mol — dry air
@@ -168,6 +175,64 @@ class CompressibleFluidTests(unittest.TestCase):
             fluid.viscosity_for_link(link_low),
             fluid.viscosity_for_link(link_high),
         )
+
+
+# ── PengRobinsonEOS ──────────────────────────────────────────────────────────
+
+class PengRobinsonEOSTests(unittest.TestCase):
+
+    def _methane_eos(self):
+        return PengRobinsonEOS(
+            molecular_weight_kg_per_mol=_M_CH4,
+            critical_temperature_k=_TC_CH4,
+            critical_pressure_pa=_PC_CH4,
+            acentric_factor=_W_CH4,
+        )
+
+    def test_low_pressure_converges_to_ideal_gas(self):
+        # At Pr ≈ 0.02 (near-atmospheric), PR and ideal gas agree to < 1 %
+        eos_pr = self._methane_eos()
+        eos_ig = IdealGasEOS(molecular_weight_kg_per_mol=_M_CH4)
+        rho_pr = eos_pr.density(101_325.0, 20.0)
+        rho_ig = eos_ig.density(101_325.0, 20.0)
+        self.assertAlmostEqual(rho_pr / rho_ig, 1.0, delta=0.01)
+
+    def test_density_increases_with_pressure(self):
+        eos = self._methane_eos()
+        rho_lo = eos.density(1_000_000.0, 20.0)
+        rho_hi = eos.density(5_000_000.0, 20.0)
+        self.assertGreater(rho_hi, rho_lo)
+
+    def test_density_decreases_with_temperature(self):
+        eos = self._methane_eos()
+        rho_cold = eos.density(3_000_000.0, 10.0)
+        rho_warm = eos.density(3_000_000.0, 60.0)
+        self.assertGreater(rho_cold, rho_warm)
+
+    def test_pr_denser_than_ideal_at_moderate_pressure(self):
+        # For methane at Tr ≈ 1.5, Pr ≈ 0.65 (3 MPa, 20 °C), Z < 1
+        # so PR density is higher than ideal gas density
+        eos_pr = self._methane_eos()
+        eos_ig = IdealGasEOS(molecular_weight_kg_per_mol=_M_CH4)
+        rho_pr = eos_pr.density(3_000_000.0, 20.0)
+        rho_ig = eos_ig.density(3_000_000.0, 20.0)
+        self.assertGreater(rho_pr, rho_ig)
+
+    def test_invalid_inputs_raise(self):
+        with self.assertRaises(ValueError):
+            PengRobinsonEOS(
+                molecular_weight_kg_per_mol=-1.0,
+                critical_temperature_k=_TC_CH4,
+                critical_pressure_pa=_PC_CH4,
+                acentric_factor=_W_CH4,
+            )
+        with self.assertRaises(ValueError):
+            PengRobinsonEOS(
+                molecular_weight_kg_per_mol=_M_CH4,
+                critical_temperature_k=0.0,
+                critical_pressure_pa=_PC_CH4,
+                acentric_factor=_W_CH4,
+            )
 
 
 # ── SteadyCompressibleSolver ──────────────────────────────────────────────────
