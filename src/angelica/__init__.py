@@ -9,6 +9,7 @@ from .core.results import ComponentFlowResult, SolveResult
 from .core.settings import SolverSettings
 from .io.reporting import print_solve_result
 from .properties.compressible_fluid import CompressibleFluid
+from .properties.gas_correlations import lee_gonzalez_eakin_viscosity
 from .properties.dead_oil import build_thermal_dead_oil
 from .properties.eos import EquationOfState, IdealGasEOS, PengRobinsonEOS
 from .properties.single_component import SingleComponentFluid
@@ -35,6 +36,7 @@ __all__ = [
     "HybridScheme",
     "IdealGasEOS",
     "PengRobinsonEOS",
+    "lee_gonzalez_eakin_viscosity",
     "NetworkCase",
     "PowerLawScheme",
     "NonIsothermalSolverSettings",

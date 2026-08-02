@@ -17,6 +17,7 @@ from angelica import (
     PengRobinsonEOS,
     PressureBoundary,
     SteadyCompressibleSolver,
+    lee_gonzalez_eakin_viscosity,
 )
 from angelica.solvers import CompressibleSolverSettings
 
@@ -233,6 +234,46 @@ class PengRobinsonEOSTests(unittest.TestCase):
                 critical_pressure_pa=_PC_CH4,
                 acentric_factor=_W_CH4,
             )
+
+
+# ── lee_gonzalez_eakin_viscosity ──────────────────────────────────────────────
+
+class LeeGonzalezEakinTests(unittest.TestCase):
+
+    def _ch4_pr_eos(self):
+        return PengRobinsonEOS(
+            molecular_weight_kg_per_mol=_M_CH4,
+            critical_temperature_k=_TC_CH4,
+            critical_pressure_pa=_PC_CH4,
+            acentric_factor=_W_CH4,
+        )
+
+    def test_atmospheric_value_close_to_known(self):
+        # Methane at 1 atm, 20 °C: accepted value ≈ 1.1e-5 Pa·s
+        eos = IdealGasEOS(molecular_weight_kg_per_mol=_M_CH4)
+        mu_fn = lee_gonzalez_eakin_viscosity(eos, _M_CH4)
+        mu = mu_fn(101_325.0, 20.0)
+        self.assertAlmostEqual(mu, 1.1e-5, delta=0.1e-5)
+
+    def test_viscosity_increases_with_temperature(self):
+        # Gas viscosity increases with T (kinetic theory)
+        eos = IdealGasEOS(molecular_weight_kg_per_mol=_M_CH4)
+        mu_fn = lee_gonzalez_eakin_viscosity(eos, _M_CH4)
+        self.assertGreater(mu_fn(101_325.0, 60.0), mu_fn(101_325.0, 20.0))
+
+    def test_viscosity_increases_with_pressure(self):
+        # Higher P → higher ρ → higher viscosity via LGE
+        eos = self._ch4_pr_eos()
+        mu_fn = lee_gonzalez_eakin_viscosity(eos, _M_CH4)
+        self.assertGreater(mu_fn(5_000_000.0, 20.0), mu_fn(1_000_000.0, 20.0))
+
+    def test_works_with_pr_eos(self):
+        # PR EOS gives higher density than ideal → higher viscosity at 3 MPa
+        eos_ig = IdealGasEOS(molecular_weight_kg_per_mol=_M_CH4)
+        eos_pr = self._ch4_pr_eos()
+        mu_ig = lee_gonzalez_eakin_viscosity(eos_ig, _M_CH4)(3_000_000.0, 20.0)
+        mu_pr = lee_gonzalez_eakin_viscosity(eos_pr, _M_CH4)(3_000_000.0, 20.0)
+        self.assertGreater(mu_pr, mu_ig)
 
 
 # ── SteadyCompressibleSolver ──────────────────────────────────────────────────
