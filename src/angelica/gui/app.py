@@ -4053,35 +4053,41 @@ class NetSimGui:
         if not show_detail and len(self.outer_turbulent_final_metrics) > 1:
             metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
 
-            if self.scene.physics_mode == "compressible":
-                # The inner hydraulic solver converges in very few iterations per density
-                # loop, so the final hydraulic correction per outer iteration is often 0.
-                # Show Δρ/ρ and ΔT directly — these are the actual outer criteria.
-                outer_series: list[tuple[str, list[float], str, int]] = []
-                if self.density_history:
-                    outer_series.append(("Δρ/ρ (−)", self.density_history, self._t["plot_faint2"], 0))
-                if self.temperature_history:
-                    outer_series.append(("ΔT (K)", self.temperature_history, self._t["plot_temperature"], 0))
-                if outer_series:
-                    self._draw_history_plot(
-                        self.convergence_canvas,
-                        outer_series,
-                        "outer_residual",
-                        secondary_series=None,
-                        x_label="Outer iteration",
-                    )
-                    return
+            # Primary series: actual outer convergence criteria (ΔT, Δρ/ρ).
+            # Hydraulic final corrections are often 0 (inner solver converges immediately
+            # each outer iteration), so they are secondary — shown on the right axis only
+            # if non-zero.  Exact zeros in ΔT / Δρ/ρ are clamped to 1e-10 so the log
+            # scale shows the convergence drop rather than filtering the point out.
+            def _log_safe(vals: list[float]) -> list[float]:
+                return [v if v > 0.0 else 1e-10 for v in vals]
 
-            # Non-isothermal: hydraulic final correction + ΔT overlay
-            values = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
-            secondary = None
+            outer_primary: list[tuple[str, list[float], str, int]] = []
+            if self.density_history:
+                outer_primary.append(("Δρ/ρ (−)", _log_safe(self.density_history), self._t["plot_faint2"], 0))
             if self.temperature_history:
-                secondary = [("ΔT (K)", self.temperature_history, self._t["plot_temperature"])]
+                outer_primary.append(("ΔT (K)", _log_safe(self.temperature_history), self._t["plot_temperature"], 0))
+
+            if outer_primary:
+                hydraulic_vals = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
+                secondary = None
+                if any(v > 0.0 for v in hydraulic_vals):
+                    secondary = [("Hydraulic (final)", hydraulic_vals, self._t["plot_turbulent"])]
+                self._draw_history_plot(
+                    self.convergence_canvas,
+                    outer_primary,
+                    "outer_residual",
+                    secondary_series=secondary,
+                    x_label="Outer iteration",
+                )
+                return
+
+            # No outer criteria available: show hydraulic final corrections directly
+            hydraulic_vals = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
             self._draw_history_plot(
                 self.convergence_canvas,
-                [("Hydraulic (final)", values, self._t["plot_turbulent"], 0)],
+                [("Hydraulic (final)", hydraulic_vals, self._t["plot_turbulent"], 0)],
                 metric_name,
-                secondary_series=secondary,
+                secondary_series=None,
                 x_label="Outer iteration",
             )
             return
