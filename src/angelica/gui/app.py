@@ -4048,11 +4048,15 @@ class NetSimGui:
         show_detail = self.show_hydraulic_detail_var.get()
 
         # Simple view: last hydraulic residual per outer iteration
-        if not show_detail and self.outer_turbulent_final_metrics:
+        # Only used when there are multiple outer iterations (non-isothermal / compressible).
+        # For isothermal (1 outer iteration), the final turbulent correction is often 0.0
+        # because the laminar phase already converges the pressure field; falling through
+        # to the detail view shows the non-zero laminar corrections instead.
+        if not show_detail and len(self.outer_turbulent_final_metrics) > 1:
             metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
             values = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
-            has_outer = len(self.outer_turbulent_final_metrics) > 1
-            x_label = "Outer iteration" if has_outer else "Iteration"
+            has_outer = True
+            x_label = "Outer iteration"
             self._draw_history_plot(
                 self.convergence_canvas,
                 [("Hydraulic (final)", values, self._t["plot_turbulent"], 0)],
