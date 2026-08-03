@@ -4047,22 +4047,42 @@ class NetSimGui:
 
         show_detail = self.show_hydraulic_detail_var.get()
 
-        # Simple view: last hydraulic residual per outer iteration
-        # Only used when there are multiple outer iterations (non-isothermal / compressible).
-        # For isothermal (1 outer iteration), the final turbulent correction is often 0.0
-        # because the laminar phase already converges the pressure field; falling through
-        # to the detail view shows the non-zero laminar corrections instead.
+        # Simple view: outer-iteration convergence (non-isothermal / compressible only).
+        # Not used for isothermal (1 outer iteration) — falls through to detail view,
+        # which shows the non-zero laminar corrections.
         if not show_detail and len(self.outer_turbulent_final_metrics) > 1:
             metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
+
+            if self.scene.physics_mode == "compressible":
+                # The inner hydraulic solver converges in very few iterations per density
+                # loop, so the final hydraulic correction per outer iteration is often 0.
+                # Show Δρ/ρ and ΔT directly — these are the actual outer criteria.
+                outer_series: list[tuple[str, list[float], str, int]] = []
+                if self.density_history:
+                    outer_series.append(("Δρ/ρ (−)", self.density_history, self._t["plot_faint2"], 0))
+                if self.temperature_history:
+                    outer_series.append(("ΔT (K)", self.temperature_history, self._t["plot_temperature"], 0))
+                if outer_series:
+                    self._draw_history_plot(
+                        self.convergence_canvas,
+                        outer_series,
+                        "outer_residual",
+                        secondary_series=None,
+                        x_label="Outer iteration",
+                    )
+                    return
+
+            # Non-isothermal: hydraulic final correction + ΔT overlay
             values = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
-            has_outer = True
-            x_label = "Outer iteration"
+            secondary = None
+            if self.temperature_history:
+                secondary = [("ΔT (K)", self.temperature_history, self._t["plot_temperature"])]
             self._draw_history_plot(
                 self.convergence_canvas,
                 [("Hydraulic (final)", values, self._t["plot_turbulent"], 0)],
                 metric_name,
-                secondary_series=None,
-                x_label=x_label,
+                secondary_series=secondary,
+                x_label="Outer iteration",
             )
             return
 
@@ -4339,6 +4359,8 @@ class NetSimGui:
             return "max |ΔT| (K)"
         if metric_name == "density_rel_change":
             return "max |Δρ/ρ|"
+        if metric_name == "outer_residual":
+            return "Outer residual"
         labels = {name: label for label, name in NetSimGui.METRIC_OPTIONS}
         return labels.get(metric_name, metric_name)
 
