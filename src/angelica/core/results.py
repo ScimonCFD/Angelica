@@ -34,6 +34,7 @@ class SolveResult:
     temperature_history: list[float] = field(default_factory=list)
     density_history: list[float] = field(default_factory=list)
     outer_turbulent_final_metrics: tuple[IterationMetrics, ...] = field(default_factory=tuple)
+    outer_iteration_boundaries: tuple[int, ...] = field(default_factory=tuple)
 
     @property
     def link_mass_flows_kg_per_s(self) -> list[float]:

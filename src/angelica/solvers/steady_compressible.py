@@ -104,6 +104,7 @@ class SteadyCompressibleSolver(BaseSolver):
         all_turb_hist: list[float] = []
         all_turb_metrics = []
         outer_turb_final = []
+        outer_boundaries: list[int] = []
         lam_hist: list[float] = []
         lam_metrics = []
         turb_hist: list[float] = []
@@ -126,6 +127,7 @@ class SteadyCompressibleSolver(BaseSolver):
             all_lam_metrics.extend(lam_metrics)
             all_turb_hist.extend(turb_hist)
             all_turb_metrics.extend(turb_metrics)
+            outer_boundaries.append(len(all_turb_metrics))
             if turb_metrics:
                 outer_turb_final.append(turb_metrics[-1])
 
@@ -192,6 +194,7 @@ class SteadyCompressibleSolver(BaseSolver):
             temperature_history=temperature_history,
             density_history=density_history,
             outer_turbulent_final_metrics=tuple(outer_turb_final),
+            outer_iteration_boundaries=tuple(outer_boundaries),
         )
 
     @staticmethod

@@ -220,6 +220,7 @@ class NetSimGui:
         self.temperature_history: list[float] = []
         self.density_history: list[float] = []
         self.outer_turbulent_final_metrics: list = []
+        self.outer_iteration_boundaries: list[int] = []
         self._dark = False
         self._unit_system_key = "si"
         self.root = tk.Tk()
@@ -468,6 +469,7 @@ class NetSimGui:
         self.temperature_history = []
         self.density_history = []
         self.outer_turbulent_final_metrics = []
+        self.outer_iteration_boundaries = []
         self.current_file_path = None
         self._undo_stack.clear()
         self._redo_stack.clear()
@@ -519,6 +521,7 @@ class NetSimGui:
             self.temperature_history = []
             self.density_history = []
             self.outer_turbulent_final_metrics = []
+            self.outer_iteration_boundaries = []
             if cached_results["component_flows"]:
                 node_pressures = {
                     node_id: entry["pressure_pa"]
@@ -541,6 +544,7 @@ class NetSimGui:
             self.temperature_history = []
             self.density_history = []
             self.outer_turbulent_final_metrics = []
+            self.outer_iteration_boundaries = []
             status_suffix = ""
 
         self.tool_var.set("No tool selected")
@@ -2210,6 +2214,7 @@ class NetSimGui:
         self.temperature_history = list(result.temperature_history)
         self.density_history = list(result.density_history)
         self.outer_turbulent_final_metrics = list(result.outer_turbulent_final_metrics)
+        self.outer_iteration_boundaries = list(result.outer_iteration_boundaries)
         self._redraw_scene()
         self._redraw_convergence_plot()
 
@@ -4005,13 +4010,6 @@ class NetSimGui:
             metric_box.pack(side="left")
             metric_box.bind("<<ComboboxSelected>>", lambda _event: self._redraw_convergence_plot())
 
-            ttk.Checkbutton(
-                control_row,
-                text="Show hydraulic detail",
-                variable=self.show_hydraulic_detail_var,
-                command=self._redraw_convergence_plot,
-            ).pack(side="left", padx=(16, 0))
-
             self.convergence_canvas = tk.Canvas(
                 frame,
                 background=self._t["plot_bg"],
@@ -4045,42 +4043,6 @@ class NetSimGui:
         if self.convergence_canvas is None:
             return
 
-        show_detail = self.show_hydraulic_detail_var.get()
-
-        # Simple view: outer-iteration convergence (non-isothermal / compressible only).
-        # Not used for isothermal (1 outer iteration) — falls through to detail view,
-        # which shows the non-zero laminar corrections.
-        if not show_detail and len(self.outer_turbulent_final_metrics) > 1 and self.scene.physics_mode != "compressible":
-            metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
-
-            def _log_safe(vals: list[float]) -> list[float]:
-                return [v if v > 0.0 else 1e-10 for v in vals]
-
-            outer_primary: list[tuple[str, list[float], str, int]] = []
-
-            # Hydraulic: selected metric at the end of each outer hydraulic solve (blue).
-            hydraulic_per_outer = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
-            outer_primary.append((
-                self.convergence_metric_var.get(),
-                _log_safe(hydraulic_per_outer),
-                self._t["plot_laminar"],
-                0,
-            ))
-
-            # Thermal: ΔT per outer iteration (green).
-            if self.temperature_history:
-                outer_primary.append(("ΔT (K)", _log_safe(self.temperature_history), self._t["plot_temperature"], 0))
-
-            self._draw_history_plot(
-                self.convergence_canvas,
-                outer_primary,
-                "outer_residual",
-                secondary_series=None,
-                x_label="Outer iteration",
-            )
-            return
-
-        # Detail view (or isothermal): hydraulic series + optional temperature overlay
         metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
         history_series: list[tuple[str, list[float], str, int]] = []
         laminar_values = [getattr(metric, metric_name) for metric in self.convergence_history["laminar"]]
@@ -4102,11 +4064,34 @@ class NetSimGui:
             )
             return
 
+        # Compute ΔT x-positions in plot space (0-indexed iteration index).
+        # outer_iteration_boundaries[i] = cumulative turbulent count after outer pass i,
+        # so the last turbulent iteration of outer pass i sits at position
+        # n_lam + outer_iteration_boundaries[i] - 1 in the lumped lam+turb plot.
         secondary = None
-        if self.scene.physics_mode != "compressible" and self.temperature_history:
-            secondary = [("ΔT (K)", self.temperature_history, self._t["plot_temperature"])]
+        if self.temperature_history:
+            n_lam = len(laminar_values)
+            x_positions = [
+                n_lam + b - 1
+                for b in self.outer_iteration_boundaries[: len(self.temperature_history)]
+            ]
+            secondary = [("ΔT (K)", self.temperature_history, self._t["plot_temperature"], x_positions)]
+
+        # Fractional positions (0..1) of outer-pass boundaries for vertical markers.
+        # All boundaries except the last (which equals total iterations = right edge).
+        n_total = len(laminar_values) + len(turbulent_values)
+        x_den = max(n_total - 1, 1)
+        outer_marker_x = [
+            (len(laminar_values) + b - 0.5) / x_den
+            for b in self.outer_iteration_boundaries[:-1]
+        ]
+
         self._draw_history_plot(
-            self.convergence_canvas, history_series, metric_name, secondary_series=secondary
+            self.convergence_canvas,
+            history_series,
+            metric_name,
+            secondary_series=secondary,
+            outer_marker_x=outer_marker_x if outer_marker_x else None,
         )
 
 
@@ -4115,8 +4100,9 @@ class NetSimGui:
         canvas: tk.Canvas,
         history_series: list[tuple[str, list[float], str, int]],
         metric_name: str,
-        secondary_series: list[tuple[str, list[float], str]] | None = None,
+        secondary_series: list[tuple] | None = None,
         x_label: str = "Iteration",
+        outer_marker_x: list[float] | None = None,
     ) -> None:
         canvas.delete("all")
         width = int(canvas.winfo_width() or canvas["width"])
@@ -4132,7 +4118,7 @@ class NetSimGui:
             return
 
         has_secondary = bool(
-            secondary_series and any(values for _, values, _ in secondary_series)
+            secondary_series and any(item[1] for item in secondary_series)
         )
         left = 70
         right = width - (70 if has_secondary else 20)
@@ -4215,6 +4201,11 @@ class NetSimGui:
                     dash=(4, 3),
                 )
 
+        if outer_marker_x:
+            for frac in outer_marker_x:
+                mx = left + (right - left) * max(0.0, min(1.0, frac))
+                canvas.create_line(mx, top, mx, bottom, fill=self._t["plot_faint"], dash=(4, 3))
+
         canvas.create_text((left + right) / 2, height - 10, text=x_label, anchor="s", fill=self._t["plot_text"])
         canvas.create_text(
             16,
@@ -4254,7 +4245,7 @@ class NetSimGui:
 
         if has_secondary and secondary_series:
             sec_all_values = [
-                v for _, values, _ in secondary_series for v in values if v > 0.0
+                v for item in secondary_series for v in item[1] if v > 0.0
             ]
             if sec_all_values:
                 sec_min_log = math.log10(min(sec_all_values))
@@ -4291,31 +4282,31 @@ class NetSimGui:
                     font=("TkDefaultFont", 9),
                 )
 
-                for _label, values, color in secondary_series:
+                for sec_item in secondary_series:
+                    _label, values, color = sec_item[0], sec_item[1], sec_item[2]
+                    x_positions: list[int] = sec_item[3] if len(sec_item) > 3 else []
                     if not values:
                         continue
-                    n = len(values)  # used for x-spacing even if some values are zero
-                    # Collect only positive points (skip exact-zero "converged" entries)
-                    pos_pts = [
-                        (i, v) for i, v in enumerate(values) if v > 0.0
-                    ]
+                    n = len(values)
+                    pos_pts = [(i, v) for i, v in enumerate(values) if v > 0.0]
                     if not pos_pts:
                         continue
                     pts: list[float] = []
                     for i, value in pos_pts:
                         vlog = math.log10(value)
-                        x = right if n == 1 else left + (right - left) * (i / (n - 1))
+                        if x_positions and i < len(x_positions):
+                            x = left + (right - left) * (x_positions[i] / x_den)
+                        else:
+                            x = right if n == 1 else left + (right - left) * (i / (n - 1))
                         y = top + (sec_max_log - vlog) * (bottom - top) / (sec_max_log - sec_min_log)
                         pts.extend((x, y))
                     if len(pts) >= 4:
                         canvas.create_line(*pts, fill=color, width=2, smooth=False, dash=(6, 3))
-                    for i, value in pos_pts:
-                        vlog = math.log10(value)
-                        x = right if n == 1 else left + (right - left) * (i / (n - 1))
-                        y = top + (sec_max_log - vlog) * (bottom - top) / (sec_max_log - sec_min_log)
+                    for k in range(0, len(pts), 2):
+                        px, py = pts[k], pts[k + 1]
                         size = 4
                         canvas.create_polygon(
-                            x, y - size, x + size, y, x, y + size, x - size, y,
+                            px, py - size, px + size, py, px, py + size, px - size, py,
                             fill=color, outline=color,
                         )
 
@@ -4324,8 +4315,8 @@ class NetSimGui:
         for label, _values, color, _offset in history_series:
             legend_items.append((label, color, "line"))
         if has_secondary and secondary_series:
-            for label, _values, color in secondary_series:
-                legend_items.append((label + " (right axis)", color, "dashed"))
+            for sec_item in secondary_series:
+                legend_items.append((sec_item[0] + " (right axis)", sec_item[2], "dashed"))
         if legend_items:
             lx = left + 8
             ly = top + 8

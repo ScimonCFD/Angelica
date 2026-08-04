@@ -107,6 +107,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         all_turb_hist: list[float] = []
         all_turb_metrics = []
         outer_turb_final = []
+        outer_boundaries: list[int] = []
         lam_hist: list[float] = []
         lam_metrics = []
         turb_hist: list[float] = []
@@ -128,6 +129,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             all_lam_metrics.extend(lam_metrics)
             all_turb_hist.extend(turb_hist)
             all_turb_metrics.extend(turb_metrics)
+            outer_boundaries.append(len(all_turb_metrics))
             if turb_metrics:
                 outer_turb_final.append(turb_metrics[-1])
 
@@ -171,6 +173,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         all_lam_metrics.extend(lam_metrics)
         all_turb_hist.extend(turb_hist)
         all_turb_metrics.extend(turb_metrics)
+        outer_boundaries.append(len(all_turb_metrics))
         if turb_metrics:
             outer_turb_final.append(turb_metrics[-1])
         final_node_temps, final_pipe_mean_temps = solve_energy_system(
@@ -221,6 +224,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             turbulent_metrics=all_turb_metrics,
             temperature_history=temperature_history,
             outer_turbulent_final_metrics=tuple(outer_turb_final),
+            outer_iteration_boundaries=tuple(outer_boundaries),
         )
 
     @staticmethod
