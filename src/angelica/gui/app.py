@@ -92,7 +92,7 @@ class NetSimGui:
             "plot_faint2":    "#666666",
             "plot_laminar":     "#1d3557",
             "plot_turbulent":   "#c1121f",
-            "plot_temperature": "#1a7a3c",
+            "plot_temperature": "#c47800",
         },
         "dark": {
             "canvas_bg":      "#070c17",
@@ -114,7 +114,7 @@ class NetSimGui:
             "plot_faint2":    "#5a7a8a",
             "plot_laminar":     "#3a9fd4",
             "plot_turbulent":   "#e8633a",
-            "plot_temperature": "#4dd476",
+            "plot_temperature": "#f59e0b",
         },
     }
 
@@ -4010,6 +4010,13 @@ class NetSimGui:
             metric_box.pack(side="left")
             metric_box.bind("<<ComboboxSelected>>", lambda _event: self._redraw_convergence_plot())
 
+            ttk.Checkbutton(
+                control_row,
+                text="Show inner iterations",
+                variable=self.show_hydraulic_detail_var,
+                command=self._redraw_convergence_plot,
+            ).pack(side="left", padx=(16, 0))
+
             self.convergence_canvas = tk.Canvas(
                 frame,
                 background=self._t["plot_bg"],
@@ -4044,9 +4051,38 @@ class NetSimGui:
             return
 
         metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
-        history_series: list[tuple[str, list[float], str, int]] = []
+        show_detail = self.show_hydraulic_detail_var.get()
+
+        # Simple view: one point per outer pass instead of every inner iteration.
+        # Available when there are outer iteration boundaries and the user unchecked the box.
+        if not show_detail and len(self.outer_iteration_boundaries) > 1:
+            outer_primary: list[tuple[str, list[float], str, int]] = []
+            hydraulic_per_outer = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
+            if hydraulic_per_outer:
+                outer_primary.append(("Hydraulic", hydraulic_per_outer, self._t["plot_turbulent"], 0))
+            secondary_simple = None
+            if self.temperature_history:
+                secondary_simple = [("ΔT (K)", self.temperature_history, self._t["plot_temperature"], [])]
+            if not outer_primary:
+                self.convergence_canvas.delete("all")
+                self.convergence_canvas.create_text(
+                    20, 20, anchor="nw", text="No convergence data yet.",
+                    fill=self._t["plot_muted"],
+                )
+                return
+            self._draw_history_plot(
+                self.convergence_canvas,
+                outer_primary,
+                metric_name,
+                secondary_series=secondary_simple,
+                x_label="Outer iteration",
+            )
+            return
+
+        # Detail view: all inner hydraulic iterations.
         laminar_values = [getattr(metric, metric_name) for metric in self.convergence_history["laminar"]]
         turbulent_values = [getattr(metric, metric_name) for metric in self.convergence_history["turbulent"]]
+        history_series: list[tuple[str, list[float], str, int]] = []
         if laminar_values:
             history_series.append(("Laminar", laminar_values, self._t["plot_laminar"], 0))
         if turbulent_values:
@@ -4064,10 +4100,9 @@ class NetSimGui:
             )
             return
 
-        # Compute ΔT x-positions in plot space (0-indexed iteration index).
-        # outer_iteration_boundaries[i] = cumulative turbulent count after outer pass i,
-        # so the last turbulent iteration of outer pass i sits at position
-        # n_lam + outer_iteration_boundaries[i] - 1 in the lumped lam+turb plot.
+        # ΔT points placed at the exact x-position of the last turbulent iteration of each
+        # outer pass. outer_iteration_boundaries[i] = cumulative turbulent count after pass i,
+        # so the last turb iteration of pass i is at plot position n_lam + boundaries[i] - 1.
         secondary = None
         if self.temperature_history:
             n_lam = len(laminar_values)
@@ -4077,8 +4112,7 @@ class NetSimGui:
             ]
             secondary = [("ΔT (K)", self.temperature_history, self._t["plot_temperature"], x_positions)]
 
-        # Fractional positions (0..1) of outer-pass boundaries for vertical markers.
-        # All boundaries except the last (which equals total iterations = right edge).
+        # Vertical dashed markers between outer passes (all boundaries except the last).
         n_total = len(laminar_values) + len(turbulent_values)
         x_den = max(n_total - 1, 1)
         outer_marker_x = [
