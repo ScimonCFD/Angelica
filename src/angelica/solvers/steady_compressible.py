@@ -82,7 +82,7 @@ class SteadyCompressibleSolver(BaseSolver):
         self.settings = self._hydraulic_solver.settings
         self.turbulent_pipe_correlation = self._hydraulic_solver.turbulent_pipe_correlation
 
-    def solve(self, case, _progress_callback=None) -> SolveResult:
+    def solve(self, case, progress_callback=None) -> SolveResult:
         from angelica.numerics.energy import solve_energy_system
 
         network_state = build_network_state(case)
@@ -117,10 +117,10 @@ class SteadyCompressibleSolver(BaseSolver):
 
             self._hydraulic_solver._initialise_pressure_field(network_state, case)
             lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
-                network_state, fluid_model
+                network_state, fluid_model, progress_callback=progress_callback
             )
             turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
-                network_state, fluid_model
+                network_state, fluid_model, progress_callback=progress_callback
             )
             all_lam_hist.extend(lam_hist)
             all_lam_metrics.extend(lam_metrics)
