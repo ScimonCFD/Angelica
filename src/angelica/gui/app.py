@@ -4068,15 +4068,11 @@ class NetSimGui:
                 outer_primary.append(("ΔT (K)", _log_safe(self.temperature_history), self._t["plot_temperature"], 0))
 
             if outer_primary:
-                hydraulic_vals = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
-                secondary = None
-                if any(v > 0.0 for v in hydraulic_vals):
-                    secondary = [("Hydraulic (final)", hydraulic_vals, self._t["plot_turbulent"])]
                 self._draw_history_plot(
                     self.convergence_canvas,
                     outer_primary,
                     "outer_residual",
-                    secondary_series=secondary,
+                    secondary_series=None,
                     x_label="Outer iteration",
                 )
                 return
@@ -4104,6 +4100,23 @@ class NetSimGui:
                 ("Turbulent", turbulent_values, self._t["plot_turbulent"], len(laminar_values))
             )
         if not history_series:
+            # No hydraulic data — fall back to outer criteria (ΔT, Δρ/ρ) if available.
+            # This happens for the compressible solver when it runs only 1 density
+            # iteration and all hydraulic corrections are zero.
+            def _log_safe_dv(vals: list[float]) -> list[float]:
+                return [v if v > 0.0 else 1e-10 for v in vals]
+
+            fallback: list[tuple[str, list[float], str, int]] = []
+            if self.density_history:
+                fallback.append(("Δρ/ρ (−)", _log_safe_dv(self.density_history), self._t["plot_faint2"], 0))
+            if self.temperature_history:
+                fallback.append(("ΔT (K)", _log_safe_dv(self.temperature_history), self._t["plot_temperature"], 0))
+            if fallback:
+                self._draw_history_plot(
+                    self.convergence_canvas, fallback, "outer_residual",
+                    secondary_series=None, x_label="Outer iteration",
+                )
+                return
             self.convergence_canvas.delete("all")
             self.convergence_canvas.create_text(
                 20,
