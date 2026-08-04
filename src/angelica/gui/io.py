@@ -247,7 +247,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
         if not scene.material.get("viscosity_pa_s", "").strip():
             raise ValueError("The material is missing viscosity_pa_s.")
 
-    if not is_non_isothermal:
+    if not (is_non_isothermal or is_compressible):
         heat_source_link_ids = [
             link.link_id
             for link in scene.links
@@ -258,8 +258,8 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             ids = ", #".join(str(i) for i in heat_source_link_ids)
             raise ValueError(
                 f"Connection(s) #{ids} contain a Heat Source, which requires "
-                "Non-isothermal physics mode. Change the physics mode in Settings "
-                "or remove the Heat Source component."
+                "Non-isothermal or Compressible physics mode. Change the physics mode "
+                "in Settings or remove the Heat Source component."
             )
 
     if is_non_isothermal:
@@ -357,13 +357,13 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 height_change = _optional_float(component, "height_change_m", default=0.0)
                 heat_transfer = _optional_float(
                     component, "heat_transfer_coefficient_w_per_m2k", default=0.0
-                ) if is_non_isothermal else 0.0
+                ) if (is_non_isothermal or is_compressible) else 0.0
                 ambient_temp = _optional_float(
                     component, "ambient_temperature_c", default=20.0
-                ) if is_non_isothermal else 20.0
+                ) if (is_non_isothermal or is_compressible) else 20.0
                 n_segs = max(1, int(_optional_float(
                     component, "n_thermal_segments", default=10.0
-                ))) if is_non_isothermal else 1
+                ))) if (is_non_isothermal or is_compressible) else 1
                 components.append(
                     Pipe(
                         start_node=current_start,
@@ -419,7 +419,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 mdot_rated = _optional_float(component, "rated_mass_flow_kg_per_s", default=1.0)
                 n_segs = max(2, int(_optional_float(
                     component, "n_thermal_segments", default=10.0
-                ))) if is_non_isothermal else 2
+                ))) if (is_non_isothermal or is_compressible) else 2
                 components.append(
                     HeatSource(
                         start_node=current_start,

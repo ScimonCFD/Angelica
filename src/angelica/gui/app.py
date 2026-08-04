@@ -2731,7 +2731,7 @@ class NetSimGui:
                 ),
             )
 
-            if self.scene.physics_mode == "non_isothermal":
+            if self.scene.physics_mode in ("non_isothermal", "compressible"):
                 ttk.Separator(container, orient="horizontal").grid(
                     row=3, column=0, columnspan=2, sticky="ew", pady=(6, 2)
                 )
@@ -2880,7 +2880,7 @@ class NetSimGui:
             ),
             width=12,
         ).pack(anchor="w", pady=4)
-        if self.scene.physics_mode == "non_isothermal":
+        if self.scene.physics_mode in ("non_isothermal", "compressible"):
             ttk.Button(
                 palette,
                 text="Heat Source",
@@ -3449,7 +3449,7 @@ class NetSimGui:
             entries[key] = var
             row += 1
 
-        if self.scene.physics_mode == "non_isothermal":
+        if self.scene.physics_mode in ("non_isothermal", "compressible"):
             ttk.Separator(properties_frame, orient="horizontal").grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=(4, 2)
             )
@@ -3771,7 +3771,7 @@ class NetSimGui:
         mode_var.trace_add("write", _sync_mode)
         _sync_mode()
 
-        if self.scene.physics_mode == "non_isothermal":
+        if self.scene.physics_mode in ("non_isothermal", "compressible"):
             ttk.Separator(properties_frame, orient="horizontal").grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=(4, 2)
             )
@@ -4053,36 +4053,28 @@ class NetSimGui:
         if not show_detail and len(self.outer_turbulent_final_metrics) > 1:
             metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
 
-            # Primary series: actual outer convergence criteria (ΔT, Δρ/ρ).
-            # Hydraulic final corrections are often 0 (inner solver converges immediately
-            # each outer iteration), so they are secondary — shown on the right axis only
-            # if non-zero.  Exact zeros in ΔT / Δρ/ρ are clamped to 1e-10 so the log
-            # scale shows the convergence drop rather than filtering the point out.
             def _log_safe(vals: list[float]) -> list[float]:
                 return [v if v > 0.0 else 1e-10 for v in vals]
 
             outer_primary: list[tuple[str, list[float], str, int]] = []
-            if self.density_history:
-                outer_primary.append(("Δρ/ρ (−)", _log_safe(self.density_history), self._t["plot_faint2"], 0))
+
+            # Hydraulic: selected metric at the end of each outer hydraulic solve (blue).
+            hydraulic_per_outer = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
+            outer_primary.append((
+                self.convergence_metric_var.get(),
+                _log_safe(hydraulic_per_outer),
+                self._t["plot_laminar"],
+                0,
+            ))
+
+            # Thermal: ΔT per outer iteration (green).
             if self.temperature_history:
                 outer_primary.append(("ΔT (K)", _log_safe(self.temperature_history), self._t["plot_temperature"], 0))
 
-            if outer_primary:
-                self._draw_history_plot(
-                    self.convergence_canvas,
-                    outer_primary,
-                    "outer_residual",
-                    secondary_series=None,
-                    x_label="Outer iteration",
-                )
-                return
-
-            # No outer criteria available: show hydraulic final corrections directly
-            hydraulic_vals = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
             self._draw_history_plot(
                 self.convergence_canvas,
-                [("Hydraulic (final)", hydraulic_vals, self._t["plot_turbulent"], 0)],
-                metric_name,
+                outer_primary,
+                "outer_residual",
                 secondary_series=None,
                 x_label="Outer iteration",
             )
@@ -4100,23 +4092,6 @@ class NetSimGui:
                 ("Turbulent", turbulent_values, self._t["plot_turbulent"], len(laminar_values))
             )
         if not history_series:
-            # No hydraulic data — fall back to outer criteria (ΔT, Δρ/ρ) if available.
-            # This happens for the compressible solver when it runs only 1 density
-            # iteration and all hydraulic corrections are zero.
-            def _log_safe_dv(vals: list[float]) -> list[float]:
-                return [v if v > 0.0 else 1e-10 for v in vals]
-
-            fallback: list[tuple[str, list[float], str, int]] = []
-            if self.density_history:
-                fallback.append(("Δρ/ρ (−)", _log_safe_dv(self.density_history), self._t["plot_faint2"], 0))
-            if self.temperature_history:
-                fallback.append(("ΔT (K)", _log_safe_dv(self.temperature_history), self._t["plot_temperature"], 0))
-            if fallback:
-                self._draw_history_plot(
-                    self.convergence_canvas, fallback, "outer_residual",
-                    secondary_series=None, x_label="Outer iteration",
-                )
-                return
             self.convergence_canvas.delete("all")
             self.convergence_canvas.create_text(
                 20,
@@ -4128,14 +4103,7 @@ class NetSimGui:
             return
 
         secondary = None
-        if self.scene.physics_mode == "compressible":
-            sec = []
-            if self.temperature_history:
-                sec.append(("ΔT (K)", self.temperature_history, self._t["plot_temperature"]))
-            if self.density_history:
-                sec.append(("Δρ/ρ", self.density_history, self._t["plot_faint2"]))
-            secondary = sec or None
-        elif self.temperature_history:
+        if self.scene.physics_mode != "compressible" and self.temperature_history:
             secondary = [("ΔT (K)", self.temperature_history, self._t["plot_temperature"])]
         self._draw_history_plot(
             self.convergence_canvas, history_series, metric_name, secondary_series=secondary
