@@ -4050,7 +4050,7 @@ class NetSimGui:
         # Simple view: outer-iteration convergence (non-isothermal / compressible only).
         # Not used for isothermal (1 outer iteration) — falls through to detail view,
         # which shows the non-zero laminar corrections.
-        if not show_detail and len(self.outer_turbulent_final_metrics) > 1:
+        if not show_detail and len(self.outer_turbulent_final_metrics) > 1 and self.scene.physics_mode != "compressible":
             metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
 
             def _log_safe(vals: list[float]) -> list[float]:
