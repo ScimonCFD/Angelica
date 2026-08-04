@@ -235,7 +235,7 @@ class NetSimGui:
             master=self.root,
             value=self.metric_name_to_label["pressure_correction_abs_pa"],
         )
-        self.show_hydraulic_detail_var = tk.BooleanVar(master=self.root, value=False)
+        self.show_hydraulic_detail_var = tk.BooleanVar(master=self.root, value=True)
         self.convergence_history = {"laminar": [], "turbulent": []}
         self.status_var = tk.StringVar(value="Select a node type from the palette.")
         self.tool_var = tk.StringVar(value="No tool selected")
