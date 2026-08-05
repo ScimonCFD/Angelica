@@ -1,6 +1,6 @@
 """Angelica: open-source platform for pipe network simulation."""
 
-__version__ = "1.3.11"
+__version__ = "1.3.12"
 
 from .closures.convection_scheme import ConvectionScheme, HybridScheme, PowerLawScheme, UpwindScheme
 from .core.case import FlowBoundary, NetworkCase, PressureBoundary, ThermalBoundary
