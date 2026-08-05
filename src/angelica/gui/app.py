@@ -4053,27 +4053,28 @@ class NetSimGui:
         metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
         show_detail = self.show_hydraulic_detail_var.get()
 
-        # Simple view: one point per outer pass instead of every inner iteration.
-        # Available when there are outer iteration boundaries and the user unchecked the box.
+        # Simple view: outer convergence metrics — one point per outer pass.
+        # Shows ΔT (primary) and Δρ/ρ (secondary, compressible only). Both decrease
+        # monotonically as the outer loop converges, unlike the inner hydraulic residual
+        # which re-initialises each outer pass and is not a reliable outer-convergence signal.
         if not show_detail and len(self.outer_iteration_boundaries) > 1:
-            outer_primary: list[tuple[str, list[float], str, int]] = []
-            hydraulic_per_outer = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
-            if hydraulic_per_outer:
-                outer_primary.append(("Hydraulic", hydraulic_per_outer, self._t["plot_turbulent"], 0))
-            secondary_simple = None
-            if self.temperature_history:
-                secondary_simple = [("ΔT (K)", self.temperature_history, self._t["plot_temperature"], [])]
-            if not outer_primary:
+            if not self.temperature_history:
                 self.convergence_canvas.delete("all")
                 self.convergence_canvas.create_text(
                     20, 20, anchor="nw", text="No convergence data yet.",
                     fill=self._t["plot_muted"],
                 )
                 return
+            outer_primary: list[tuple[str, list[float], str, int]] = [
+                ("max |ΔT| (K)", self.temperature_history, self._t["plot_temperature"], 0)
+            ]
+            secondary_simple = None
+            if self.density_history:
+                secondary_simple = [("max |Δρ/ρ|", self.density_history, self._t["plot_turbulent"], [])]
             self._draw_history_plot(
                 self.convergence_canvas,
                 outer_primary,
-                metric_name,
+                "temperature_delta_k",
                 secondary_series=secondary_simple,
                 x_label="Outer iteration",
             )
@@ -4110,7 +4111,7 @@ class NetSimGui:
                 n_lam + b - 1
                 for b in self.outer_iteration_boundaries[: len(self.temperature_history)]
             ]
-            secondary = [("ΔT (K)", self.temperature_history, self._t["plot_temperature"], x_positions)]
+            secondary = [("max |ΔT| (K)", self.temperature_history, self._t["plot_temperature"], x_positions)]
 
         # Vertical dashed markers between outer passes (all boundaries except the last).
         n_total = len(laminar_values) + len(turbulent_values)
@@ -4310,7 +4311,7 @@ class NetSimGui:
                 canvas.create_text(
                     width - 12,
                     (top + bottom) / 2,
-                    text="max |ΔT| (K)",
+                    text=secondary_series[0][0],
                     angle=90,
                     fill=temp_color,
                     font=("TkDefaultFont", 9),
