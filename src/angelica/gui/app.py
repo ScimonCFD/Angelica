@@ -4058,7 +4058,7 @@ class NetSimGui:
         # Simple view: one point per outer pass, same structure as detail view.
         # Left axis = selected hydraulic metric (final turbulent residual each outer pass).
         # Right axis = max |ΔT| (K) — same as in the detail view.
-        if not show_detail and len(self.outer_iteration_boundaries) > 1:
+        if not show_detail and len(self.outer_iteration_boundaries) >= 1:
             hydraulic_per_outer = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
             if not hydraulic_per_outer:
                 self.convergence_canvas.delete("all")
@@ -4072,7 +4072,10 @@ class NetSimGui:
             ]
             secondary_simple = None
             if self.temperature_history:
-                secondary_simple = [("max |ΔT| (K)", self.temperature_history, self._t["plot_temperature"], [])]
+                n_temp = len(self.temperature_history)
+                secondary_simple = [
+                    ("max |ΔT| (K)", self.temperature_history, self._t["plot_temperature"], list(range(n_temp)))
+                ]
             self._draw_history_plot(
                 self.convergence_canvas,
                 outer_primary,
