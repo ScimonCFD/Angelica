@@ -4055,12 +4055,12 @@ class NetSimGui:
         metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
         show_detail = self.show_hydraulic_detail_var.get()
 
-        # Outer-convergence view: one point per outer pass showing the metrics that
-        # actually measure outer-loop convergence (ΔT and Δρ/ρ). The inner hydraulic
-        # residual is NOT shown here because it re-initialises each outer pass and
-        # can increase between passes even while the system converges globally.
+        # Simple view: one point per outer pass, same structure as detail view.
+        # Left axis = selected hydraulic metric (final turbulent residual each outer pass).
+        # Right axis = max |ΔT| (K) — same as in the detail view.
         if not show_detail and len(self.outer_iteration_boundaries) > 1:
-            if not self.temperature_history:
+            hydraulic_per_outer = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
+            if not hydraulic_per_outer:
                 self.convergence_canvas.delete("all")
                 self.convergence_canvas.create_text(
                     20, 20, anchor="nw", text="No convergence data yet.",
@@ -4068,13 +4068,15 @@ class NetSimGui:
                 )
                 return
             outer_primary: list[tuple[str, list[float], str, int]] = [
-                ("max |ΔT| (K)", self.temperature_history, self._t["plot_temperature"], 0)
+                ("Turbulent", hydraulic_per_outer, self._t["plot_turbulent"], 0)
             ]
             secondary_simple = None
+            if self.temperature_history:
+                secondary_simple = [("max |ΔT| (K)", self.temperature_history, self._t["plot_temperature"], [])]
             self._draw_history_plot(
                 self.convergence_canvas,
                 outer_primary,
-                "temperature_delta_k",
+                metric_name,
                 secondary_series=secondary_simple,
                 x_label="Outer iteration",
             )
