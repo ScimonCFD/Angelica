@@ -93,6 +93,7 @@ class NetSimGui:
             "plot_laminar":     "#1d3557",
             "plot_turbulent":   "#c1121f",
             "plot_temperature": "#c47800",
+            "plot_density":     "#0891b2",
         },
         "dark": {
             "canvas_bg":      "#070c17",
@@ -115,6 +116,7 @@ class NetSimGui:
             "plot_laminar":     "#3a9fd4",
             "plot_turbulent":   "#e8633a",
             "plot_temperature": "#f59e0b",
+            "plot_density":     "#22d3ee",
         },
     }
 
@@ -4070,7 +4072,7 @@ class NetSimGui:
             ]
             secondary_simple = None
             if self.density_history:
-                secondary_simple = [("max |Δρ/ρ|", self.density_history, self._t["plot_turbulent"], [])]
+                secondary_simple = [("max |Δρ/ρ|", self.density_history, self._t["plot_density"], [])]
             self._draw_history_plot(
                 self.convergence_canvas,
                 outer_primary,
@@ -4101,9 +4103,9 @@ class NetSimGui:
             )
             return
 
-        # ΔT points placed at the exact x-position of the last turbulent iteration of each
-        # outer pass. outer_iteration_boundaries[i] = cumulative turbulent count after pass i,
-        # so the last turb iteration of pass i is at plot position n_lam + boundaries[i] - 1.
+        # ΔT (and Δρ/ρ for compressible) placed at the x-position of the last turbulent
+        # iteration of each outer pass. outer_iteration_boundaries[i] = cumulative turbulent
+        # count after pass i → plot position = n_lam + boundaries[i] - 1.
         secondary = None
         if self.temperature_history:
             n_lam = len(laminar_values)
@@ -4112,6 +4114,12 @@ class NetSimGui:
                 for b in self.outer_iteration_boundaries[: len(self.temperature_history)]
             ]
             secondary = [("max |ΔT| (K)", self.temperature_history, self._t["plot_temperature"], x_positions)]
+            if self.density_history:
+                density_x = [
+                    n_lam + b - 1
+                    for b in self.outer_iteration_boundaries[: len(self.density_history)]
+                ]
+                secondary.append(("max |Δρ/ρ|", self.density_history, self._t["plot_density"], density_x))
 
         # Vertical dashed markers between outer passes (all boundaries except the last).
         n_total = len(laminar_values) + len(turbulent_values)
@@ -4293,8 +4301,9 @@ class NetSimGui:
                 sec_num_decades = sec_decade_max - sec_decade_min
                 sec_decade_step = 1 if sec_num_decades <= 6 else 2 if sec_num_decades <= 12 else 3
 
-                temp_color = secondary_series[0][2]
-                canvas.create_line(right, top, right, bottom, fill=temp_color, width=1.5)
+                multi_sec = len(secondary_series) > 1
+                axis_color = self._t["plot_axis"] if multi_sec else secondary_series[0][2]
+                canvas.create_line(right, top, right, bottom, fill=axis_color, width=1.5)
 
                 for decade in range(sec_decade_min, sec_decade_max + 1, sec_decade_step):
                     if decade < sec_min_log - 0.01 or decade > sec_max_log + 0.01:
@@ -4302,20 +4311,21 @@ class NetSimGui:
                     frac = (sec_max_log - decade) / (sec_max_log - sec_min_log)
                     y = top + (bottom - top) * frac
                     value = 10 ** decade
-                    canvas.create_line(right, y, right + 4, y, fill=temp_color, width=1)
+                    canvas.create_line(right, y, right + 4, y, fill=axis_color, width=1)
                     canvas.create_text(
                         right + 6, y, text=f"{value:.0e}", anchor="w",
-                        font=("TkDefaultFont", 8), fill=temp_color,
+                        font=("TkDefaultFont", 8), fill=axis_color,
                     )
 
-                canvas.create_text(
-                    width - 12,
-                    (top + bottom) / 2,
-                    text=secondary_series[0][0],
-                    angle=90,
-                    fill=temp_color,
-                    font=("TkDefaultFont", 9),
-                )
+                if not multi_sec:
+                    canvas.create_text(
+                        width - 12,
+                        (top + bottom) / 2,
+                        text=secondary_series[0][0],
+                        angle=90,
+                        fill=axis_color,
+                        font=("TkDefaultFont", 9),
+                    )
 
                 for sec_item in secondary_series:
                     _label, values, color = sec_item[0], sec_item[1], sec_item[2]
