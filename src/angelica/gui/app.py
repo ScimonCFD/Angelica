@@ -4071,8 +4071,6 @@ class NetSimGui:
                 ("max |ΔT| (K)", self.temperature_history, self._t["plot_temperature"], 0)
             ]
             secondary_simple = None
-            if self.density_history:
-                secondary_simple = [("max |Δρ/ρ|", self.density_history, self._t["plot_density"], [])]
             self._draw_history_plot(
                 self.convergence_canvas,
                 outer_primary,
@@ -4114,12 +4112,6 @@ class NetSimGui:
                 for b in self.outer_iteration_boundaries[: len(self.temperature_history)]
             ]
             secondary = [("max |ΔT| (K)", self.temperature_history, self._t["plot_temperature"], x_positions)]
-            if self.density_history:
-                density_x = [
-                    n_lam + b - 1
-                    for b in self.outer_iteration_boundaries[: len(self.density_history)]
-                ]
-                secondary.append(("max |Δρ/ρ|", self.density_history, self._t["plot_density"], density_x))
 
         # Vertical dashed markers between outer passes (all boundaries except the last).
         n_total = len(laminar_values) + len(turbulent_values)
