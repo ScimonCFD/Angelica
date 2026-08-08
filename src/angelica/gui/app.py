@@ -4061,21 +4061,41 @@ class NetSimGui:
         metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
         show_detail = self.show_hydraulic_detail_var.get()
 
-        # Simple view: one point per outer pass, same structure as detail view.
-        # Left axis = selected hydraulic metric (final turbulent residual each outer pass).
-        # Right axis = max |ΔT| (K) — same as in the detail view.
+        # Simple view: one point per outer pass.
+        # For compressible (density_history populated): left = Δρ/ρ, right = ΔT.
+        #   The hydraulic final residual per outer pass is NOT monotonic for compressible
+        #   because _initialise_pressure_field re-sets hydraulics each pass. Δρ/ρ is the
+        #   correct outer-loop convergence indicator.
+        # For non-isothermal incompressible: left = hydraulic (Pa), right = ΔT.
         if not show_detail and len(self.outer_iteration_boundaries) >= 1:
-            hydraulic_per_outer = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
-            if not hydraulic_per_outer:
-                self.convergence_canvas.delete("all")
-                self.convergence_canvas.create_text(
-                    20, 20, anchor="nw", text="No convergence data yet.",
-                    fill=self._t["plot_muted"],
-                )
-                return
-            outer_primary: list[tuple[str, list[float], str, int]] = [
-                (self._series_label("Turbulent", metric_name), hydraulic_per_outer, self._t["plot_turbulent"], 0)
-            ]
+            if self.density_history:
+                # Compressible: use Δρ/ρ as the primary outer convergence metric.
+                primary_values = list(self.density_history)
+                if not primary_values:
+                    self.convergence_canvas.delete("all")
+                    self.convergence_canvas.create_text(
+                        20, 20, anchor="nw", text="No convergence data yet.",
+                        fill=self._t["plot_muted"],
+                    )
+                    return
+                outer_primary: list[tuple[str, list[float], str, int]] = [
+                    ("max |Δρ/ρ| (−)", primary_values, self._t["plot_turbulent"], 0)
+                ]
+                primary_metric = "density_rel_change"
+            else:
+                # Non-isothermal incompressible: use final turbulent hydraulic per outer pass.
+                hydraulic_per_outer = [getattr(m, metric_name) for m in self.outer_turbulent_final_metrics]
+                if not hydraulic_per_outer:
+                    self.convergence_canvas.delete("all")
+                    self.convergence_canvas.create_text(
+                        20, 20, anchor="nw", text="No convergence data yet.",
+                        fill=self._t["plot_muted"],
+                    )
+                    return
+                outer_primary = [
+                    (self._series_label("Turbulent", metric_name), hydraulic_per_outer, self._t["plot_turbulent"], 0)
+                ]
+                primary_metric = metric_name
             secondary_simple = None
             if self.temperature_history:
                 n_temp = len(self.temperature_history)
@@ -4085,7 +4105,7 @@ class NetSimGui:
             self._draw_history_plot(
                 self.convergence_canvas,
                 outer_primary,
-                metric_name,
+                primary_metric,
                 secondary_series=secondary_simple,
                 x_label="Outer iteration",
             )
