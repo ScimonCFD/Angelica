@@ -2905,14 +2905,17 @@ class NetSimGui:
                 width=12,
             ).pack(anchor="w", pady=4)
 
-        components_list.bind(
-            "<<ListboxSelect>>",
-            lambda _event: self._render_link_component_properties(
-                link.link_id,
-                components_list,
-                properties_frame,
-            ),
-        )
+        _last_rendered: list[int] = [-1]
+
+        def _on_listbox_select(_event: tk.Event) -> None:
+            sel = components_list.curselection()
+            idx = sel[0] if sel else -1
+            if idx == _last_rendered[0]:
+                return
+            _last_rendered[0] = idx
+            self._render_link_component_properties(link.link_id, components_list, properties_frame)
+
+        components_list.bind("<<ListboxSelect>>", _on_listbox_select)
 
         list_actions = ttk.Frame(container)
         list_actions.grid(row=2, column=1, sticky="w", pady=(4, 0))
@@ -4087,6 +4090,10 @@ class NetSimGui:
                     fill=self._t["plot_muted"],
                 )
                 return
+            # For non-isothermal, outer_turbulent_final_metrics has N+1 entries (N thermal passes
+            # + 1 final synchronous hydraulic pass). Trim to N so both axes have the same count.
+            if self.temperature_history:
+                hydraulic_per_outer = hydraulic_per_outer[:len(self.temperature_history)]
             outer_primary: list[tuple[str, list[float], str, int]] = [
                 (self._series_label("Turbulent", metric_name), hydraulic_per_outer, self._t["plot_turbulent"], 0)
             ]
