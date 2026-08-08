@@ -9,6 +9,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import sv_ttk
 
+import angelica
 from angelica.core.case import NetworkCase
 from angelica.core.components import FITTING_PRESET_LIBRARY
 from angelica.core.results import ComponentFlowResult, SolveResult
@@ -233,7 +234,7 @@ class NetSimGui:
         self._unit_system_key = "si"
         self.root = tk.Tk()
         sv_ttk.set_theme("light")
-        self.root.title("Angelica")
+        self.root.title(f"Angelica v{angelica.__version__}")
         self.root.geometry("1100x700")
         self.root.minsize(900, 600)
         self._set_window_icon()
@@ -567,12 +568,13 @@ class NetSimGui:
         return "tutorials" in parts
 
     def _update_title(self) -> None:
+        v = f"Angelica v{angelica.__version__}"
         if self.current_file_path:
             name = os.path.basename(self.current_file_path)
             suffix = " [tutorial]" if self._is_tutorial_file(self.current_file_path) else ""
-            self.root.title(f"Angelica — {name}{suffix}")
+            self.root.title(f"{v} — {name}{suffix}")
         else:
-            self.root.title("Angelica")
+            self.root.title(v)
 
     def _save_scene(self) -> None:
         if self.current_file_path and not self._is_tutorial_file(self.current_file_path):
