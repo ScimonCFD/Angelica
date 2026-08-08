@@ -165,9 +165,15 @@ class NetSimGui:
         },
     }
     METRIC_OPTIONS = (
-        ("Max abs ΔP correction (Pa)", "pressure_correction_abs_pa"),
-        ("Max rel mass imbalance (−)", "max_nodal_mass_imbalance_rel"),
+        ("Max |ΔP| correction (Pa)", "pressure_correction_abs_pa"),
+        ("Max rel. mass imbalance (−)", "max_nodal_mass_imbalance_rel"),
     )
+    _METRIC_UNIT: dict[str, str] = {
+        "pressure_correction_abs_pa": "Pa",
+        "max_nodal_mass_imbalance_rel": "−",
+        "temperature_delta_k": "K",
+        "density_rel_change": "−",
+    }
     UNIT_SYSTEMS: dict[str, dict] = {
         "si": {
             "name": "SI  (m · Pa · kg/s)",
@@ -4068,7 +4074,7 @@ class NetSimGui:
                 )
                 return
             outer_primary: list[tuple[str, list[float], str, int]] = [
-                ("Turbulent", hydraulic_per_outer, self._t["plot_turbulent"], 0)
+                (self._series_label("Turbulent", metric_name), hydraulic_per_outer, self._t["plot_turbulent"], 0)
             ]
             secondary_simple = None
             if self.temperature_history:
@@ -4090,10 +4096,10 @@ class NetSimGui:
         turbulent_values = [getattr(metric, metric_name) for metric in self.convergence_history["turbulent"]]
         history_series: list[tuple[str, list[float], str, int]] = []
         if laminar_values:
-            history_series.append(("Laminar", laminar_values, self._t["plot_laminar"], 0))
+            history_series.append((self._series_label("Laminar", metric_name), laminar_values, self._t["plot_laminar"], 0))
         if turbulent_values:
             history_series.append(
-                ("Turbulent", turbulent_values, self._t["plot_turbulent"], len(laminar_values))
+                (self._series_label("Turbulent", metric_name), turbulent_values, self._t["plot_turbulent"], len(laminar_values))
             )
         if not history_series:
             self.convergence_canvas.delete("all")
@@ -4191,6 +4197,14 @@ class NetSimGui:
         if math.isclose(min_log, max_log):
             min_log -= 1.0
             max_log += 1.0
+        # Expand to whole-decade boundaries so at least two tick labels are always visible.
+        # Without this, data spanning < 1 decade produces no visible tick marks.
+        _dmin = math.floor(min_log)
+        _dmax = math.ceil(max_log)
+        if _dmax <= _dmin:
+            _dmax = _dmin + 1
+        min_log = float(_dmin)
+        max_log = float(_dmax)
 
         max_index = max(
             offset + len(values) - 1
@@ -4378,11 +4392,15 @@ class NetSimGui:
         if metric_name == "temperature_delta_k":
             return "max |ΔT| (K)"
         if metric_name == "density_rel_change":
-            return "max |Δρ/ρ|"
+            return "max |Δρ/ρ| (−)"
         if metric_name == "outer_residual":
             return "Outer residual"
         labels = {name: label for label, name in NetSimGui.METRIC_OPTIONS}
         return labels.get(metric_name, metric_name)
+
+    def _series_label(self, base: str, metric_name: str) -> str:
+        unit = self._METRIC_UNIT.get(metric_name, "")
+        return f"{base} ({unit})" if unit else base
 
     def run(self) -> None:
         self.root.mainloop()
