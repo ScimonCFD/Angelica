@@ -4116,6 +4116,16 @@ class NetSimGui:
         # Detail view: all inner hydraulic iterations.
         laminar_values = [getattr(metric, metric_name) for metric in self.convergence_history["laminar"]]
         turbulent_values = [getattr(metric, metric_name) for metric in self.convergence_history["turbulent"]]
+
+        # For non-isothermal, outer_iteration_boundaries has N+1 entries (N temperature passes +
+        # 1 final synchronous hydraulic pass with no corresponding temperature update). Trim
+        # turbulent_values and boundaries to the first N passes so the plot is symmetric.
+        active_boundaries = self.outer_iteration_boundaries
+        if self.temperature_history and len(active_boundaries) > len(self.temperature_history):
+            turb_cutoff = active_boundaries[len(self.temperature_history) - 1]
+            turbulent_values = turbulent_values[:turb_cutoff]
+            active_boundaries = active_boundaries[: len(self.temperature_history)]
+
         history_series: list[tuple[str, list[float], str, int]] = []
         if laminar_values:
             history_series.append((self._series_label("Laminar", metric_name), laminar_values, self._t["plot_laminar"], 0))
@@ -4134,16 +4144,13 @@ class NetSimGui:
             )
             return
 
-        # ΔT (and Δρ/ρ for compressible) placed at the x-position of the last turbulent
-        # iteration of each outer pass. outer_iteration_boundaries[i] = cumulative turbulent
-        # count after pass i → plot position = n_lam + boundaries[i] - 1.
+        # ΔT placed at the x-position of the last turbulent iteration of each outer pass.
+        # outer_iteration_boundaries[i] = cumulative turbulent count after pass i
+        # → plot position = n_lam + active_boundaries[i] - 1.
         secondary = None
         if self.temperature_history:
             n_lam = len(laminar_values)
-            x_positions = [
-                n_lam + b - 1
-                for b in self.outer_iteration_boundaries[: len(self.temperature_history)]
-            ]
+            x_positions = [n_lam + b - 1 for b in active_boundaries]
             secondary = [("max |ΔT| (K)", self.temperature_history, self._t["plot_temperature"], x_positions)]
 
         # Vertical dashed markers between outer passes (all boundaries except the last).
@@ -4151,7 +4158,7 @@ class NetSimGui:
         x_den = max(n_total - 1, 1)
         outer_marker_x = [
             (len(laminar_values) + b - 0.5) / x_den
-            for b in self.outer_iteration_boundaries[:-1]
+            for b in active_boundaries[:-1]
         ]
 
         self._draw_history_plot(
