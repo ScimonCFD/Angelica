@@ -2535,10 +2535,7 @@ class NetSimGui:
         if link is None:
             return
 
-        if self.latest_boundary_results:
-            self._show_link_pressure_profile(link)
-        else:
-            self._open_link_properties_dialog(link)
+        self._open_link_properties_dialog(link)
 
     def _finish_connection(self, event: tk.Event) -> None:
         source_node_id = self.drag_source_node_id
@@ -3687,6 +3684,8 @@ class NetSimGui:
             component_id,
             properties,
         )
+        self.latest_result = None
+        self.latest_boundary_results = {}
         selection = components_list.curselection()
         components_list.delete(0, "end")
         for component_index, component in enumerate(updated_link.components, start=1):
@@ -3714,6 +3713,8 @@ class NetSimGui:
             component_id,
             properties,
         )
+        self.latest_result = None
+        self.latest_boundary_results = {}
         selection = components_list.curselection()
         components_list.delete(0, "end")
         for component_index, component in enumerate(updated_link.components, start=1):
@@ -3848,6 +3849,8 @@ class NetSimGui:
             component_id,
             properties,
         )
+        self.latest_result = None
+        self.latest_boundary_results = {}
         selection = components_list.curselection()
         components_list.delete(0, "end")
         for component_index, component in enumerate(updated_link.components, start=1):
@@ -3886,6 +3889,8 @@ class NetSimGui:
             else:
                 properties[key] = val
         updated_node = self.scene.update_node_properties(node_id, properties)
+        self.latest_result = None
+        self.latest_boundary_results = {}
         self._redraw_scene()
         self.status_var.set(
             f"Updated properties for {updated_node.node_type} #{updated_node.node_id}."
