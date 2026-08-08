@@ -471,6 +471,12 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             )
             if tb is not None
         )
+        if not any(tb.bc_type == "fixed_temperature" for tb in thermal_inlets):
+            raise ValueError(
+                "Compressible mode requires at least one boundary node with a fixed "
+                "temperature. Open a source or sink node and set its thermal boundary "
+                "condition to 'Fixed temperature'."
+            )
     elif is_non_isothermal:
         fluid_model = ThermalFluid.from_constants(
             density_kg_per_m3=float(scene.material["density_kg_per_m3"]),
