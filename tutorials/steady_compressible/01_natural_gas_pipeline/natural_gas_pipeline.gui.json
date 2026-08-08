@@ -26,8 +26,8 @@
         "condition_type": "pressure",
         "pressure": "800000.0",
         "flow": "",
-        "thermal_bc_type": "zero_gradient",
-        "inlet_temperature_c": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "20.0",
         "thermal_gradient_dc_per_m": "0.0"
       }
     },
