@@ -61,8 +61,7 @@
             "hazen_williams_c": "130.0",
             "num_segments": "1",
             "heat_transfer_coefficient_w_per_m2k": "50.0",
-            "ambient_temperature_c": "20.0",
-            "n_thermal_segments": "50"
+            "ambient_temperature_c": "20.0"
           }
         }
       ]

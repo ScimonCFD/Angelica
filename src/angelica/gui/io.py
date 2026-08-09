@@ -361,24 +361,30 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 ambient_temp = _optional_float(
                     component, "ambient_temperature_c", default=20.0
                 ) if (is_non_isothermal or is_compressible) else 20.0
-                n_segs = max(1, int(_optional_float(
-                    component, "n_thermal_segments", default=10.0
-                ))) if (is_non_isothermal or is_compressible) else 1
-                components.append(
-                    Pipe(
-                        start_node=current_start,
-                        end_node=current_end,
-                        diameter_m=diameter,
-                        length_m=length,
-                        absolute_roughness_m=roughness,
-                        hazen_williams_c=hazen_williams_c,
-                        height_change_m=height_change,
-                        heat_transfer_coefficient_w_per_m2k=heat_transfer,
-                        ambient_temperature_c=ambient_temp,
-                        n_thermal_segments=n_segs,
-                        component_id=f"link_{link.link_id}_pipe_{component.component_id}",
+                num_segs = max(1, int(_optional_float(component, "num_segments", default=1.0)))
+                seg_length = length / num_segs
+                seg_height = height_change / num_segs
+                seg_nodes = [current_start]
+                for _ in range(num_segs - 1):
+                    seg_nodes.append(next_internal_node_id)
+                    next_internal_node_id += 1
+                seg_nodes.append(current_end)
+                for seg_idx in range(num_segs):
+                    components.append(
+                        Pipe(
+                            start_node=seg_nodes[seg_idx],
+                            end_node=seg_nodes[seg_idx + 1],
+                            diameter_m=diameter,
+                            length_m=seg_length,
+                            absolute_roughness_m=roughness,
+                            hazen_williams_c=hazen_williams_c,
+                            height_change_m=seg_height,
+                            heat_transfer_coefficient_w_per_m2k=heat_transfer,
+                            ambient_temperature_c=ambient_temp,
+                            n_thermal_segments=1,
+                            component_id=f"link_{link.link_id}_pipe_{component.component_id}_seg{seg_idx}",
+                        )
                     )
-                )
             elif component.component_type == "fitting":
                 diameter = _required_float(component, "diameter_m", link.link_id)
                 fitting_mode = component.properties.get("fitting_mode", "manual").strip() or "manual"

@@ -3476,12 +3476,10 @@ class NetSimGui:
             thermal_fields = [
                 ("heat_transfer_coefficient_w_per_m2k", "U — Heat transfer coeff. (W/m²K)"),
                 ("ambient_temperature_c", "T_amb — Ambient temperature (°C)"),
-                ("n_thermal_segments", "Thermal segments"),
             ]
             defaults = {
                 "heat_transfer_coefficient_w_per_m2k": "0.0",
                 "ambient_temperature_c": "20.0",
-                "n_thermal_segments": "10",
             }
             for key, label in thermal_fields:
                 ttk.Label(properties_frame, text=label).grid(
