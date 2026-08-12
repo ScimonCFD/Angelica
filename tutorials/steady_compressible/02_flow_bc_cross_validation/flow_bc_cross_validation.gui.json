@@ -1,0 +1,131 @@
+{
+  "case_name": "Natural Gas Pipeline — Flow BC Cross-Validation",
+  "physics_mode": "compressible",
+  "material": {
+    "definition_mode": "gas",
+    "library_key": "",
+    "name": "Methane (CH₄)",
+    "molecular_weight_kg_per_mol": "0.016043",
+    "viscosity_pa_s": "0.000011",
+    "specific_heat_j_per_kg_k": "2220.0",
+    "thermal_conductivity_w_per_m_k": "0.033"
+  },
+  "pressure_drop_model": {
+    "library_key": "colebrook_white",
+    "name": "Colebrook-White"
+  },
+  "solver_settings": {},
+  "initial_node_pressures_pa": {},
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 100,
+      "y": 240,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "800000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "20.0",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "junction",
+      "x": 400,
+      "y": 240,
+      "properties": {
+        "label": ""
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "sink",
+      "x": 650,
+      "y": 140,
+      "properties": {
+        "condition_type": "flow",
+        "pressure": "",
+        "flow": "1.255479",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    },
+    {
+      "node_id": 4,
+      "node_type": "sink",
+      "x": 650,
+      "y": 340,
+      "properties": {
+        "condition_type": "flow",
+        "pressure": "",
+        "flow": "1.540697",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "500.0",
+            "diameter_m": "0.15",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 2,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": 2,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "300.0",
+            "diameter_m": "0.10",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 3,
+      "start_node_id": 2,
+      "end_node_id": 4,
+      "components": [
+        {
+          "component_id": 3,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "200.0",
+            "diameter_m": "0.10",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    }
+  ]
+}
