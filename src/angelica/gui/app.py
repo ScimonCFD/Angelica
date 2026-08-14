@@ -2910,7 +2910,7 @@ class NetSimGui:
         def _on_listbox_select(_event: tk.Event) -> None:
             sel = components_list.curselection()
             idx = sel[0] if sel else -1
-            if idx == _last_rendered[0]:
+            if idx < 0 or idx == _last_rendered[0]:
                 return
             _last_rendered[0] = idx
             self._render_link_component_properties(link.link_id, components_list, properties_frame)
