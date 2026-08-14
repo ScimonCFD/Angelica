@@ -232,6 +232,7 @@ class NetSimGui:
         self.outer_iteration_boundaries: list[int] = []
         self._dark = False
         self._unit_system_key = "si"
+        self._simulation_running = False
         self.root = tk.Tk()
         sv_ttk.set_theme("light")
         self.root.title(f"Angelica v{angelica.__version__}")
@@ -342,12 +343,13 @@ class NetSimGui:
         palette_title = ttk.Label(palette, text="Node Palette")
         palette_title.pack(anchor="w", pady=(0, 8))
 
-        ttk.Button(
+        self._run_button = ttk.Button(
             palette,
             text="▶ Run",
             command=self._run_simulation,
             width=12,
-        ).pack(anchor="w", pady=(0, 10))
+        )
+        self._run_button.pack(anchor="w", pady=(0, 10))
 
         source_button = ttk.Button(
             palette,
@@ -2197,6 +2199,9 @@ class NetSimGui:
         return errors
 
     def _run_simulation(self) -> None:
+        if self._simulation_running:
+            return
+
         errors = self._validate_scene()
         if errors:
             messagebox.showerror(
@@ -2211,10 +2216,20 @@ class NetSimGui:
             messagebox.showerror("Run failed", str(exc))
             return
 
-        solver = build_solver_from_scene(self.scene)
-        self.convergence_history = {"laminar": [], "turbulent": []}
-        self._prepare_convergence_window()
-        result = solver.solve(case, progress_callback=self._on_solver_progress)
+        self._simulation_running = True
+        self._run_button.configure(state="disabled")
+        try:
+            solver = build_solver_from_scene(self.scene)
+            self.convergence_history = {"laminar": [], "turbulent": []}
+            self._prepare_convergence_window()
+            result = solver.solve(case, progress_callback=self._on_solver_progress)
+        except Exception as exc:
+            messagebox.showerror("Run failed", str(exc))
+            return
+        finally:
+            self._simulation_running = False
+            self._run_button.configure(state="normal")
+
         self.latest_result = result
         self.latest_boundary_results = self._build_boundary_results(case, result)
         self.convergence_history = {
