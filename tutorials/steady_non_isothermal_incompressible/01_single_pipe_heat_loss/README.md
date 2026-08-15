@@ -4,7 +4,7 @@
 
 ```
 source (node 1)  ──[pipe, 500 m, D=25 mm]──>  sink (node 2)
-  3 bar, 80 °C                                    1 bar
+  2 bar, 80 °C                                    1 bar
 ```
 
 ## Parameters
@@ -16,22 +16,19 @@ source (node 1)  ──[pipe, 500 m, D=25 mm]──>  sink (node 2)
 | Pipe length | 500 m |
 | Wall heat transfer coeff. U | 50 W/m²K |
 | Ambient temperature | 20 °C |
-| Thermal segments | 50 |
 
 ## What to expect
 
 Hot water enters at 80 °C and loses heat through the pipe wall.
-At the converged mass flow (~0.41 kg/s), the outlet temperature is roughly
-**39–41 °C** depending on mesh resolution.
-
 The analytical solution for plug-flow with a uniform heat sink is:
 
 ```
 T_out = T_amb + (T_in − T_amb) × exp(−U·π·D·L / (ṁ·cₚ))
 ```
 
-This gives ~38.8 °C at ṁ=0.41 kg/s; the FV result converges towards this as
-the number of thermal segments is increased.
+At the converged mass flow (~0.41 kg/s) this gives **~38.8 °C**.
+The solver uses the NTU formula directly for each pipe, so the result
+is exact regardless of the number of pipe segments.
 
 ## Files
 

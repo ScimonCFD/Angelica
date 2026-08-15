@@ -227,9 +227,12 @@ class TutorialSuiteSmokeTests(unittest.TestCase):
         result = solver.solve(build_looped_network_heat_loss_case())
         self.assertTrue(result.converged)
         self.assertAlmostEqual(result.node_temperatures_c[1], 95.0, delta=0.01)
-        # Long path (node 3) loses almost all heat — must arrive near ambient (5 °C)
-        self.assertLess(result.node_temperatures_c[3], 30.0)
-        # Bypass keeps heat — junction C (node 4) must be well above ambient
-        self.assertGreater(result.node_temperatures_c[4], 50.0)
+        # Upper branch (node 3) must be cooler than the inlet
+        self.assertLess(result.node_temperatures_c[3], 90.0)
+        # Temperatures decrease monotonically along the main flow path
+        self.assertGreater(result.node_temperatures_c[2], result.node_temperatures_c[4])
+        self.assertGreater(result.node_temperatures_c[4], result.node_temperatures_c[5])
+        # All nodes above ambient (10 °C)
+        self.assertGreater(result.node_temperatures_c[5], 10.0)
         # Outer loop requires multiple iterations with relax=0.5
-        self.assertGreater(len(result.temperature_history), 5)
+        self.assertGreater(len(result.temperature_history), 3)

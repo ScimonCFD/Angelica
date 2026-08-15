@@ -16,7 +16,7 @@ def main() -> None:
     case = build_looped_network_heat_loss_case()
 
     # temperature_relaxation=0.5 slows the outer loop so convergence is visible
-    # on the plot (~14 iterations instead of 3).
+    # on the plot (~12 iterations instead of 3–4).
     solver = SteadyNonIsothermalIncompressibleSolver(
         hydraulic_settings=SolverSettings(
             turbulent_iterations=200,
@@ -40,7 +40,7 @@ def main() -> None:
     node_labels = {
         1: "Source",
         2: "Junction A",
-        3: "Junction B (cold end)",
+        3: "Junction B",
         4: "Junction C (mixing)",
         5: "Sink",
     }
@@ -52,11 +52,11 @@ def main() -> None:
     print()
 
     pipe_labels = [
-        "Feed  1→2 (D50, 50m)",
-        "Long  2→3 (D20, 600m)",
-        "Long  3→4 (D20, 400m)",
-        "Bypass 2→4 (D25, 100m)",
-        "Exit  4→5 (D50, 50m)",
+        "Feed  1→2 (D50, 100m)",
+        "Upper 2→3 (D40, 400m)",
+        "Upper 3→4 (D40, 300m)",
+        "Bypass 2→4 (D35, 400m)",
+        "Exit  4→5 (D50, 100m)",
     ]
     print(f"{'Pipe':<28}  {'kg/s':>8}  {'m³/h':>8}")
     for label, cf in zip(pipe_labels, result.component_flows):

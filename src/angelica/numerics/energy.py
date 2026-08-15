@@ -140,6 +140,25 @@ def solve_energy_system(
         F = mdot * cp          # convective strength (W/K), signed
         D = k_fl * A / dx      # diffusive conductance (W/K)
 
+        # ── Analytical NTU path for single-segment pipes ───────────────────
+        # For pipes with n_thermal_segments=1 the FV discretisation places the
+        # sole interior node at the midpoint, causing exit temperatures to
+        # converge to exp(-NTU/2) instead of exp(-NTU). We substitute the
+        # exact NTU solution: T_exit = decay·T_in + (1-decay)·T_amb.
+        if (not isinstance(ps, HeatSourceState)
+                and ps.component.n_thermal_segments == 1
+                and abs(F) > 1e-30):
+            ntu = U * math.pi * D_pipe * L / abs(F)
+            decay = math.exp(-ntu) if ntu > 0.0 else 1.0
+            # The sole interior node (offset + 0) represents the pipe exit.
+            internal_row = offset
+            upstream_col = (node_index[ps.start_node.node_id] if F > 0.0
+                            else node_index[ps.end_node.node_id])
+            add(internal_row, internal_row, 1.0)
+            add(internal_row, upstream_col, -decay)
+            rhs[internal_row] = (1.0 - decay) * T_amb
+            continue
+
         # Moukalled source linearisation: S = Sc + Sp·T_P, Sp ≤ 0
         Sc = U * math.pi * D_pipe * dx * T_amb
         Sp = -U * math.pi * D_pipe * dx   # negative → strengthens diagonal

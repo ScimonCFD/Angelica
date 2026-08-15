@@ -3,76 +3,71 @@
 ## Network
 
 ```
-source (node 1, 6 bar, 95 °C)
+source (node 1, 5 bar, 95 °C)
     |
-[feed: D=50 mm, L=50 m]
+[feed: D=50 mm, L=100 m]
     |
 junction A (node 2)
   /                      \
-[long path]          [bypass]
-2→3: D=20mm, 600m    2→4: D=25mm, 100m
-3→4: D=20mm, 400m
+[upper branch]        [direct bypass]
+2→3: D=40mm, 400m     2→4: D=35mm, 400m
+3→4: D=40mm, 300m
   \                      /
-junction C (node 4)   ← cold long path + hot bypass mix here
+junction C (node 4)   ← upper branch + bypass mix here
     |
-[exit: D=50 mm, L=50 m]
+[exit: D=50 mm, L=100 m]
     |
 sink (node 5, 1 bar)
 ```
 
-All pipes: U = 50 W/m²K, T_ambient = 5 °C.
+All pipes: U = 30 W/m²K, T_amb = 10 °C.
 
-## Why this case requires many outer iterations
+## Parameters
 
-The long path (1000 m, D = 20 mm) loses almost all its heat to the
-5 °C ambient — junction B arrives near-cold (~21 °C).
-The bypass (100 m, D = 25 mm) loses very little heat and stays hot (~91 °C).
+| Property | Value |
+|---|---|
+| Fluid | Water (temperature-dependent ρ, μ) |
+| Inlet pressure | 5 bar |
+| Outlet pressure | 1 bar |
+| Inlet temperature | 95 °C |
+| Ambient temperature | 10 °C |
+| Heat transfer coefficient U | 30 W/m²K |
 
-This creates a large viscosity contrast between the two paths:
-- Long path average ~55 °C → μ ≈ 0.50 mPa·s
-- Bypass average ~83 °C → μ ≈ 0.34 mPa·s
+## What to expect
 
-The initial temperature guess (all nodes at 95 °C) gives μ ≈ 0.30 mPa·s
-everywhere — a completely wrong hydraulic starting point.  As temperatures
-update towards their converged values, the flow distribution shifts
-significantly, which in turn changes the temperature field.
-This mutual coupling keeps the outer loop iterating.
+Hot water enters at 95 °C and splits at junction A into two paths:
+- **Upper branch** (700 m total, D=40 mm): longer, loses more heat
+- **Direct bypass** (400 m, D=35 mm): shorter, loses less heat
 
-With `temperature_relaxation = 0.5`, the solver takes **14 outer iterations**
-with a clean geometric convergence (ratio ≈ 0.5 per step):
+Both paths rejoin at junction C, where their temperatures mix.
+All temperatures decrease monotonically along each flow path.
 
-```
-iter  1: 36.5 K  ████████████████████████████████████████
-iter  2: 18.3 K  ████████████████████
-iter  3:  9.2 K  ██████████
-...
-iter 14:  0.005 K
-```
+The two paths have slightly different average temperatures after splitting,
+so their fluid viscosities differ.  Since viscosity affects friction and
+therefore flow distribution, the hydraulic and thermal solutions are coupled
+— the outer temperature loop must iterate several times to converge.
 
 ## Expected results
 
 | Node | Pressure | Temperature |
 |---|---|---|
-| Source (1) | 6.000 bar | 95.0 °C |
-| Junction A (2) | 5.908 bar | 90.9 °C |
-| Junction B — cold end (3) | 3.032 bar | 21.5 °C |
-| Junction C — mixing (4) | 1.092 bar | 75.5 °C |
-| Sink (5) | 1.000 bar | 72.3 °C |
+| Source (1) | 5.000 bar | 95.0 °C |
+| Junction A (2) | 4.507 bar | 91.9 °C |
+| Junction B (3) | 2.789 bar | 74.9 °C |
+| Junction C (4) | 1.495 bar | 70.0 °C |
+| Sink (5) | 1.000 bar | 67.8 °C |
 
 | Pipe | Flow |
 |---|---|
-| Feed 1→2 | 1.80 kg/s |
-| Long path 2→3 | 0.26 kg/s |
-| Long path 3→4 | 0.26 kg/s |
-| Bypass 2→4 | 1.54 kg/s |
-| Exit 4→5 | 1.80 kg/s |
-
-The bypass carries ~6× more flow than the long path because its
-lower viscosity (hotter fluid) and shorter length both reduce resistance.
+| Feed 1→2 | 3.00 kg/s |
+| Upper 2→3 | 1.55 kg/s |
+| Upper 3→4 | 1.55 kg/s |
+| Bypass 2→4 | 1.45 kg/s |
+| Exit 4→5 | 3.00 kg/s |
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `run.py` | Python script — solves with relax=0.5 and prints convergence bar chart |
+| `run.py` | Python script — solves and prints results plus convergence history |
 | `looped_network_heat_loss.gui.json` | Scene file — open in Angelica GUI |
