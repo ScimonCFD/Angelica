@@ -20,7 +20,7 @@
     {
       "node_id": 1,
       "node_type": "source",
-      "x": 80,
+      "x": 60,
       "y": 200,
       "properties": {
         "condition_type": "pressure",
@@ -34,7 +34,7 @@
     {
       "node_id": 2,
       "node_type": "junction",
-      "x": 280,
+      "x": 220,
       "y": 200,
       "properties": {
         "label": ""
@@ -43,7 +43,7 @@
     {
       "node_id": 3,
       "node_type": "junction",
-      "x": 430,
+      "x": 390,
       "y": 80,
       "properties": {
         "label": ""
@@ -52,7 +52,7 @@
     {
       "node_id": 4,
       "node_type": "junction",
-      "x": 430,
+      "x": 390,
       "y": 320,
       "properties": {
         "label": ""
@@ -60,8 +60,17 @@
     },
     {
       "node_id": 5,
+      "node_type": "junction",
+      "x": 560,
+      "y": 200,
+      "properties": {
+        "label": ""
+      }
+    },
+    {
+      "node_id": 6,
       "node_type": "sink",
-      "x": 640,
+      "x": 720,
       "y": 200,
       "properties": {
         "condition_type": "pressure",
@@ -83,7 +92,7 @@
           "component_id": 1,
           "component_type": "pipe",
           "properties": {
-            "length_m": "800.0",
+            "length_m": "600.0",
             "diameter_m": "0.20",
             "height_change_m": "0.0",
             "roughness_m": "0.000046",
@@ -125,7 +134,7 @@
           "component_id": 3,
           "component_type": "pipe",
           "properties": {
-            "length_m": "600.0",
+            "length_m": "400.0",
             "diameter_m": "0.12",
             "height_change_m": "0.0",
             "roughness_m": "0.000046",
@@ -146,7 +155,7 @@
           "component_id": 4,
           "component_type": "pipe",
           "properties": {
-            "length_m": "400.0",
+            "length_m": "350.0",
             "diameter_m": "0.10",
             "height_change_m": "0.0",
             "roughness_m": "0.000046",
@@ -188,8 +197,29 @@
           "component_id": 6,
           "component_type": "pipe",
           "properties": {
-            "length_m": "300.0",
+            "length_m": "500.0",
             "diameter_m": "0.15",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "10.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 7,
+      "start_node_id": 5,
+      "end_node_id": 6,
+      "components": [
+        {
+          "component_id": 7,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "600.0",
+            "diameter_m": "0.20",
             "height_change_m": "0.0",
             "roughness_m": "0.000046",
             "hazen_williams_c": "130.0",
