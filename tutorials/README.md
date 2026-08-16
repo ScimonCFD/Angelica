@@ -33,3 +33,4 @@ Tutorials are grouped by solver family. Run them from the repository root.
 ## Black-oil three-phase
 
 - `python3 tutorials/steady_black_oil/01_three_phase_pipeline/run.py`
+- `python3 tutorials/steady_black_oil/02_looped_gathering_network/run.py`
