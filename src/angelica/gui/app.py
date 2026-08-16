@@ -9,9 +9,14 @@ from tkinter import filedialog, messagebox, ttk
 
 try:
     import sv_ttk
+    if not hasattr(sv_ttk, "set_theme"):
+        raise ImportError(
+            "Angelica requires sv-ttk >= 2.0, but an older version is installed. "
+            "Upgrade with: pip install \"sv-ttk>=2.5\" --upgrade"
+        )
 except ImportError as _sv_err:
     raise ImportError(
-        "The Angelica GUI requires the 'sv-ttk' package. "
+        "The Angelica GUI requires sv-ttk >= 2.5. "
         "Install it with: pip install 'angelica[gui]'"
     ) from _sv_err
 
