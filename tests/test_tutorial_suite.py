@@ -50,6 +50,9 @@ class TutorialSuiteSmokeTests(unittest.TestCase):
             ),
         )
         self.assertTrue(result.converged)
+        flows = {cf.label: cf.volumetric_flow_m3_per_h for cf in result.component_flows}
+        self.assertAlmostEqual(flows["Pipe 1->2"], 6.227, delta=0.05)
+        self.assertAlmostEqual(flows["Pipe 3->6"], 9.282, delta=0.05)
 
     def test_fittings_case_converges(self) -> None:
         result = solve(
@@ -63,6 +66,9 @@ class TutorialSuiteSmokeTests(unittest.TestCase):
             ),
         )
         self.assertTrue(result.converged)
+        flows = {cf.label: cf.volumetric_flow_m3_per_h for cf in result.component_flows}
+        self.assertAlmostEqual(flows["Pipe 1->7"], 6.150, delta=0.05)
+        self.assertAlmostEqual(flows["Pipe 3->6"], 9.207, delta=0.05)
 
     def test_elevation_case_converges(self) -> None:
         result = solve(
@@ -76,6 +82,9 @@ class TutorialSuiteSmokeTests(unittest.TestCase):
             ),
         )
         self.assertTrue(result.converged)
+        flows = {cf.label: cf.volumetric_flow_m3_per_h for cf in result.component_flows}
+        self.assertAlmostEqual(flows["Pipe 1->7"], 5.103, delta=0.05)
+        self.assertAlmostEqual(flows["Pipe 3->6"], 6.388, delta=0.05)
 
     def test_inlet_flow_case_converges(self) -> None:
         result = solve(
@@ -89,6 +98,9 @@ class TutorialSuiteSmokeTests(unittest.TestCase):
             ),
         )
         self.assertTrue(result.converged)
+        flows = {cf.label: cf.volumetric_flow_m3_per_h for cf in result.component_flows}
+        self.assertAlmostEqual(flows["Pipe 1->7"], 6.150, delta=0.05)
+        self.assertAlmostEqual(flows["Pipe 3->6"], 9.207, delta=0.05)
 
     def test_outlet_flow_case_converges(self) -> None:
         result = solve(
@@ -103,6 +115,9 @@ class TutorialSuiteSmokeTests(unittest.TestCase):
             ),
         )
         self.assertTrue(result.converged)
+        flows = {cf.label: cf.volumetric_flow_m3_per_h for cf in result.component_flows}
+        self.assertAlmostEqual(flows["Pipe 1->7"], 5.103, delta=0.05)
+        self.assertAlmostEqual(flows["Pipe 3->6"], 6.389, delta=0.05)
 
     def test_two_flow_boundaries_case_converges(self) -> None:
         result = solve(
@@ -116,6 +131,9 @@ class TutorialSuiteSmokeTests(unittest.TestCase):
             ),
         )
         self.assertTrue(result.converged)
+        flows = {cf.label: cf.volumetric_flow_m3_per_h for cf in result.component_flows}
+        self.assertAlmostEqual(flows["Pipe 1->7"], 6.150, delta=0.05)
+        self.assertAlmostEqual(flows["Pipe 3->6"], 9.207, delta=0.05)
 
     def test_crude_oil_pipeline_converges(self) -> None:
         result = solve(
