@@ -7,7 +7,13 @@ import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-import sv_ttk
+try:
+    import sv_ttk
+except ImportError as _sv_err:
+    raise ImportError(
+        "The Angelica GUI requires the 'sv-ttk' package. "
+        "Install it with: pip install 'angelica[gui]'"
+    ) from _sv_err
 
 import angelica
 from angelica.core.case import NetworkCase

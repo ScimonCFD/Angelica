@@ -12,7 +12,7 @@ class SolverSettings:
     colebrook_friction_strategy: str = "transformed"
     friction_factor_method: str = "newton"
     friction_factor_max_iterations: int = 50
-    velocity_loop_method: str = "fixed_point"
+    velocity_loop_method: str = "secant"
     velocity_loop_max_iterations: int = 50
     colebrook_residual_tolerance: float = 1e-4
     velocity_loop_tolerance: float = 1e-4

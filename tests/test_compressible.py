@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import sys
 import unittest
 from dataclasses import dataclass
@@ -16,7 +17,9 @@ from angelica import (
     Pipe,
     PengRobinsonEOS,
     PressureBoundary,
+    SolverSettings,
     SteadyCompressibleSolver,
+    ThermalBoundary,
     lee_gonzalez_eakin_viscosity,
 )
 from angelica.solvers import CompressibleSolverSettings
@@ -320,6 +323,135 @@ class SteadyCompressibleSolverTests(unittest.TestCase):
     def test_density_history_converges(self):
         result = _solver().solve(_single_pipe_case(200_000.0, 100_000.0))
         self.assertLess(result.density_history[-1], 1e-4)
+
+
+# ── quantitative benchmark helpers ───────────────────────────────────────────
+
+def _colebrook_white_friction(re, eps_over_d):
+    """Darcy-Weisbach friction factor from Colebrook-White (iterative)."""
+    if re < 1e-6:
+        return 0.0
+    f = 0.02
+    for _ in range(60):
+        rhs = -2.0 * math.log10(eps_over_d / 3.7 + 2.51 / (re * math.sqrt(f)))
+        f_new = 1.0 / rhs ** 2
+        if abs(f_new - f) < 1e-12 * f_new:
+            break
+        f = f_new
+    return f
+
+
+def _isothermal_compressible_mdot(p1_pa, p2_pa, D, L, eps, T_c=20.0, M=_M_AIR, mu=_MU_AIR):
+    """Reference ṁ for isothermal ideal-gas pipe via P₁²-P₂² + Colebrook-White."""
+    R = 8.314  # J/(mol·K)
+    T_k = T_c + 273.15
+    A = math.pi / 4.0 * D ** 2
+    eps_over_d = eps / D
+    p_sq_diff = p1_pa ** 2 - p2_pa ** 2
+    f = 0.02
+    for _ in range(60):
+        mdot_sq = p_sq_diff * M * D * A ** 2 / (f * L * R * T_k)
+        mdot = math.sqrt(max(mdot_sq, 0.0))
+        re = 4.0 * mdot / (math.pi * D * mu) if mdot > 0.0 else 0.0
+        f_new = _colebrook_white_friction(re, eps_over_d)
+        if f_new > 0.0 and abs(f_new - f) < 1e-10:
+            break
+        f = f_new
+    return mdot
+
+
+def _heat_loss_case(p_in_pa, p_out_pa, T_in_c, T_amb_c, U_w_per_m2k,
+                    diameter=0.05, length=100.0):
+    """Single pipe with heat loss — n_thermal_segments=1 activates analytical NTU."""
+    return NetworkCase(
+        name="compressible heat loss benchmark",
+        fluid_model=_air_fluid(reference_pressure_pa=p_out_pa),
+        pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=p_in_pa),),
+        pressure_outlets=(PressureBoundary(node_id=2, pressure_pa=p_out_pa),),
+        thermal_inlets=(
+            ThermalBoundary(node_id=1, temperature_c=T_in_c, bc_type="fixed_temperature"),
+        ),
+        components=(
+            Pipe(
+                start_node=1,
+                end_node=2,
+                diameter_m=diameter,
+                length_m=length,
+                absolute_roughness_m=0.000045,
+                heat_transfer_coefficient_w_per_m2k=U_w_per_m2k,
+                ambient_temperature_c=T_amb_c,
+                n_thermal_segments=1,
+            ),
+        ),
+        node_ids=(1, 2),
+    )
+
+
+def _benchmark_solver():
+    """Solver with secant velocity loop for precise quantitative benchmarks.
+
+    The default fixed-point velocity loop may not fully converge when all nodes
+    are pressure boundaries (outer density loop exits after 1 iteration).  The
+    secant method converges from any reasonable initial guess in a few steps.
+    """
+    return SteadyCompressibleSolver(
+        hydraulic_settings=SolverSettings(
+            pressure_correction_abs_tolerance_pa=10.0,
+            velocity_loop_method="secant",
+        ),
+        compressible_settings=CompressibleSolverSettings(
+            max_density_iterations=30,
+            density_rel_tolerance=1e-5,
+        ),
+    )
+
+
+# ── quantitative benchmarks ───────────────────────────────────────────────────
+
+class QuantitativeBenchmarks(unittest.TestCase):
+    """Benchmarks that pin the solver to known analytical / derived references."""
+
+    def test_single_pipe_mass_flow_vs_p_squared(self):
+        """Solver ṁ must match P₁²-P₂² + Colebrook-White reference within 1 %."""
+        p_in, p_out = 200_000.0, 100_000.0
+        D, L, eps = 0.05, 100.0, 4.5e-5
+        result = _benchmark_solver().solve(_single_pipe_case(p_in, p_out, diameter=D, length=L))
+        self.assertTrue(result.converged)
+        mdot_solver = result.component_flows[0].mass_flow_kg_per_s
+        mdot_ref = _isothermal_compressible_mdot(p_in, p_out, D, L, eps)
+        self.assertAlmostEqual(mdot_solver, mdot_ref, delta=0.01 * mdot_ref)
+
+    def test_two_pipes_series_intermediate_pressure(self):
+        """Midpoint pressure for two identical isothermal pipes must equal sqrt((P₁²+P₂²)/2).
+
+        For isothermal ideal-gas flow the solver reproduces the P₁²-P₂² momentum
+        equation exactly (via average-pressure density).  With two identical pipes
+        carrying the same ṁ, the two ΔP² terms are equal, giving this closed-form.
+        """
+        p1, p2 = 300_000.0, 100_000.0
+        result = _benchmark_solver().solve(_two_pipe_case(p1, p2))
+        self.assertTrue(result.converged)
+        p_mid_solver = result.node_pressures_pa[2]
+        p_mid_ref = math.sqrt(0.5 * (p1 ** 2 + p2 ** 2))
+        self.assertAlmostEqual(p_mid_solver, p_mid_ref, delta=500.0)
+
+    def test_single_pipe_heat_loss_ntu(self):
+        """Outlet temperature must equal T_amb+(T_in-T_amb)·exp(-NTU) to machine precision.
+
+        With n_thermal_segments=1, the energy solver applies the exact NTU formula.
+        Using the converged ṁ from the result as reference guarantees consistency —
+        the test confirms the analytical path is active, not that ṁ is exact.
+        """
+        p_in, p_out = 200_000.0, 100_000.0
+        T_in, T_amb, U = 80.0, 20.0, 5.0
+        D, L, Cp = 0.05, 100.0, 1005.0
+        result = _benchmark_solver().solve(_heat_loss_case(p_in, p_out, T_in, T_amb, U, diameter=D, length=L))
+        self.assertTrue(result.converged)
+        T_out_solver = result.node_temperatures_c[2]
+        mdot = result.component_flows[0].mass_flow_kg_per_s
+        ntu = U * math.pi * D * L / (mdot * Cp)
+        T_out_ref = T_amb + (T_in - T_amb) * math.exp(-ntu)
+        self.assertAlmostEqual(T_out_solver, T_out_ref, delta=1e-6)
 
 
 if __name__ == "__main__":

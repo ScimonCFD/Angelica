@@ -180,7 +180,7 @@ class GuiIoTests(unittest.TestCase):
         self.assertEqual(solver.settings.colebrook_friction_strategy, "transformed")
         self.assertEqual(solver.settings.friction_factor_method, "newton")
         self.assertEqual(solver.settings.friction_factor_max_iterations, 50)
-        self.assertEqual(solver.settings.velocity_loop_method, "fixed_point")
+        self.assertEqual(solver.settings.velocity_loop_method, "secant")
         self.assertEqual(solver.settings.velocity_loop_max_iterations, 50)
 
     def test_build_solver_reads_explicit_numerics_settings(self) -> None:
