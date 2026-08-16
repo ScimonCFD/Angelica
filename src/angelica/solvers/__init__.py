@@ -1,4 +1,5 @@
 from .base import BaseSolver
+from .steady_black_oil import BlackOilSolverSettings, SteadyBlackOilSolver
 from .steady_compressible import CompressibleSolverSettings, SteadyCompressibleSolver
 from .steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
 from .steady_non_isothermal_incompressible import (
@@ -8,8 +9,10 @@ from .steady_non_isothermal_incompressible import (
 
 __all__ = [
     "BaseSolver",
+    "BlackOilSolverSettings",
     "CompressibleSolverSettings",
     "NonIsothermalSolverSettings",
+    "SteadyBlackOilSolver",
     "SteadyCompressibleSolver",
     "SteadyIsothermalIncompressibleSolver",
     "SteadyNonIsothermalIncompressibleSolver",
