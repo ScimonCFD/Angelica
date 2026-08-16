@@ -58,25 +58,34 @@ long feeder and collector pipes.
 
 | Link | Route | Flow (kg/s) |
 |---|---|---|
-| L1 | feeder 1→2 | 2.65 |
-| L2 | upper 2→3 | 1.53 |
-| L3 | lower 2→4 | 1.13 |
-| L4 | cross 3→4 | 0.40 |
-| L5 | upper 3→5 | 1.13 |
-| L6 | lower 4→5 | 1.53 |
-| L7 | collector 5→6 | 2.65 |
+| L1 | feeder 1→2 | 2.639 |
+| L2 | upper 2→3 | 1.518 |
+| L3 | lower 2→4 | 1.122 |
+| L4 | cross 3→4 | 0.395 |
+| L5 | upper 3→5 | 1.123 |
+| L6 | lower 4→5 | 1.517 |
+| L7 | collector 5→6 | 2.639 |
 
 | Node | Pressure | Temperature |
 |---|---|---|
 | Source (1) | 700.0 kPa | 40.0 °C |
-| Junction A (2) | 663.5 kPa | 31.8 °C |
-| Junction 3 | 616.5 kPa | 25.4 °C |
-| Junction 4 | 597.0 kPa | 24.1 °C |
-| Junction B (5) | 545.4 kPa | 20.6 °C |
-| Sink (6) | 500.0 kPa | 17.7 °C |
+| Junction A (2) | 663.4 kPa | 32.6 °C |
+| Junction 3 | 616.4 kPa | 26.6 °C |
+| Junction 4 | 596.9 kPa | 25.2 °C |
+| Junction B (5) | 545.3 kPa | 21.8 °C |
+| Sink (6) | 500.0 kPa | 18.9 °C |
+
+## Running
+
+```bash
+python tutorials/steady_compressible/03_looped_gas_pipeline_heat_loss/run.py
+```
+
+Or open `looped_gas_pipeline_heat_loss.gui.json` in Angelica via **File → Open**.
 
 ## Files
 
 | File | Purpose |
 |---|---|
+| `run.py` | Scripted API example |
 | `looped_gas_pipeline_heat_loss.gui.json` | Scene file — open in Angelica GUI |
