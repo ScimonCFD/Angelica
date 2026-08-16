@@ -5,7 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from openpyxl import load_workbook
+import pytest
+openpyxl = pytest.importorskip("openpyxl")
+load_workbook = openpyxl.load_workbook
 
 SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_ROOT) not in sys.path:
