@@ -1,14 +1,33 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Callable, Optional
+
+if TYPE_CHECKING:
+    from angelica.core.case import NetworkCase
+    from angelica.core.results import SolveResult
 
 from angelica.core.state import HeatSourceState, PipeState
 
 
 class BaseSolver(ABC):
     @abstractmethod
-    def solve(self, case):
+    def solve(
+        self,
+        case: NetworkCase,
+        progress_callback: Optional[Callable] = None,
+    ) -> SolveResult:
         raise NotImplementedError
+
+    @staticmethod
+    def _initial_temperature(case: NetworkCase) -> float:
+        for tb in case.thermal_inlets:
+            if tb.bc_type == "fixed_temperature":
+                return tb.temperature_c
+        for comp in case.components:
+            if hasattr(comp, "ambient_temperature_c"):
+                return comp.ambient_temperature_c
+        return 20.0
 
     @staticmethod
     def _update_component_temperatures(

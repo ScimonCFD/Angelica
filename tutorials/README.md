@@ -1,13 +1,8 @@
 # Tutorials
 
-Tutorials are grouped by solver family.
+Tutorials are grouped by solver family. Run them from the repository root.
 
-The tutorial suite currently includes two solver families:
-
-- `steady_isothermal_incompressible/`
-- `steady_non_isothermal_incompressible/`
-
-Run them from the repository root:
+## Isothermal incompressible
 
 - `python3 tutorials/steady_isothermal_incompressible/01_pipe_only/run.py`
 - `python3 tutorials/steady_isothermal_incompressible/02_fittings_no_elevation/run.py`
@@ -20,7 +15,17 @@ Run them from the repository root:
 - `python3 tutorials/steady_isothermal_incompressible/09_three_reservoir_junction/run.py`
 - `python3 tutorials/steady_isothermal_incompressible/10_laminar_poiseuille_benchmark/run.py`
 - `python3 tutorials/steady_isothermal_incompressible/11_crude_oil_pipeline/run.py`
+
+## Non-isothermal incompressible
+
 - `python3 tutorials/steady_non_isothermal_incompressible/01_single_pipe_heat_loss/run.py`
 - `python3 tutorials/steady_non_isothermal_incompressible/02_district_heating_branch/run.py`
 - `python3 tutorials/steady_non_isothermal_incompressible/03_looped_network/run.py`
 - `python3 tutorials/steady_non_isothermal_incompressible/04_inline_heater/run.py`
+- `python3 tutorials/steady_non_isothermal_incompressible/05_crude_oil_pipeline/run.py`
+
+## Compressible
+
+- `python3 tutorials/steady_compressible/01_natural_gas_pipeline/run.py`
+- `python3 tutorials/steady_compressible/02_flow_bc_cross_validation/run.py`
+- `python3 tutorials/steady_compressible/03_looped_gas_pipeline_heat_loss/run.py`

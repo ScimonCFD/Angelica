@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from angelica.closures.convection_scheme import ConvectionScheme, UpwindScheme
 from angelica.closures.pressure_drop import PressureDropCorrelation
+from angelica.core.case import NetworkCase
 from angelica.core.network import build_network_state
 from angelica.core.results import SolveResult
 from angelica.core.settings import SolverSettings
@@ -63,7 +64,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             turbulent_pipe_correlation=turbulent_pipe_correlation,
         )
 
-    def solve(self, case, progress_callback=None) -> SolveResult:
+    def solve(self, case: NetworkCase, progress_callback=None) -> SolveResult:
         from dataclasses import replace as _replace
 
         from angelica.numerics.energy import solve_energy_system
@@ -86,7 +87,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
 
         # ── initialise temperature field ───────────────────────────────────
         # Use the temperature of the inlet with the most prescribed T as seed.
-        T_init = self._initial_temperature(case, network_state)
+        T_init = self._initial_temperature(case)
         fluid_model = case.fluid_model
         if isinstance(fluid_model, ThermalFluid) and fluid_model.reference_temperature_c != T_init:
             fluid_model = _replace(fluid_model, reference_temperature_c=T_init)
@@ -226,17 +227,6 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             outer_turbulent_final_metrics=tuple(outer_turb_final),
             outer_iteration_boundaries=tuple(outer_boundaries),
         )
-
-    @staticmethod
-    def _initial_temperature(case, _network_state) -> float:
-        for tb in case.thermal_inlets:
-            if tb.bc_type == "fixed_temperature":
-                return tb.temperature_c
-        # fallback: ambient of first pipe, or 20 °C
-        for comp in case.components:
-            if hasattr(comp, "ambient_temperature_c"):
-                return comp.ambient_temperature_c
-        return 20.0
 
     @staticmethod
     def _set_node_temperatures(network_state, node_temperatures: dict[int, float]) -> None:

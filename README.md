@@ -10,7 +10,7 @@
 
 </div>
 
-Angelica solves **steady, incompressible pipe networks** — computing nodal pressures, flow rates, and (in non-isothermal mode) temperatures for systems with pipes, fittings, pumps, and heat sources. A graphical interface means there is nothing to script: define sources and sinks, connect them through junctions, assign components, and run.
+Angelica solves **steady pipe networks** — computing nodal pressures, flow rates, and temperatures for systems with pipes, fittings, pumps, and heat sources. Three solver modes are live: isothermal incompressible, non-isothermal incompressible, and compressible ideal gas. A graphical interface means there is nothing to script: define sources and sinks, connect them through junctions, assign components, and run.
 
 ## Features
 
@@ -22,8 +22,9 @@ Angelica solves **steady, incompressible pipe networks** — computing nodal pre
 | **Heat sources** | Inline heaters and coolers with fixed power (W) and optional pressure drop. Non-isothermal mode only. |
 | **Boundaries** | Pressure and mass-flow boundaries on any node. Mixed types on the same network. |
 | **Non-isothermal** | Outer temperature loop with NTU-based pipe heat loss, source-term linearisation (Moukalled), and temperature-dependent fluid properties. |
+| **Compressible** | Ideal-gas and Peng-Robinson EOS. Outer density loop with average-pressure density. Validated against P²-law and NTU analytical solutions. |
 | **GUI** | Graphical network editor with convergence monitor and spreadsheet report export. |
-| **Validation** | Results benchmarked against published EPANET reference solutions and NTU analytical solutions. |
+| **Validation** | Results benchmarked against published EPANET reference solutions and NTU/P²-law analytical solutions. |
 
 ## Installation
 
@@ -71,8 +72,8 @@ angelica-gui
 
 ## Tutorials and Benchmarks
 
-Fifteen GUI/tutorial cases are included across two solver folders, plus
-additional automated non-isothermal validation benchmarks in the test suite.
+Twenty tutorial and benchmark cases are included across three solver folders,
+plus additional automated validation benchmarks in the test suite.
 
 **Isothermal** — [`tutorials/steady_isothermal_incompressible/`](tutorials/steady_isothermal_incompressible/)
 
@@ -98,23 +99,35 @@ additional automated non-isothermal validation benchmarks in the test suite.
 | 13 | Branched district-heating network with two thermal loads | Tutorial |
 | 14 | Looped network with ambient heat loss | Tutorial |
 | 15 | Inline electric heater — energy balance verification | Benchmark (ΔT = Q/ṁcₚ) |
+| 16 | Crude oil gathering pipeline — 32°API, temperature-dependent viscosity | Demo |
 
-Additional non-isothermal validation cases in the automated test suite:
+**Compressible** — [`tutorials/steady_compressible/`](tutorials/steady_compressible/)
+
+| # | Case | Type |
+|---|------|------|
+| 17 | Natural gas (CH₄) branched gathering network | Tutorial |
+| 18 | Flow BC cross-validation — mixed pressure/flow boundaries | Benchmark |
+| 19 | Looped gas pipeline with heat loss — 7-pipe methane network | Tutorial |
+
+Additional validation cases in the automated test suite:
 
 - adiabatic junction mixing with exact energy balance
 - fixed-flow inline heater with exact `ΔT = Q / (ṁ cₚ)`
 - symmetric adiabatic loop with exact 50/50 flow split
 - symmetric heat-loss loop with NTU-based exact branch temperature
 - **Cengel & Ghajar Example 8-3** (oil through icy lake, McGraw-Hill): T_out = 19.74 °C ± 0.05 K
+- **P²-law mass flow** — compressible single pipe vs. analytical P₁²−P₂² formula
+- **Series intermediate pressure** — two isothermal gas pipes, P_mid = √((P₁²+P₂²)/2)
+- **NTU heat loss** — compressible single pipe vs. analytical NTU exit temperature
 
 ## Roadmap
 
 Two solver modes are live; the platform is designed to grow:
 
 ```
-Steady isothermal ✓  →  Non-isothermal ✓  →  Compressible  →  Multiphase  →  Multicomponent
-                                                                                    ↑
-                                                                    Long-term: Transient
+Steady isothermal ✓  →  Non-isothermal ✓  →  Compressible ✓  →  Multiphase  →  Multicomponent
+                                                                                      ↑
+                                                                      Long-term: Transient
 ```
 
 ## Repository Layout

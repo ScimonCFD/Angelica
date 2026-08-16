@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from angelica.closures.convection_scheme import ConvectionScheme, HybridScheme
 from angelica.closures.pressure_drop import PressureDropCorrelation
+from angelica.core.case import NetworkCase
 from angelica.core.network import build_network_state
 from angelica.core.state import PipeState, HeatSourceState
 from angelica.core.results import ComponentFlowResult, SolveResult
@@ -82,7 +83,7 @@ class SteadyCompressibleSolver(BaseSolver):
         self.settings = self._hydraulic_solver.settings
         self.turbulent_pipe_correlation = self._hydraulic_solver.turbulent_pipe_correlation
 
-    def solve(self, case, progress_callback=None) -> SolveResult:
+    def solve(self, case: NetworkCase, progress_callback=None) -> SolveResult:
         from angelica.numerics.energy import solve_energy_system
 
         network_state = build_network_state(case)
@@ -197,12 +198,3 @@ class SteadyCompressibleSolver(BaseSolver):
             outer_iteration_boundaries=tuple(outer_boundaries),
         )
 
-    @staticmethod
-    def _initial_temperature(case) -> float:
-        for tb in case.thermal_inlets:
-            if tb.bc_type == "fixed_temperature":
-                return tb.temperature_c
-        for comp in case.components:
-            if hasattr(comp, "ambient_temperature_c"):
-                return comp.ambient_temperature_c
-        return 20.0

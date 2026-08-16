@@ -59,7 +59,13 @@ def export_solve_result_csv(result, output_path: str) -> None:
 
 
 def export_solve_result_workbook(result, output_path: str) -> None:
-    from openpyxl import Workbook
+    try:
+        from openpyxl import Workbook
+    except ImportError as _err:
+        raise ImportError(
+            "Excel export requires the 'openpyxl' package. "
+            "Install it with: pip install 'angelica[excel]'"
+        ) from _err
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)

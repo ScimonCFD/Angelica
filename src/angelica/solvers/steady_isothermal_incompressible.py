@@ -8,6 +8,7 @@ from angelica.closures import (
     PumpCurveModel,
 )
 from angelica.closures.pressure_drop import PressureDropCorrelation
+from angelica.core.case import NetworkCase
 from angelica.core.components import Fitting, Pipe, Pump
 from angelica.core.network import build_network_state
 from angelica.core.results import ComponentFlowResult, IterationMetrics, SolveResult
@@ -34,7 +35,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         self.pump_correlation = pump_correlation or PumpCurveModel()
         self.heat_source_correlation = heat_source_correlation or HeatSourceModel()
 
-    def solve(self, case, progress_callback=None) -> SolveResult:
+    def solve(self, case: NetworkCase, progress_callback=None) -> SolveResult:
         network_state = build_network_state(case)
         self._initialise_pressure_field(network_state, case)
 
