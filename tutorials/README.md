@@ -29,3 +29,7 @@ Tutorials are grouped by solver family. Run them from the repository root.
 - `python3 tutorials/steady_compressible/01_natural_gas_pipeline/run.py`
 - `python3 tutorials/steady_compressible/02_flow_bc_cross_validation/run.py`
 - `python3 tutorials/steady_compressible/03_looped_gas_pipeline_heat_loss/run.py`
+
+## Black-oil three-phase
+
+- `python3 tutorials/steady_black_oil/01_three_phase_pipeline/run.py`
