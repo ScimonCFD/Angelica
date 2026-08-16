@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.4.0] — 2026-08-16
+
+### New: Black-oil three-phase solver
+
+- `BlackOilFluid` — homogeneous three-phase fluid model (stock-tank oil +
+  dissolved/free gas + water) implementing the `FluidModel` interface.
+  Works with all existing network components without changes to the core
+  hydraulic or energy solvers.
+- `SteadyBlackOilSolver` — steady-state solver with outer PVT iteration loop.
+  Converges when the mixture-density field and temperature field both stop
+  changing between iterations.
+- PVT correlations:
+  - Bubble point, Rs, Bo: Standing (1947)
+  - Gas compressibility z: Hall-Yarborough (1974) + Sutton (1985) pseudo-crits
+  - Gas viscosity: Lee, Gonzalez & Eakin (1966)
+  - Live-oil viscosity: Beggs & Robinson (1975)
+  - Water FVF: McCain (1990), simplified
+- 31 new unit tests covering all correlations and phase-holdup logic.
+- Tutorial `steady_black_oil/01_three_phase_pipeline`: 32°API crude, GOR 25 m³/m³,
+  WOR 0.5, single 10 km pipe — demonstrates undersaturated inlet transitioning
+  to two-phase at the outlet when pressure drops below the bubble point.
+
 ## [1.3.31] — 2026-08-16
 
 ### Solver improvements
