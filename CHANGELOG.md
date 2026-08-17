@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.1] — 2026-08-17
+
+### Fixes
+- Fix compressible solver: inlet temperature boundary condition was ignored during
+  solving. The solver seeded all nodes with the inlet temperature but never marked
+  the inlet node as a Dirichlet boundary (`is_thermal_inlet = True`), so the energy
+  solver was free to change it every iteration. The prescribed temperature is now
+  locked correctly, matching the behaviour of the non-isothermal solver.
+
 ## [1.4.0] — 2026-08-16
 
 ### New: Black-oil three-phase solver
