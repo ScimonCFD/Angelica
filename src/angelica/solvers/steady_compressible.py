@@ -86,6 +86,7 @@ class SteadyCompressibleSolver(BaseSolver):
     def solve(self, case: NetworkCase, progress_callback=None) -> SolveResult:
         from angelica.numerics.energy import solve_energy_system
 
+        self._require_fixed_temperature(case)
         network_state = build_network_state(case)
         settings = self.compressible_settings
         fluid_model = case.fluid_model

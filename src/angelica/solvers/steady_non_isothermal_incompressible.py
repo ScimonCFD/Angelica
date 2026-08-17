@@ -70,6 +70,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         from angelica.numerics.energy import solve_energy_system
         from angelica.properties.thermal_fluid import ThermalFluid
 
+        self._require_fixed_temperature(case)
         network_state = build_network_state(case)
 
         # ── initialise thermal boundary conditions on nodes ────────────────

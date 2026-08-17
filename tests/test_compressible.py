@@ -68,6 +68,7 @@ def _single_pipe_case(p_in_pa, p_out_pa, diameter=0.05, length=100.0):
             ),
         ),
         node_ids=(1, 2),
+        thermal_inlets=(ThermalBoundary(node_id=1, temperature_c=20.0, bc_type="fixed_temperature"),),
     )
 
 
@@ -83,6 +84,7 @@ def _two_pipe_case(p_in_pa, p_out_pa):
             Pipe(start_node=2, end_node=3, diameter_m=0.05, length_m=50.0, absolute_roughness_m=0.000045),
         ),
         node_ids=(1, 2, 3),
+        thermal_inlets=(ThermalBoundary(node_id=1, temperature_c=20.0, bc_type="fixed_temperature"),),
     )
 
 

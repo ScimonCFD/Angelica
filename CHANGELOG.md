@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.2] — 2026-08-17
+
+### Fixes
+- All three thermal solvers (non-isothermal, compressible, black-oil) now raise a
+  clear `ValueError` at the start of `solve()` if no `fixed_temperature` thermal
+  boundary is provided. Without a Dirichlet node the energy system is singular
+  (pure Neumann problem) and previously produced silently incorrect temperatures.
+
 ## [1.4.1] — 2026-08-17
 
 ### Fixes

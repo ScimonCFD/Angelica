@@ -20,6 +20,21 @@ class BaseSolver(ABC):
         raise NotImplementedError
 
     @staticmethod
+    def _require_fixed_temperature(case: NetworkCase) -> None:
+        """Raise if no fixed-temperature thermal boundary is defined.
+
+        The energy system is singular without at least one Dirichlet node.
+        """
+        for tb in case.thermal_inlets:
+            if tb.bc_type == "fixed_temperature":
+                return
+        raise ValueError(
+            "The thermal solver requires at least one ThermalBoundary with "
+            "bc_type='fixed_temperature'. Without it the energy system has no "
+            "unique solution (pure Neumann problem)."
+        )
+
+    @staticmethod
     def _initial_temperature(case: NetworkCase) -> float:
         for tb in case.thermal_inlets:
             if tb.bc_type == "fixed_temperature":
