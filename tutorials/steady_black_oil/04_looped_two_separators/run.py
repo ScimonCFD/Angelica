@@ -1,31 +1,32 @@
 """
-Tutorial 04 — Black-Oil Looped Network: Two Flow Delivery Points
-================================================================
-A diamond loop (two parallel paths) with a branch tapped off one of the
-junction nodes.  Two delivery points are served simultaneously: the main
-separator at the end of the diamond loop, and a satellite separator on
-the branch.  The solver distributes total flow between the two parallel
-paths of the loop while satisfying both delivery demands.
+Tutorial 04 — Black-Oil Looped Network with Two Separators
+===========================================================
+Trunk-fed diamond loop with a **lateral branch** to a satellite separator.
+The main loop converges at Node 5 (T-merge), which leads via a discharge
+trunk to the primary separator (Node 6, 80 kg/s).  A lateral branch from
+Node 4 (lower loop junction) delivers crude to a satellite separator
+(Node 7, 20 kg/s).  Both outlets use flow BCs — the solver finds both
+outlet pressures.
 
 Geometry
 --------
-                     PipeA (5 km, D=0.20 m)        PipeC (5 km, D=0.18 m)
-      [Node 1] ─────────────────────────> [Node 2] ─────────────────────────> [Node 4]
-      P = 8 MPa                                                               ṁ = 80 kg/s
-      T = 60 °C                                                               Separator A
-          │                                 ↑
-          │  PipeB (5 km, D=0.18 m)     PipeD (5 km, D=0.16 m)
-          └───────────────────────> [Node 3] ─────────────────────────> Node 4 (loop)
-                                       │
-                                       │  PipeE (2 km, D=0.14 m)
-                                       └──────────────────────────> [Node 5]
-                                                                    ṁ = 20 kg/s
-                                                                    Separator B
+                   PipeB  5 km, D=0.20 m        PipeC  5 km, D=0.18 m
+             ┌──────────────────── Node 3 ──────────────────────┐
+             │                                                   │
+  Node 1 ──PipeA── Node 2                                    Node 5 ──PipeF── Node 6
+  P=8 MPa   2 km   T-split                                   T-merge   2 km   ṁ=80 kg/s
+  T=60 °C   0.22m  │                                              │    0.22m
+             │     └──── Node 4 ──────────────────────────────────┘
+             │     PipeD  5 km  │  PipeE  5 km, D=0.16 m
+             │          0.18m   │
+             │                PipeG 2 km, D=0.14 m
+             │                  │
+             │               Node 7
+             │               ṁ=20 kg/s (satellite separator)
 
-Loop : 1 → 2 → 4 and 1 → 3 → 4  (diamond, two parallel paths)
-Branch: Node 3 → Node 5           (flow tap to Separator B)
-
-Total delivery: 80 + 20 = 100 kg/s
+  Node 1 : P = 8 MPa, T = 60 °C  (pressure inlet)
+  Node 6 : ṁ = 80 kg/s            (primary separator, flow BC)
+  Node 7 : ṁ = 20 kg/s            (satellite separator, flow BC)
 """
 import sys
 from pathlib import Path
@@ -34,7 +35,7 @@ SRC_ROOT = Path(__file__).resolve().parents[4] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from angelica.core.case import FlowBoundary, NetworkCase, PressureBoundary, ThermalBoundary
+from angelica.core.case import NetworkCase, PressureBoundary, FlowBoundary, ThermalBoundary
 from angelica.core.components import Pipe
 from angelica.properties.black_oil import BlackOilFluid, bubble_point_pa
 from angelica.solvers import SteadyBlackOilSolver
@@ -61,36 +62,37 @@ print()
 
 # ── Network ───────────────────────────────────────────────────────────────────
 pipes = [
-    # Diamond loop
-    Pipe(component_id="pipe_A_1_2", start_node=1, end_node=2,
+    Pipe(component_id="pipe_A_trunk_in",   start_node=1, end_node=2,
+         diameter_m=0.22, length_m=2_000.0, absolute_roughness_m=46e-6,
+         heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
+    Pipe(component_id="pipe_B_upper_L",    start_node=2, end_node=3,
          diameter_m=0.20, length_m=5_000.0, absolute_roughness_m=46e-6,
          heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
-    Pipe(component_id="pipe_B_1_3", start_node=1, end_node=3,
+    Pipe(component_id="pipe_C_upper_R",    start_node=3, end_node=5,
          diameter_m=0.18, length_m=5_000.0, absolute_roughness_m=46e-6,
          heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
-    Pipe(component_id="pipe_C_2_4", start_node=2, end_node=4,
+    Pipe(component_id="pipe_D_lower_L",    start_node=2, end_node=4,
          diameter_m=0.18, length_m=5_000.0, absolute_roughness_m=46e-6,
          heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
-    Pipe(component_id="pipe_D_3_4", start_node=3, end_node=4,
+    Pipe(component_id="pipe_E_lower_R",    start_node=4, end_node=5,
          diameter_m=0.16, length_m=5_000.0, absolute_roughness_m=46e-6,
          heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
-    # Branch to satellite separator
-    Pipe(component_id="pipe_E_3_5", start_node=3, end_node=5,
+    Pipe(component_id="pipe_F_trunk_out",  start_node=5, end_node=6,
+         diameter_m=0.22, length_m=2_000.0, absolute_roughness_m=46e-6,
+         heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
+    Pipe(component_id="pipe_G_satellite",  start_node=4, end_node=7,
          diameter_m=0.14, length_m=2_000.0, absolute_roughness_m=46e-6,
          heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
 ]
 
-DELIVERY_4 = 80.0   # kg/s at Node 4 (main separator)
-DELIVERY_5 = 20.0   # kg/s at Node 5 (satellite separator)
-
 case = NetworkCase(
-    name             = "Black-Oil Looped Network — Two Flow Delivery Points",
+    name             = "Black-Oil Loop — Two Separators",
     fluid_model      = fluid,
     pressure_inlets  = (PressureBoundary(node_id=1, pressure_pa=8e6),),
     pressure_outlets = (),
     flow_outlets     = (
-        FlowBoundary(node_id=4, mass_flow_kg_per_s=DELIVERY_4),
-        FlowBoundary(node_id=5, mass_flow_kg_per_s=DELIVERY_5),
+        FlowBoundary(node_id=6, mass_flow_kg_per_s=80.0),
+        FlowBoundary(node_id=7, mass_flow_kg_per_s=20.0),
     ),
     components       = tuple(pipes),
     thermal_inlets   = (
@@ -118,22 +120,24 @@ for node_id in sorted(result.node_pressures_pa):
 print()
 
 # ── Per-pipe flows ────────────────────────────────────────────────────────────
-print(f"{'Pipe':30s}  {'ṁ (kg/s)':>10}  {'Q_mix (m³/h)':>13}")
+print(f"{'Pipe':35s}  {'ṁ (kg/s)':>10}  {'Q_mix (m³/h)':>13}")
 for cf in result.component_flows:
-    print(f"{cf.label:30s}  {cf.mass_flow_kg_per_s:>10.3f}  {cf.volumetric_flow_m3_per_h:>13.2f}")
+    print(f"{cf.label:35s}  {cf.mass_flow_kg_per_s:>10.3f}  {cf.volumetric_flow_m3_per_h:>13.2f}")
 print()
 
-# ── Loop split summary ────────────────────────────────────────────────────────
+# ── Loop split ────────────────────────────────────────────────────────────────
 flows = {cf.label.split(":")[-1].strip(): cf.mass_flow_kg_per_s
          for cf in result.component_flows}
-upper = flows.get("pipe_A_1_2", 0.0)
-lower = flows.get("pipe_B_1_3", 0.0)
-branch = flows.get("pipe_E_3_5", 0.0)
-total = upper + lower
-print(f"Upper path (A→C):  {upper:.3f} kg/s  ({100*upper/total:.1f} % of total)")
-print(f"Lower path (B→D/E): {lower:.3f} kg/s  ({100*lower/total:.1f} % of total)")
-print(f"  Branch to Sep B (E): {branch:.3f} kg/s")
-print(f"Total from inlet:  {total:.3f} kg/s")
+upper  = flows.get("pipe_B_upper_L", 0.0)
+lower  = flows.get("pipe_D_lower_L", 0.0)
+sat    = flows.get("pipe_G_satellite", 0.0)
+total  = upper + lower
+P_main = result.node_pressures_pa[6]
+P_sat  = result.node_pressures_pa[7]
+print(f"Primary separator  (Node 6) P = {P_main/1e6:.3f} MPa")
+print(f"Satellite separator(Node 7) P = {P_sat/1e6:.3f} MPa")
 print()
-print(f"Separator A (Node 4): P = {result.node_pressures_pa[4]/1e6:.3f} MPa")
-print(f"Separator B (Node 5): P = {result.node_pressures_pa[5]/1e6:.3f} MPa")
+print(f"Upper loop (B+C): {upper:.3f} kg/s  ({100*upper/total:.1f} % of loop flow)")
+print(f"Lower loop (D+E): {lower:.3f} kg/s  ({100*lower/total:.1f} % of loop flow)")
+print(f"Satellite branch : {sat:.3f} kg/s  (drawn from Node 4)")
+print(f"Total inlet:       {total:.3f} kg/s")

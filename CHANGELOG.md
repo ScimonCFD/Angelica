@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.5.2] — 2026-08-17
+
+### Tutorials
+- Redesign black-oil tutorials 02, 03, and 04 with proper trunk pipes.
+  Previously the source node connected directly to the loop T-junction and
+  the sink received directly from the T-merge, making the topology look like
+  a bare split rather than a realistic gathering network.  All three tutorials
+  now include an inlet header (2 km, D=0.22 m) between the source and the
+  bifurcation T-junction, and a discharge header (2 km, D=0.22 m) between
+  the convergence T-junction and the outlet.  Networks grow from 4 to 6 nodes
+  (tutorials 02/03) and from 5 to 7 nodes (tutorial 04).
+- Tutorial 04 lateral branch now taps from Node 4 (the lower loop junction),
+  which sits between the two trunk pipes, giving the satellite separator a
+  physically meaningful upstream pressure (6.10 MPa) above the bubble point.
+
 ## [1.5.1] — 2026-08-17
 
 ### Tutorials

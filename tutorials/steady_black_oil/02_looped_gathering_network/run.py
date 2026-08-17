@@ -1,36 +1,25 @@
 """
-Tutorial: Black-Oil Looped Gathering Network
-=============================================
-Two parallel flow paths connect a high-pressure inlet to a low-pressure
-separator, forming a loop.  The solver distributes flow between the paths
-according to their hydraulic resistances, and the PVT state differs in
-each branch because the intermediate pressures are different.
+Tutorial 02 — Black-Oil Looped Gathering Network
+=================================================
+A trunk-fed diamond loop.  A single header feeds a T-split junction;
+two parallel loop branches reconnect at a T-merge junction; a single
+discharge header leads to the outlet separator.
 
 Geometry
 --------
-                PipeA (5 km, D=0.20 m)
-  [Node 1] ─────────────────────────────> [Node 2] ─┐
-      │                                              │
-      │  PipeC (8 km, D=0.15 m)                  PipeB
-      └────────────────────────> [Node 3]          (5 km,
-                                    │             D=0.18 m)
-                                 PipeD              │
-                              (3 km, D=0.20 m)      │
-                                    └───────────────> [Node 4]
-                                                   Separator
+                        PipeB  5 km, D=0.20 m             PipeC  5 km, D=0.18 m
+                  ┌───────────────────────── Node 3 ─────────────────────────┐
+                  │                                                           │
+  Node 1 ──PipeA─ Node 2                                                 Node 5 ──PipeF── Node 6
+  P=8 MPa  2 km   T-split                                                T-merge   2 km   P=2 MPa
+  T=60 °C  0.22m  │                                                           │    0.22m
+                  └───────────────────────── Node 4 ─────────────────────────┘
+                        PipeD  8 km, D=0.15 m             PipeE  3 km, D=0.20 m
 
-  Node 1 : P = 8 MPa, T = 60 °C  (inlet)
-  Node 4 : P = 2 MPa              (outlet)
-  Nodes 2, 3 : free junctions
-
-Upper path  1→2→4 : 10 km total, wider diameters
-Lower path  1→3→4 : 11 km total, narrower middle section
-
-Fluid
------
-  32 °API crude oil, γ_g = 0.65, GOR = 25 m³/m³, WOR = 0.5 m³/m³
-  Bubble point at 60 °C ≈ 5.6 MPa.  The intermediate node pressures
-  determine whether each branch is undersaturated or two-phase.
+  Nodes 2, 5 : T-junctions (bifurcation / convergence)
+  Nodes 3, 4 : upper and lower loop junctions
+  Node 1 : P = 8 MPa, T = 60 °C (pressure inlet)
+  Node 6 : P = 2 MPa             (pressure outlet)
 """
 import sys
 from pathlib import Path
@@ -66,20 +55,23 @@ print()
 
 # ── Network ───────────────────────────────────────────────────────────────────
 pipes = [
-    Pipe(component_id="pipe_A_1_2", start_node=1, end_node=2,
+    Pipe(component_id="pipe_A_trunk_in",   start_node=1, end_node=2,
+         diameter_m=0.22, length_m=2_000.0, absolute_roughness_m=46e-6,
+         heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
+    Pipe(component_id="pipe_B_upper_L",    start_node=2, end_node=3,
          diameter_m=0.20, length_m=5_000.0, absolute_roughness_m=46e-6,
          heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
-
-    Pipe(component_id="pipe_B_2_4", start_node=2, end_node=4,
+    Pipe(component_id="pipe_C_upper_R",    start_node=3, end_node=5,
          diameter_m=0.18, length_m=5_000.0, absolute_roughness_m=46e-6,
          heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
-
-    Pipe(component_id="pipe_C_1_3", start_node=1, end_node=3,
+    Pipe(component_id="pipe_D_lower_L",    start_node=2, end_node=4,
          diameter_m=0.15, length_m=8_000.0, absolute_roughness_m=46e-6,
          heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
-
-    Pipe(component_id="pipe_D_3_4", start_node=3, end_node=4,
+    Pipe(component_id="pipe_E_lower_R",    start_node=4, end_node=5,
          diameter_m=0.20, length_m=3_000.0, absolute_roughness_m=46e-6,
+         heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
+    Pipe(component_id="pipe_F_trunk_out",  start_node=5, end_node=6,
+         diameter_m=0.22, length_m=2_000.0, absolute_roughness_m=46e-6,
          heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=15.0),
 ]
 
@@ -87,7 +79,7 @@ case = NetworkCase(
     name             = "Black-Oil Looped Gathering Network",
     fluid_model      = fluid,
     pressure_inlets  = (PressureBoundary(node_id=1, pressure_pa=8e6),),
-    pressure_outlets = (PressureBoundary(node_id=4, pressure_pa=2e6),),
+    pressure_outlets = (PressureBoundary(node_id=6, pressure_pa=2e6),),
     components       = tuple(pipes),
     thermal_inlets   = (
         ThermalBoundary(node_id=1, temperature_c=T_INLET_C, bc_type="fixed_temperature"),
@@ -114,39 +106,34 @@ for node_id in sorted(result.node_pressures_pa):
 print()
 
 # ── Per-pipe flows ────────────────────────────────────────────────────────────
-print(f"{'Pipe':30s}  {'ṁ (kg/s)':>10}  {'Q_mix (m³/h)':>13}")
-upper_mdot = lower_mdot = 0.0
+print(f"{'Pipe':35s}  {'ṁ (kg/s)':>10}  {'Q_mix (m³/h)':>13}")
 for cf in result.component_flows:
-    print(f"{cf.label:30s}  {cf.mass_flow_kg_per_s:>10.3f}  {cf.volumetric_flow_m3_per_h:>13.2f}")
-    if "A" in cf.label or "B" in cf.label:
-        upper_mdot = max(upper_mdot, cf.mass_flow_kg_per_s)
-    else:
-        lower_mdot = max(lower_mdot, cf.mass_flow_kg_per_s)
-
-total_mdot = upper_mdot + lower_mdot
+    print(f"{cf.label:35s}  {cf.mass_flow_kg_per_s:>10.3f}  {cf.volumetric_flow_m3_per_h:>13.2f}")
 print()
-print(f"Upper path (A+B): {upper_mdot:.3f} kg/s  ({100*upper_mdot/total_mdot:.1f} %)")
-print(f"Lower path (C+D): {lower_mdot:.3f} kg/s  ({100*lower_mdot/total_mdot:.1f} %)")
-print(f"Total:            {total_mdot:.3f} kg/s")
 
-# ── Surface rates (total) ─────────────────────────────────────────────────────
+# ── Loop split ────────────────────────────────────────────────────────────────
+flows = {cf.label.split(":")[-1].strip(): cf.mass_flow_kg_per_s
+         for cf in result.component_flows}
+upper = flows.get("pipe_B_upper_L", 0.0)
+lower = flows.get("pipe_D_lower_L", 0.0)
+total = upper + lower
+print(f"Upper loop (B+C): {upper:.3f} kg/s  ({100*upper/total:.1f} %)")
+print(f"Lower loop (D+E): {lower:.3f} kg/s  ({100*lower/total:.1f} %)")
+print(f"Total throughput: {total:.3f} kg/s")
+
+# ── Surface rates ─────────────────────────────────────────────────────────────
 from angelica.properties.dead_oil import dead_oil_density_kg_per_m3
 
 rho_oil_sc = dead_oil_density_kg_per_m3(API)
 rho_gas_sc = GAS_GR * 1.225
 rho_wtr_sc = 1_025.0
-
-denom  = rho_oil_sc + GOR_SC * rho_gas_sc + WOR_SC * rho_wtr_sc
-f_oil  = rho_oil_sc          / denom
-f_gas  = GOR_SC * rho_gas_sc / denom
-f_wtr  = WOR_SC * rho_wtr_sc / denom
-
-q_oil_sc = total_mdot * f_oil / rho_oil_sc * 3600
-q_gas_sc = total_mdot * f_gas / rho_gas_sc * 3600
-q_wtr_sc = total_mdot * f_wtr / rho_wtr_sc * 3600
+denom      = rho_oil_sc + GOR_SC * rho_gas_sc + WOR_SC * rho_wtr_sc
+f_oil      = rho_oil_sc          / denom
+f_gas      = GOR_SC * rho_gas_sc / denom
+f_wtr      = WOR_SC * rho_wtr_sc / denom
 
 print()
 print("Surface rates at separator (standard conditions):")
-print(f"  Oil:    {q_oil_sc:.1f} m³/h")
-print(f"  Gas:    {q_gas_sc:.0f} m³/h")
-print(f"  Water:  {q_wtr_sc:.1f} m³/h")
+print(f"  Oil:   {total * f_oil / rho_oil_sc * 3600:.1f} m³/h")
+print(f"  Gas:   {total * f_gas / rho_gas_sc * 3600:.0f} m³/h")
+print(f"  Water: {total * f_wtr / rho_wtr_sc * 3600:.1f} m³/h")
