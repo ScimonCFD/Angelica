@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.5.0] — 2026-08-17
+
+### New: Black-oil GUI integration
+
+- Physics selector: new "Black-oil (3-phase)" option alongside Compressible
+  and Incompressible modes.  Selecting it disables the energy radio buttons
+  (black-oil always solves the energy equation).
+- Material dialog: new "Black-oil" definition mode with four fields —
+  API gravity, gas gravity, GOR sc (m³/m³), and WOR sc (m³/m³).
+  No density or viscosity input required; PVT correlations compute them
+  from first principles at run time.
+- Node properties panel: thermal boundary condition section is now shown
+  for black-oil cases (same as non-isothermal / compressible) — at least
+  one "Fixed temperature" node is required.
+- Link properties panel: heat-transfer fields (U and T_amb) and the
+  "Heat Source" component button are now available in black-oil mode.
+- Two GUI tutorial files added:
+  - `steady_black_oil/01_three_phase_pipeline/three_phase_pipeline.gui.json`
+    — 10 km, 0.20 m pipe; 8 MPa inlet (undersaturated) → 2 MPa outlet
+    (two-phase below bubble point ~5.63 MPa).
+  - `steady_black_oil/02_looped_gathering_network/looped_gathering_network.gui.json`
+    — 4-node, 4-pipe loop; two parallel paths from 8 MPa to 2 MPa;
+    demonstrates split-flow with phase-state differences between paths.
+
 ## [1.4.2] — 2026-08-17
 
 ### Fixes

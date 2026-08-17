@@ -10,13 +10,16 @@ from angelica.core.results import ComponentFlowResult, IterationMetrics
 from angelica.core.settings import SolverSettings
 from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
 from angelica.closures.convection_scheme import HybridScheme, PowerLawScheme, UpwindScheme
+from angelica.properties.black_oil import BlackOilFluid
 from angelica.properties.compressible_fluid import CompressibleFluid
 from angelica.properties.eos import IdealGasEOS, PengRobinsonEOS
 from angelica.properties.single_component import SingleComponentFluid
 from angelica.properties.thermal_fluid import ThermalFluid
 from angelica.solvers import (
+    BlackOilSolverSettings,
     CompressibleSolverSettings,
     NonIsothermalSolverSettings,
+    SteadyBlackOilSolver,
     SteadyCompressibleSolver,
     SteadyIsothermalIncompressibleSolver,
     SteadyNonIsothermalIncompressibleSolver,
@@ -232,8 +235,16 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
 
     is_compressible = scene.physics_mode == "compressible"
     is_non_isothermal = scene.physics_mode == "non_isothermal"
+    is_black_oil = scene.physics_mode == "black_oil"
 
-    if is_compressible:
+    if is_black_oil:
+        for _field in ("api_gravity", "gas_gravity", "gor_sc_m3_per_m3", "wor_sc_m3_per_m3"):
+            if not scene.material.get(_field, "").strip():
+                raise ValueError(
+                    f"Black-oil mode requires '{_field}' in the material. "
+                    "Open Material → Define Material."
+                )
+    elif is_compressible:
         if not scene.material.get("molecular_weight_kg_per_mol", "").strip():
             raise ValueError(
                 "Compressible mode requires Molecular Weight (M) in the material. "
@@ -247,7 +258,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
         if not scene.material.get("viscosity_pa_s", "").strip():
             raise ValueError("The material is missing viscosity_pa_s.")
 
-    if not (is_non_isothermal or is_compressible):
+    if not (is_non_isothermal or is_compressible or is_black_oil):
         heat_source_link_ids = [
             link.link_id
             for link in scene.links
@@ -357,10 +368,10 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 height_change = _optional_float(component, "height_change_m", default=0.0)
                 heat_transfer = _optional_float(
                     component, "heat_transfer_coefficient_w_per_m2k", default=0.0
-                ) if (is_non_isothermal or is_compressible) else 0.0
+                ) if (is_non_isothermal or is_compressible or is_black_oil) else 0.0
                 ambient_temp = _optional_float(
                     component, "ambient_temperature_c", default=20.0
-                ) if (is_non_isothermal or is_compressible) else 20.0
+                ) if (is_non_isothermal or is_compressible or is_black_oil) else 20.0
                 num_segs = max(1, int(_optional_float(component, "num_segments", default=1.0)))
                 seg_length = length / num_segs
                 seg_height = height_change / num_segs
@@ -425,7 +436,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 mdot_rated = _optional_float(component, "rated_mass_flow_kg_per_s", default=1.0)
                 n_segs = max(2, int(_optional_float(
                     component, "n_thermal_segments", default=10.0
-                ))) if (is_non_isothermal or is_compressible) else 2
+                ))) if (is_non_isothermal or is_compressible or is_black_oil) else 2
                 components.append(
                     HeatSource(
                         start_node=current_start,
@@ -505,6 +516,28 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 "temperature. Open a source or sink node and set its thermal boundary "
                 "condition to 'Fixed temperature'."
             )
+    elif is_black_oil:
+        fluid_model = BlackOilFluid(
+            api_gravity=float(scene.material["api_gravity"]),
+            gas_gravity=float(scene.material["gas_gravity"]),
+            gor_sc_m3_per_m3=float(scene.material["gor_sc_m3_per_m3"]),
+            wor_sc_m3_per_m3=float(scene.material["wor_sc_m3_per_m3"]),
+        )
+        thermal_inlets = tuple(
+            tb
+            for tb in (
+                _build_thermal_boundary(node)
+                for node in scene.nodes
+                if node.node_type in ("source", "sink")
+            )
+            if tb is not None
+        )
+        if not any(tb.bc_type == "fixed_temperature" for tb in thermal_inlets):
+            raise ValueError(
+                "Black-oil mode requires at least one boundary node with a fixed "
+                "temperature. Open a source or sink node and set its thermal boundary "
+                "condition to 'Fixed temperature'."
+            )
     else:
         fluid_model = SingleComponentFluid(
             density_kg_per_m3=float(scene.material["density_kg_per_m3"]),
@@ -553,6 +586,12 @@ def build_solver_from_scene(scene: CanvasScene):
     hyd_raw = {k: v for k, v in scene.solver_settings.items() if k not in _OUTER_KEYS}
 
     settings = SolverSettings(**hyd_raw) if hyd_raw else SolverSettings()
+
+    if scene.physics_mode == "black_oil":
+        return SteadyBlackOilSolver(
+            hydraulic_settings=settings if hyd_raw else None,
+            turbulent_pipe_correlation=turbulent_pipe_correlation,
+        )
 
     if scene.physics_mode == "compressible":
         _CONVECTION_SCHEMES = {

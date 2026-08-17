@@ -715,6 +715,9 @@ class NetSimGui:
         tc_var = tk.StringVar(master=dialog, value=material.get("critical_temperature_k", ""))
         pc_var = tk.StringVar(master=dialog, value=material.get("critical_pressure_pa", ""))
         omega_var = tk.StringVar(master=dialog, value=material.get("acentric_factor", ""))
+        gas_gravity_var = tk.StringVar(master=dialog, value=material.get("gas_gravity", "0.65"))
+        gor_var = tk.StringVar(master=dialog, value=material.get("gor_sc_m3_per_m3", "25.0"))
+        wor_var = tk.StringVar(master=dialog, value=material.get("wor_sc_m3_per_m3", "0.5"))
 
         ttk.Label(frame, text="Definition").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
         mode_row = ttk.Frame(frame)
@@ -724,6 +727,7 @@ class NetSimGui:
         ttk.Radiobutton(mode_row, text="Crude oil", variable=mode_var, value="crude_oil").pack(side="left", padx=(8, 0))
         ttk.Radiobutton(mode_row, text="Gas (ideal)", variable=mode_var, value="gas").pack(side="left", padx=(8, 0))
         ttk.Radiobutton(mode_row, text="Gas (PR)", variable=mode_var, value="gas_pr").pack(side="left", padx=(8, 0))
+        ttk.Radiobutton(mode_row, text="Black-oil", variable=mode_var, value="black_oil").pack(side="left", padx=(8, 0))
 
         ttk.Label(frame, text="Material Library").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=4)
         library_box = ttk.Combobox(
@@ -778,6 +782,21 @@ class NetSimGui:
         omega_entry = ttk.Entry(frame, textvariable=omega_var, width=26)
         omega_entry.grid(row=7, column=1, sticky="ew", pady=4)
 
+        gas_gravity_label = ttk.Label(frame, text="Gas Gravity (air = 1)")
+        gas_gravity_label.grid(row=6, column=0, sticky="w", padx=(0, 8), pady=4)
+        gas_gravity_entry = ttk.Entry(frame, textvariable=gas_gravity_var, width=26)
+        gas_gravity_entry.grid(row=6, column=1, sticky="ew", pady=4)
+
+        gor_label = ttk.Label(frame, text="GOR sc (m³/m³)")
+        gor_label.grid(row=7, column=0, sticky="w", padx=(0, 8), pady=4)
+        gor_entry = ttk.Entry(frame, textvariable=gor_var, width=26)
+        gor_entry.grid(row=7, column=1, sticky="ew", pady=4)
+
+        wor_label = ttk.Label(frame, text="WOR sc (m³/m³)")
+        wor_label.grid(row=8, column=0, sticky="w", padx=(0, 8), pady=4)
+        wor_entry = ttk.Entry(frame, textvariable=wor_var, width=26)
+        wor_entry.grid(row=8, column=1, sticky="ew", pady=4)
+
         cp_label = ttk.Label(frame, text="Specific Heat cp (J/kg·K)")
         cp_label.grid(row=8, column=0, sticky="w", padx=(0, 8), pady=4)
         cp_entry = ttk.Entry(frame, textvariable=cp_var, width=26)
@@ -807,32 +826,40 @@ class NetSimGui:
             is_crude_oil = mode == "crude_oil"
             is_gas = mode == "gas"
             is_gas_pr = mode == "gas_pr"
+            is_black_oil_mat = mode == "black_oil"
             is_any_gas = is_gas or is_gas_pr
             library_box.configure(state="readonly" if is_library else "disabled")
             std_state = "normal" if mode == "custom" else "disabled"
-            name_entry.configure(state=std_state if not is_any_gas else "normal")
-            viscosity_entry.configure(state=std_state if not is_any_gas else "normal")
-            # density vs molecular weight
+            name_entry.configure(state="disabled" if (is_any_gas or is_black_oil_mat) else std_state)
+            viscosity_entry.configure(state="disabled" if is_black_oil_mat else (std_state if not is_any_gas else "normal"))
+            # density vs molecular weight vs black-oil (no density/MW field)
             if is_any_gas:
                 density_label.grid_remove()
                 density_entry.grid_remove()
                 mw_label.grid()
                 mw_entry.grid()
                 mw_entry.configure(state="normal")
+            elif is_black_oil_mat:
+                density_label.grid_remove()
+                density_entry.grid_remove()
+                mw_label.grid_remove()
+                mw_entry.grid_remove()
             else:
                 mw_label.grid_remove()
                 mw_entry.grid_remove()
                 density_label.grid()
                 density_entry.grid()
                 density_entry.configure(state=std_state)
-            if is_crude_oil:
+            if is_crude_oil or is_black_oil_mat:
                 api_label.grid()
                 api_entry.grid()
-                temperature_label.grid()
-                temperature_entry.grid()
             else:
                 api_label.grid_remove()
                 api_entry.grid_remove()
+            if is_crude_oil:
+                temperature_label.grid()
+                temperature_entry.grid()
+            else:
                 temperature_label.grid_remove()
                 temperature_entry.grid_remove()
             if is_gas_pr:
@@ -852,6 +879,23 @@ class NetSimGui:
                 pc_entry.grid_remove()
                 omega_label.grid_remove()
                 omega_entry.grid_remove()
+            if is_black_oil_mat:
+                gas_gravity_label.grid()
+                gas_gravity_entry.grid()
+                gas_gravity_entry.configure(state="normal")
+                gor_label.grid()
+                gor_entry.grid()
+                gor_entry.configure(state="normal")
+                wor_label.grid()
+                wor_entry.grid()
+                wor_entry.configure(state="normal")
+            else:
+                gas_gravity_label.grid_remove()
+                gas_gravity_entry.grid_remove()
+                gor_label.grid_remove()
+                gor_entry.grid_remove()
+                wor_label.grid_remove()
+                wor_entry.grid_remove()
             if is_non_isothermal or is_any_gas:
                 cp_label.grid()
                 cp_entry.grid()
@@ -892,6 +936,9 @@ class NetSimGui:
                 tc_var,
                 pc_var,
                 omega_var,
+                gas_gravity_var,
+                gor_var,
+                wor_var,
             ),
         ).pack(side="right", padx=(0, 8))
 
@@ -1312,9 +1359,54 @@ class NetSimGui:
         tc_var: tk.StringVar | None = None,
         pc_var: tk.StringVar | None = None,
         omega_var: tk.StringVar | None = None,
+        gas_gravity_var: tk.StringVar | None = None,
+        gor_var: tk.StringVar | None = None,
+        wor_var: tk.StringVar | None = None,
     ) -> None:
         mode = mode_var.get()
         is_non_isothermal = self.scene.physics_mode == "non_isothermal"
+
+        if mode == "black_oil":
+            try:
+                api = float(api_var.get().strip())
+                gg = float((gas_gravity_var.get() if gas_gravity_var else "").strip())
+                gor = float((gor_var.get() if gor_var else "").strip())
+                wor = float((wor_var.get() if wor_var else "").strip())
+            except ValueError:
+                messagebox.showerror(
+                    "Invalid material",
+                    "API gravity, gas gravity, GOR, and WOR must be valid numbers.",
+                    parent=dialog,
+                )
+                return
+            if gg <= 0:
+                messagebox.showerror(
+                    "Invalid material",
+                    "Gas gravity must be positive.",
+                    parent=dialog,
+                )
+                return
+            if gor < 0 or wor < 0:
+                messagebox.showerror(
+                    "Invalid material",
+                    "GOR and WOR must be non-negative.",
+                    parent=dialog,
+                )
+                return
+            material: dict = {
+                "definition_mode": "black_oil",
+                "library_key": "",
+                "name": f"Black-oil ({api:.1f}°API, GOR={gor:.0f} m³/m³)",
+                "api_gravity": str(api),
+                "gas_gravity": str(gg),
+                "gor_sc_m3_per_m3": str(gor),
+                "wor_sc_m3_per_m3": str(wor),
+            }
+            self.scene.update_material(material)
+            self._refresh_global_summaries()
+            self.status_var.set(f"Material set to {material['name']}.")
+            dialog.destroy()
+            return
 
         if mode == "gas":
             mw_text = (mw_var.get() if mw_var else "").strip()
@@ -1881,9 +1973,13 @@ class NetSimGui:
 
         current_mode = self.scene.physics_mode
         is_currently_compressible = current_mode == "compressible"
+        is_currently_black_oil = current_mode == "black_oil"
 
         compressibility_var = tk.StringVar(
-            value="compressible" if is_currently_compressible else "incompressible"
+            value=(
+                "compressible" if is_currently_compressible
+                else ("black_oil" if is_currently_black_oil else "incompressible")
+            )
         )
         energy_var = tk.StringVar(
             value="non_isothermal" if current_mode == "non_isothermal" else "isothermal"
@@ -1898,6 +1994,9 @@ class NetSimGui:
         ttk.Radiobutton(
             comp_frame, text="Compressible", variable=compressibility_var, value="compressible"
         ).pack(side="left")
+        ttk.Radiobutton(
+            comp_frame, text="Black-oil (3-phase)", variable=compressibility_var, value="black_oil"
+        ).pack(side="left", padx=(12, 0))
 
         ttk.Separator(frame, orient="horizontal").grid(
             row=1, column=0, columnspan=2, sticky="ew", pady=8
@@ -1928,7 +2027,7 @@ class NetSimGui:
         note_ni.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 8))
 
         def _sync_energy_state(*_args: object) -> None:
-            state = "disabled" if compressibility_var.get() == "compressible" else "normal"
+            state = "disabled" if compressibility_var.get() in ("compressible", "black_oil") else "normal"
             rb_isothermal.configure(state=state)
             rb_non_isothermal.configure(state=state)
 
@@ -1957,6 +2056,8 @@ class NetSimGui:
     ) -> None:
         if compressibility == "compressible":
             mode = "compressible"
+        elif compressibility == "black_oil":
+            mode = "black_oil"
         elif energy == "non_isothermal":
             mode = "non_isothermal"
         else:
@@ -1981,6 +2082,7 @@ class NetSimGui:
             "isothermal": "Isothermal",
             "non_isothermal": "Non-isothermal",
             "compressible": "Compressible",
+            "black_oil": "Black-oil (3-phase)",
         }
         self.status_var.set(f"Case type set to: {_LABELS.get(mode, mode)}.")
         dialog.destroy()
@@ -2086,6 +2188,19 @@ class NetSimGui:
                 lines.append(f"M={mw} kg/mol")
             if viscosity:
                 lines.append(f"mu={viscosity} Pa·s")
+        elif self.scene.physics_mode == "black_oil":
+            api = self.scene.material.get("api_gravity", "").strip()
+            gg = self.scene.material.get("gas_gravity", "").strip()
+            gor = self.scene.material.get("gor_sc_m3_per_m3", "").strip()
+            wor = self.scene.material.get("wor_sc_m3_per_m3", "").strip()
+            if api:
+                lines.append(f"API={api}°")
+            if gg:
+                lines.append(f"gg={gg}")
+            if gor:
+                lines.append(f"GOR={gor} m³/m³")
+            if wor:
+                lines.append(f"WOR={wor} m³/m³")
         else:
             density = self.scene.material.get("density_kg_per_m3", "").strip()
             viscosity = self.scene.material.get("viscosity_pa_s", "").strip()
@@ -2769,7 +2884,7 @@ class NetSimGui:
                 ),
             )
 
-            if self.scene.physics_mode in ("non_isothermal", "compressible"):
+            if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil"):
                 ttk.Separator(container, orient="horizontal").grid(
                     row=3, column=0, columnspan=2, sticky="ew", pady=(6, 2)
                 )
@@ -2918,7 +3033,7 @@ class NetSimGui:
             ),
             width=12,
         ).pack(anchor="w", pady=4)
-        if self.scene.physics_mode in ("non_isothermal", "compressible"):
+        if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil"):
             ttk.Button(
                 palette,
                 text="Heat Source",
@@ -3490,7 +3605,7 @@ class NetSimGui:
             entries[key] = var
             row += 1
 
-        if self.scene.physics_mode in ("non_isothermal", "compressible"):
+        if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil"):
             ttk.Separator(properties_frame, orient="horizontal").grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=(4, 2)
             )
@@ -3814,7 +3929,7 @@ class NetSimGui:
         mode_var.trace_add("write", _sync_mode)
         _sync_mode()
 
-        if self.scene.physics_mode in ("non_isothermal", "compressible"):
+        if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil"):
             ttk.Separator(properties_frame, orient="horizontal").grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=(4, 2)
             )
