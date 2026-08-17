@@ -90,6 +90,16 @@ class SteadyCompressibleSolver(BaseSolver):
         settings = self.compressible_settings
         fluid_model = case.fluid_model
 
+        for tb in case.thermal_inlets:
+            if tb.node_id not in network_state.nodes:
+                continue
+            node_st = network_state.nodes[tb.node_id]
+            if tb.bc_type == "fixed_temperature":
+                node_st.temperature_c = tb.temperature_c
+                node_st.is_thermal_inlet = True
+            else:
+                node_st.thermal_gradient_dc_per_m = tb.gradient_dc_per_m
+
         T_init = self._initial_temperature(case)
         for node in network_state.nodes.values():
             if node.temperature_c is None:
