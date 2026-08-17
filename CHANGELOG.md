@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.5.1] — 2026-08-17
+
+### Tutorials
+- Fix tutorial 02 GUI file: nodes 2 and 3 were at the same x-position,
+  making the loop look like two horizontal parallel lines.  Repositioned
+  to form a clear diamond (◇) shape.  Also corrected pipe lengths to
+  match `run.py` (lower path: 8 km + 3 km, not 5.5 + 5.5 km).
+- Add tutorial 03 — diamond loop with **flow outlet** BC: same 4-pipe
+  diamond network as tutorial 02 but the outlet specifies mass-flow
+  demand (100 kg/s) instead of pressure.  The solver determines the
+  outlet pressure (5.356 MPa) and the flow split (63 / 37 %).
+- Add tutorial 04 — looped network with **two flow delivery points**:
+  5-node, 5-pipe network combining a diamond loop with a branch to a
+  satellite separator.  Both outlets use flow BCs (80 kg/s + 20 kg/s).
+  The loop routes ≈ 51 % via the upper path and ≈ 49 % via the lower
+  path; all nodes remain undersaturated (P > 5.63 MPa bubble point).
+
 ## [1.5.0] — 2026-08-17
 
 ### New: Black-oil GUI integration

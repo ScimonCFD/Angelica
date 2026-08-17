@@ -1,5 +1,5 @@
 {
-  "case_name": "Looped gathering network (black-oil)",
+  "case_name": "Diamond loop — flow delivery outlet (black-oil)",
   "physics_mode": "black_oil",
   "material": {
     "definition_mode": "black_oil",
@@ -53,9 +53,9 @@
       "x": 680,
       "y": 240,
       "properties": {
-        "condition_type": "pressure",
-        "pressure": "2000000.0",
-        "flow": "",
+        "condition_type": "flow",
+        "pressure": "",
+        "flow": "100.0",
         "thermal_bc_type": "zero_gradient",
         "inlet_temperature_c": "",
         "thermal_gradient_dc_per_m": "0.0"
