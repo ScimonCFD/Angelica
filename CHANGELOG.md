@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.2] — 2026-08-18
+
+### Tutorials now installed with the package
+
+- Moved `tutorials/` inside the Python package (`src/angelica/tutorials/`).
+  When Angelica is installed via `pip install`, the tutorials folder is now
+  available on all platforms — the GUI "Open" dialog opens there by default.
+- Previously the tutorials were only accessible in the Windows installer or
+  in a local development clone.
+
 ## [1.6.1] — 2026-08-18
 
 ### GUI: Composition moved from Material dialog to source node properties

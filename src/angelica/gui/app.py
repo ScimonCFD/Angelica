@@ -875,23 +875,6 @@ class NetSimGui:
                 pc_entry.grid_remove()
                 omega_label.grid_remove()
                 omega_entry.grid_remove()
-            if is_black_oil_mat:
-                gas_gravity_label.grid()
-                gas_gravity_entry.grid()
-                gas_gravity_entry.configure(state="normal")
-                gor_label.grid()
-                gor_entry.grid()
-                gor_entry.configure(state="normal")
-                wor_label.grid()
-                wor_entry.grid()
-                wor_entry.configure(state="normal")
-            else:
-                gas_gravity_label.grid_remove()
-                gas_gravity_entry.grid_remove()
-                gor_label.grid_remove()
-                gor_entry.grid_remove()
-                wor_label.grid_remove()
-                wor_entry.grid_remove()
             if is_non_isothermal or is_any_gas:
                 cp_label.grid()
                 cp_entry.grid()
@@ -2050,16 +2033,17 @@ class NetSimGui:
     def _default_open_dir(self) -> str:
         """Start the Open dialog in the tutorials folder when one can be found."""
         if getattr(sys, "frozen", False):
+            # Windows installer bundles tutorials/ next to the executable.
             exe_dir = os.path.dirname(sys.executable)
-            tutorials = os.path.join(exe_dir, "tutorials")
-            if os.path.isdir(tutorials):
-                return tutorials
-        else:
-            # Dev / editable install: tutorials/ is 3 dirs above src/angelica/gui/
-            here = os.path.dirname(os.path.abspath(__file__))
-            candidate = os.path.normpath(os.path.join(here, "..", "..", "..", "tutorials"))
+            candidate = os.path.join(exe_dir, "tutorials")
             if os.path.isdir(candidate):
                 return candidate
+        # Editable install (dev) and regular pip install both put tutorials/
+        # one level above this file: angelica/gui/ → angelica/tutorials/
+        here = os.path.dirname(os.path.abspath(__file__))
+        candidate = os.path.normpath(os.path.join(here, "..", "tutorials"))
+        if os.path.isdir(candidate):
+            return candidate
         return os.path.expanduser("~")
 
     def _set_window_icon(self) -> None:

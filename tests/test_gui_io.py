@@ -8,6 +8,8 @@ SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
+TUTORIALS_ROOT = SRC_ROOT / "angelica" / "tutorials"
+
 from angelica.gui.io import build_network_case_from_scene, build_solver_from_scene, load_scene_from_file
 from angelica.gui.model import CanvasLink, CanvasLinkComponent, CanvasNode, CanvasScene
 
@@ -16,8 +18,7 @@ class GuiIoTests(unittest.TestCase):
     @staticmethod
     def _pipe_only_case_path() -> Path:
         return (
-            Path(__file__).resolve().parents[1]
-            / "tutorials"
+            TUTORIALS_ROOT
             / "steady_isothermal_incompressible"
             / "01_pipe_only"
             / "pipe_only.gui.json"
@@ -67,8 +68,7 @@ class GuiIoTests(unittest.TestCase):
 
     def test_build_network_case_uses_fitting_preset_loss_coefficient(self) -> None:
         scene = load_scene_from_file(
-            Path(__file__).resolve().parents[1]
-            / "tutorials"
+            TUTORIALS_ROOT
             / "steady_isothermal_incompressible"
             / "02_fittings_no_elevation"
             / "fittings_no_elevation.gui.json"
@@ -114,11 +114,7 @@ class GuiIoTests(unittest.TestCase):
         self.assertEqual(pump.curve_points_q_head, ((0.0, 80.0), (200.0, 60.0), (400.0, 0.0)))
 
     def test_all_gui_tutorial_scenes_build_and_converge(self) -> None:
-        tutorial_root = (
-            Path(__file__).resolve().parents[1]
-            / "tutorials"
-            / "steady_isothermal_incompressible"
-        )
+        tutorial_root = TUTORIALS_ROOT / "steady_isothermal_incompressible"
         gui_paths = sorted(tutorial_root.glob("*/*.gui.json"))
 
         self.assertGreaterEqual(len(gui_paths), 7)
@@ -131,11 +127,7 @@ class GuiIoTests(unittest.TestCase):
                 self.assertTrue(result.converged, msg=f"{gui_path} did not converge")
 
     def test_all_non_isothermal_gui_tutorial_scenes_build_and_converge(self) -> None:
-        tutorial_root = (
-            Path(__file__).resolve().parents[1]
-            / "tutorials"
-            / "steady_non_isothermal_incompressible"
-        )
+        tutorial_root = TUTORIALS_ROOT / "steady_non_isothermal_incompressible"
         gui_paths = sorted(tutorial_root.glob("*/*.gui.json"))
 
         self.assertGreaterEqual(len(gui_paths), 4)
@@ -152,11 +144,7 @@ class GuiIoTests(unittest.TestCase):
                 )
 
     def test_all_compressible_gui_tutorial_scenes_build_and_converge(self) -> None:
-        tutorial_root = (
-            Path(__file__).resolve().parents[1]
-            / "tutorials"
-            / "steady_compressible"
-        )
+        tutorial_root = TUTORIALS_ROOT / "steady_compressible"
         gui_paths = sorted(tutorial_root.glob("*/*.gui.json"))
 
         self.assertGreaterEqual(len(gui_paths), 1)
