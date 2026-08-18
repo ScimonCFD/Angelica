@@ -279,6 +279,146 @@ def water_viscosity_pa_s(temperature_c: float) -> float:
     return math.exp(0.52 - 2.84e-2 * temperature_c + 1.16e-4 * temperature_c ** 2) * 1e-3
 
 
+# ── Black-oil composition ─────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class BlackOilComposition:
+    """Four-parameter black-oil fluid composition (reservoir characterisation).
+
+    Separates the compositional description of a fluid from the PVT machinery,
+    allowing each inlet node in a network to carry its own composition.
+
+    Args:
+        api_gravity: Stock-tank oil API gravity (°API).
+        gas_gravity: Gas specific gravity relative to air (–).
+        gor_sc_m3_per_m3: Producing gas-oil ratio at standard conditions (m³/m³).
+        wor_sc_m3_per_m3: Water-oil ratio at standard conditions (m³/m³).
+    """
+    api_gravity: float
+    gas_gravity: float
+    gor_sc_m3_per_m3: float
+    wor_sc_m3_per_m3: float
+
+    def mix(self, other: "BlackOilComposition", weight_self: float, weight_other: float) -> "BlackOilComposition":
+        """Return a mass-weighted mixture of two compositions."""
+        w_tot = weight_self + weight_other
+        if w_tot <= 0.0:
+            return self
+        f_s = weight_self  / w_tot
+        f_o = weight_other / w_tot
+        return BlackOilComposition(
+            api_gravity       = f_s * self.api_gravity        + f_o * other.api_gravity,
+            gas_gravity       = f_s * self.gas_gravity        + f_o * other.gas_gravity,
+            gor_sc_m3_per_m3  = f_s * self.gor_sc_m3_per_m3  + f_o * other.gor_sc_m3_per_m3,
+            wor_sc_m3_per_m3  = f_s * self.wor_sc_m3_per_m3  + f_o * other.wor_sc_m3_per_m3,
+        )
+
+
+# ── Standalone PVT function ───────────────────────────────────────────────────
+
+def compute_pvt(
+    pressure_pa: float,
+    temperature_c: float,
+    api_gravity: float,
+    gas_gravity: float,
+    gor_sc_m3_per_m3: float,
+    wor_sc_m3_per_m3: float,
+) -> "BlackOilPVTState":
+    """Compute the full black-oil PVT state for an explicit fluid composition.
+
+    This is the functional core used by :class:`BlackOilFluid` and by the
+    solver's per-pipe composition propagation.  All parameters are explicit so
+    the function can be called with any composition, not just the one stored
+    in a ``BlackOilFluid`` instance.
+    """
+    from .dead_oil import (
+        dead_oil_density_kg_per_m3,
+        dead_oil_viscosity_pa_s,
+        dead_oil_specific_heat_j_per_kg_k,
+        dead_oil_thermal_conductivity_w_per_m_k,
+    )
+
+    P = max(pressure_pa, 1.0)
+    T = temperature_c
+
+    Pb = bubble_point_pa(gor_sc_m3_per_m3, gas_gravity, api_gravity, T)
+    Rs = solution_gor_m3_per_m3(P, T, gas_gravity, api_gravity, gor_sc_m3_per_m3)
+    Bo = oil_fvf(Rs, T, gas_gravity, api_gravity)
+
+    has_gas = gor_sc_m3_per_m3 > 0.0
+    if has_gas:
+        z  = z_factor_hall_yarborough(P, T, gas_gravity)
+        Bg = gas_fvf(P, T, z)
+    else:
+        z  = 1.0
+        Bg = 1.0
+
+    Bw = water_fvf(P, T)
+
+    rho_oil_sc   = dead_oil_density_kg_per_m3(api_gravity)
+    rho_gas_sc   = gas_gravity * _AIR_DENSITY_SC_KG_M3
+    rho_water_sc = 1_025.0
+
+    rho_oil = (rho_oil_sc + Rs * rho_gas_sc) / Bo
+    rho_gas = rho_gas_sc / Bg if has_gas else 0.0
+    rho_wtr = rho_water_sc / Bw
+
+    v_oil = Bo
+    v_gas = max(0.0, gor_sc_m3_per_m3 - Rs) * Bg if has_gas else 0.0
+    v_wtr = wor_sc_m3_per_m3 * Bw
+    v_tot = v_oil + v_gas + v_wtr
+
+    alpha_oil = v_oil / v_tot
+    alpha_gas = v_gas / v_tot
+    alpha_wtr = v_wtr / v_tot
+
+    rho_m = alpha_oil * rho_oil + alpha_gas * rho_gas + alpha_wtr * rho_wtr
+
+    mu_od  = dead_oil_viscosity_pa_s(api_gravity, T)
+    mu_oil = live_oil_viscosity_pa_s(mu_od, Rs)
+    mu_gas = gas_viscosity_pa_s(P, T, gas_gravity) if has_gas else 0.0
+    mu_wtr = water_viscosity_pa_s(T)
+    mu_m   = alpha_oil * mu_oil + alpha_gas * mu_gas + alpha_wtr * mu_wtr
+
+    cp_oil = dead_oil_specific_heat_j_per_kg_k(api_gravity, T)
+    cp_gas = 2_200.0
+    cp_wtr = 4_182.0
+
+    k_oil = dead_oil_thermal_conductivity_w_per_m_k(api_gravity, T)
+    k_gas = 0.035
+    k_wtr = 0.62
+
+    w_oil = alpha_oil * rho_oil / rho_m
+    w_gas = alpha_gas * rho_gas / rho_m if has_gas else 0.0
+    w_wtr = alpha_wtr * rho_wtr / rho_m
+    cp_m  = w_oil * cp_oil + w_gas * cp_gas + w_wtr * cp_wtr
+    k_m   = alpha_oil * k_oil + alpha_gas * k_gas + alpha_wtr * k_wtr
+
+    return BlackOilPVTState(
+        pressure_pa=P,
+        temperature_c=T,
+        bubble_point_pa=Pb,
+        rs_m3_per_m3=Rs,
+        bo=Bo,
+        bg=Bg,
+        bw=Bw,
+        z=z,
+        holdup_oil=alpha_oil,
+        holdup_gas=alpha_gas,
+        holdup_water=alpha_wtr,
+        density_oil_kg_per_m3=rho_oil,
+        density_gas_kg_per_m3=rho_gas,
+        density_water_kg_per_m3=rho_wtr,
+        viscosity_oil_pa_s=mu_oil,
+        viscosity_gas_pa_s=mu_gas,
+        viscosity_water_pa_s=mu_wtr,
+        mixture_density_kg_per_m3=rho_m,
+        mixture_viscosity_pa_s=mu_m,
+        mixture_specific_heat_j_per_kg_k=cp_m,
+        mixture_thermal_conductivity_w_per_m_k=k_m,
+    )
+
+
 # ── PVT state dataclass ───────────────────────────────────────────────────────
 
 @dataclass
@@ -382,106 +522,15 @@ class BlackOilFluid(FluidModel):
 
     # ── PVT ───────────────────────────────────────────────────────────────────
 
-    def pvt(self, pressure_pa: float, temperature_c: float) -> BlackOilPVTState:
+    def pvt(self, pressure_pa: float, temperature_c: float) -> "BlackOilPVTState":
         """Compute the full black-oil PVT state at (pressure_pa, temperature_c)."""
-        from .dead_oil import (
-            dead_oil_density_kg_per_m3,
-            dead_oil_viscosity_pa_s,
-            dead_oil_specific_heat_j_per_kg_k,
-            dead_oil_thermal_conductivity_w_per_m_k,
-        )
-
-        P = max(pressure_pa, 1.0)
-        T = temperature_c
-
-        # ── PVT factors ──────────────────────────────────────────────────────
-        Pb = bubble_point_pa(self.gor_sc_m3_per_m3, self.gas_gravity, self.api_gravity, T)
-        Rs = solution_gor_m3_per_m3(P, T, self.gas_gravity, self.api_gravity, self.gor_sc_m3_per_m3)
-        Bo = oil_fvf(Rs, T, self.gas_gravity, self.api_gravity)
-
-        has_gas = self.gor_sc_m3_per_m3 > 0.0
-        if has_gas:
-            z  = z_factor_hall_yarborough(P, T, self.gas_gravity)
-            Bg = gas_fvf(P, T, z)
-        else:
-            z  = 1.0
-            Bg = 1.0
-
-        Bw = water_fvf(P, T)
-
-        # ── Standard-condition densities ──────────────────────────────────────
-        rho_oil_sc  = dead_oil_density_kg_per_m3(self.api_gravity)
-        rho_gas_sc  = self.gas_gravity * _AIR_DENSITY_SC_KG_M3
-        rho_water_sc = 1_025.0  # kg/m³ (seawater-like brine)
-
-        # ── Reservoir-condition densities ─────────────────────────────────────
-        # Live oil: stock-tank oil + dissolved gas, swollen by Bo
-        rho_oil = (rho_oil_sc + Rs * rho_gas_sc) / Bo
-        rho_gas = rho_gas_sc / Bg if has_gas else 0.0
-        rho_wtr = rho_water_sc / Bw
-
-        # ── Volumetric rates at actual conditions (per m³_oil_sc) ─────────────
-        v_oil = Bo
-        v_gas = max(0.0, self.gor_sc_m3_per_m3 - Rs) * Bg if has_gas else 0.0
-        v_wtr = self.wor_sc_m3_per_m3 * Bw
-        v_tot = v_oil + v_gas + v_wtr
-
-        alpha_oil = v_oil / v_tot
-        alpha_gas = v_gas / v_tot
-        alpha_wtr = v_wtr / v_tot
-
-        # ── Mixture density ───────────────────────────────────────────────────
-        rho_m = alpha_oil * rho_oil + alpha_gas * rho_gas + alpha_wtr * rho_wtr
-
-        # ── Viscosities ───────────────────────────────────────────────────────
-        mu_od  = dead_oil_viscosity_pa_s(self.api_gravity, T)
-        mu_oil = live_oil_viscosity_pa_s(mu_od, Rs)
-        mu_gas = gas_viscosity_pa_s(P, T, self.gas_gravity) if has_gas else 0.0
-        mu_wtr = water_viscosity_pa_s(T)
-
-        # Mixture viscosity — volumetric average
-        mu_m = alpha_oil * mu_oil + alpha_gas * mu_gas + alpha_wtr * mu_wtr
-
-        # ── Thermal properties ────────────────────────────────────────────────
-        cp_oil = dead_oil_specific_heat_j_per_kg_k(self.api_gravity, T)
-        cp_gas = 2_200.0   # J/(kg·K) — approximate for natural gas
-        cp_wtr = 4_182.0   # J/(kg·K)
-
-        k_oil = dead_oil_thermal_conductivity_w_per_m_k(self.api_gravity, T)
-        k_gas = 0.035      # W/(m·K) — approximate for natural gas
-        k_wtr = 0.62       # W/(m·K)
-
-        # Mass-weighted specific heat
-        w_oil = alpha_oil * rho_oil / rho_m
-        w_gas = alpha_gas * rho_gas / rho_m if has_gas else 0.0
-        w_wtr = alpha_wtr * rho_wtr / rho_m
-        cp_m  = w_oil * cp_oil + w_gas * cp_gas + w_wtr * cp_wtr
-
-        # Volume-weighted thermal conductivity
-        k_m = alpha_oil * k_oil + alpha_gas * k_gas + alpha_wtr * k_wtr
-
-        return BlackOilPVTState(
-            pressure_pa=P,
-            temperature_c=T,
-            bubble_point_pa=Pb,
-            rs_m3_per_m3=Rs,
-            bo=Bo,
-            bg=Bg,
-            bw=Bw,
-            z=z,
-            holdup_oil=alpha_oil,
-            holdup_gas=alpha_gas,
-            holdup_water=alpha_wtr,
-            density_oil_kg_per_m3=rho_oil,
-            density_gas_kg_per_m3=rho_gas,
-            density_water_kg_per_m3=rho_wtr,
-            viscosity_oil_pa_s=mu_oil,
-            viscosity_gas_pa_s=mu_gas,
-            viscosity_water_pa_s=mu_wtr,
-            mixture_density_kg_per_m3=rho_m,
-            mixture_viscosity_pa_s=mu_m,
-            mixture_specific_heat_j_per_kg_k=cp_m,
-            mixture_thermal_conductivity_w_per_m_k=k_m,
+        return compute_pvt(
+            pressure_pa,
+            temperature_c,
+            self.api_gravity,
+            self.gas_gravity,
+            self.gor_sc_m3_per_m3,
+            self.wor_sc_m3_per_m3,
         )
 
     # ── FluidModel interface ───────────────────────────────────────────────────

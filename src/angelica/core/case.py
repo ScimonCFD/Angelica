@@ -7,6 +7,29 @@ from angelica.properties.base import FluidModel
 
 
 @dataclass(frozen=True)
+class InletFluidBC:
+    """Black-oil fluid composition at a pressure or flow inlet node.
+
+    Specifies the four characterisation parameters that define the produced
+    fluid from a particular reservoir or well.  When multiple inlets with
+    different compositions feed a network, the solver propagates each inlet's
+    fluid through the network and mixes at junctions by mass-weighted average.
+
+    Args:
+        node_id: ID of the inlet node this composition is assigned to.
+        api_gravity: Stock-tank oil API gravity (°API).
+        gas_gravity: Gas specific gravity relative to air (–).
+        gor_sc_m3_per_m3: Gas-oil ratio at standard conditions (m³/m³).
+        wor_sc_m3_per_m3: Water-oil ratio at standard conditions (m³/m³).
+    """
+    node_id: int
+    api_gravity: float
+    gas_gravity: float
+    gor_sc_m3_per_m3: float
+    wor_sc_m3_per_m3: float
+
+
+@dataclass(frozen=True)
 class PressureBoundary:
     node_id: int
     pressure_pa: float
@@ -73,11 +96,13 @@ class NetworkCase:
     node_ids: tuple[int, ...] = field(default_factory=tuple)
     initial_node_pressures_pa: dict[int, float] = field(default_factory=dict)
     thermal_inlets: tuple[ThermalBoundary, ...] = field(default_factory=tuple)
+    inlet_fluid_bcs: tuple[InletFluidBC, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         _tuple_fields = (
             "pressure_inlets", "pressure_outlets", "components",
             "flow_inlets", "flow_outlets", "node_ids", "thermal_inlets",
+            "inlet_fluid_bcs",
         )
         for attr in _tuple_fields:
             val = getattr(self, attr)

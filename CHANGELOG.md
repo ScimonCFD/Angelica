@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.6.0] — 2026-08-17
+
+### New: Per-inlet fluid composition (multi-reservoir black-oil)
+
+- `InletFluidBC` — new dataclass in `angelica.core.case`.  Assigns a
+  four-parameter black-oil composition (API gravity, gas gravity, GOR, WOR)
+  to a specific inlet node.  Pass one per source node via the new
+  `NetworkCase.inlet_fluid_bcs` field.
+- `BlackOilComposition` — lightweight frozen dataclass that carries the four
+  composition parameters separately from the PVT machinery.  Provides a
+  `mix(other, w_self, w_other)` method for mass-weighted blending.
+- `compute_pvt()` — standalone module-level function extracted from
+  `BlackOilFluid.pvt()`.  Accepts explicit composition parameters so the
+  solver can evaluate PVT for any pipe with any composition without needing
+  a per-pipe `BlackOilFluid` instance.
+- `SteadyBlackOilSolver` now propagates compositions from inlet nodes through
+  the network following the flow field, mixes at junctions by mass-weighted
+  average, and evaluates density/viscosity per pipe from the local composition.
+  Single-fluid networks (no `inlet_fluid_bcs`) behave exactly as before.
+- Tutorial 05 — two-reservoir blending: 32°API light crude (Res A, 9 MPa,
+  GOR=25) and 22°API heavy crude (Res B, 8 MPa, GOR=10) converge at a mixing
+  junction and deliver a blended stream (28.1°API, GOR=19.2) to a separator.
+  Confirms that oil, gas, and water conservation holds across the junction.
+
 ## [1.5.2] — 2026-08-17
 
 ### Tutorials

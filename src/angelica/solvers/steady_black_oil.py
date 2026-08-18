@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
+from typing import Dict
 
 from angelica.closures.convection_scheme import ConvectionScheme, HybridScheme
 from angelica.closures.pressure_drop import PressureDropCorrelation
 from angelica.core.case import NetworkCase
 from angelica.core.network import build_network_state
-from angelica.core.state import PipeState, HeatSourceState
+from angelica.core.state import PipeState, HeatSourceState, NetworkState
 from angelica.core.results import ComponentFlowResult, SolveResult
 from angelica.core.settings import SolverSettings
+from angelica.properties.black_oil import BlackOilComposition, compute_pvt
 from .base import BaseSolver
 from .steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
 
@@ -46,28 +49,28 @@ class SteadyBlackOilSolver(BaseSolver):
     (Standing, Hall-Yarborough, Beggs-Robinson, Lee-Gonzalez-Eakin) at
     the local pressure and temperature.
 
+    Multi-inlet composition
+    -----------------------
+    When ``NetworkCase.inlet_fluid_bcs`` is provided, each inlet node
+    carries its own four-parameter composition (API, gas gravity, GOR, WOR).
+    In each outer iteration the solver propagates compositions from the inlet
+    nodes through the network following the flow direction, mixing streams at
+    junctions by mass-weighted average.  The result is a per-pipe composition
+    used to evaluate density and viscosity.
+
+    If ``inlet_fluid_bcs`` is empty the solver falls back to the single global
+    ``fluid_model`` composition (backward-compatible behaviour).
+
     Algorithm
     ---------
-    Outer loop (PVT + temperature coupling):
-        1. Snapshot mixture density ρ_m at the current (P, T) field.
-        2. Run the SIMPLE hydraulic solver (inner loop).
-           BlackOilFluid.density_for_link re-evaluates ρ_m(P, T) as the
-           pressure field evolves.
-        3. Solve the steady energy equation on the converged flow field.
-        4. Update nodal temperatures with under-relaxation.
-        5. Compute max |Δρ_m/ρ_m| and max |ΔT|.
-        6. Converge when both fall below their tolerances.
-
-    Applicability
-    -------------
-    - Three-phase (oil + dissolved/free gas + water) steady-state flow.
-    - No-slip homogeneous mixture — valid when phase velocities are
-      similar (high flow rates, turbulent flow).
-    - Valid for both undersaturated (P > Pb, no free gas) and two-phase
-      (P < Pb, free gas present) conditions.
-    - Uses a single GOR and WOR for the entire network (uniform inlet
-      composition); junction mixing with multiple different compositions
-      is deferred to a future version.
+    Outer loop (PVT + temperature + composition coupling):
+        1. Propagate compositions from inlets → per-pipe ``BlackOilComposition``.
+        2. Snapshot mixture density ρ_m at the current (P, T, composition) field.
+        3. Run the SIMPLE hydraulic solver (inner loop).
+        4. Solve the steady energy equation on the converged flow field.
+        5. Update nodal temperatures with under-relaxation.
+        6. Compute max |Δρ_m/ρ_m| and max |ΔT|.
+        7. Converge when both fall below their tolerances.
     """
 
     def __init__(
@@ -87,6 +90,189 @@ class SteadyBlackOilSolver(BaseSolver):
             turbulent_pipe_correlation=turbulent_pipe_correlation,
         )
 
+    # ── Composition helpers ───────────────────────────────────────────────────
+
+    @staticmethod
+    def _propagate_compositions(
+        network_state: NetworkState,
+        case: NetworkCase,
+        default_comp: BlackOilComposition,
+    ) -> Dict[int, BlackOilComposition]:
+        """Return a per-pipe-index composition map after one propagation pass.
+
+        Compositions are seeded at inlet nodes and propagated downstream
+        following the current flow field.  At each junction the incoming
+        streams are mixed by mass-weighted average.  Pipes in which flow
+        is ambiguous or zero inherit the default composition.
+
+        Returns
+        -------
+        dict mapping index-in-network_state.components → BlackOilComposition
+        """
+        # ── seed inlet node compositions ──────────────────────────────────────
+        node_comp: Dict[int, BlackOilComposition] = {
+            ibc.node_id: BlackOilComposition(
+                api_gravity      = ibc.api_gravity,
+                gas_gravity      = ibc.gas_gravity,
+                gor_sc_m3_per_m3 = ibc.gor_sc_m3_per_m3,
+                wor_sc_m3_per_m3 = ibc.wor_sc_m3_per_m3,
+            )
+            for ibc in case.inlet_fluid_bcs
+        }
+
+        # ── determine flow directions from current mass-flow field ────────────
+        # For each node accumulate (mass_flow, composition) of incoming pipes.
+        # Incoming means: flow is from the pipe's upstream end TO this node.
+        incoming: Dict[int, list] = defaultdict(list)
+        pipe_states = [
+            (idx, ps)
+            for idx, ps in enumerate(network_state.components)
+            if isinstance(ps, PipeState)
+        ]
+
+        # ── first pass: propagate from seeded nodes into their downstream pipes
+        # We iterate several times to handle networks where compositions must
+        # travel through multiple junctions (convergence in O(diameter) passes).
+        for _ in range(len(network_state.nodes) + 1):
+            changed = False
+            incoming = defaultdict(list)
+
+            for _, ps in pipe_states:
+                ṁ = ps.mass_flow_kg_per_s
+                if ṁ >= 0.0:
+                    up_id, down_id = ps.start_node.node_id, ps.end_node.node_id
+                else:
+                    up_id, down_id = ps.end_node.node_id, ps.start_node.node_id
+                    ṁ = -ṁ
+
+                comp = node_comp.get(up_id, default_comp)
+                incoming[down_id].append((ṁ, comp))
+
+            # Mix at each non-inlet junction
+            for nid, contributions in incoming.items():
+                if nid in {ibc.node_id for ibc in case.inlet_fluid_bcs}:
+                    continue  # inlet nodes keep their prescribed composition
+                if not contributions:
+                    continue
+                total_m = sum(m for m, _ in contributions)
+                if total_m <= 1e-12:
+                    continue
+                mixed = contributions[0][1]
+                w_acc = contributions[0][0]
+                for m_i, c_i in contributions[1:]:
+                    mixed = mixed.mix(c_i, w_acc, m_i)
+                    w_acc += m_i
+                prev = node_comp.get(nid)
+                node_comp[nid] = mixed
+                if prev is None or abs(mixed.gor_sc_m3_per_m3 - prev.gor_sc_m3_per_m3) > 1e-9:
+                    changed = True
+
+            if not changed:
+                break
+
+        # ── assign per-pipe composition from upstream node ────────────────────
+        pipe_comp: Dict[int, BlackOilComposition] = {}
+        for idx, ps in pipe_states:
+            ṁ = ps.mass_flow_kg_per_s
+            if ṁ >= 0.0:
+                up_id = ps.start_node.node_id
+            else:
+                up_id = ps.end_node.node_id
+            pipe_comp[idx] = node_comp.get(up_id, default_comp)
+
+        # Non-pipe components inherit the default
+        for idx in range(len(network_state.components)):
+            if idx not in pipe_comp:
+                pipe_comp[idx] = default_comp
+
+        return pipe_comp
+
+    @staticmethod
+    def _pipe_density(ps: PipeState, comp: BlackOilComposition) -> float:
+        P = 0.5 * ((ps.start_node.pressure_pa or 0.0) + (ps.end_node.pressure_pa or 0.0))
+        T = ps.temperature_c if ps.temperature_c is not None else 20.0
+        return compute_pvt(P, T, comp.api_gravity, comp.gas_gravity,
+                           comp.gor_sc_m3_per_m3, comp.wor_sc_m3_per_m3
+                           ).mixture_density_kg_per_m3
+
+    @staticmethod
+    def _pipe_viscosity(ps: PipeState, comp: BlackOilComposition) -> float:
+        P = 0.5 * ((ps.start_node.pressure_pa or 0.0) + (ps.end_node.pressure_pa or 0.0))
+        T = ps.temperature_c if ps.temperature_c is not None else 20.0
+        return compute_pvt(P, T, comp.api_gravity, comp.gas_gravity,
+                           comp.gor_sc_m3_per_m3, comp.wor_sc_m3_per_m3
+                           ).mixture_viscosity_pa_s
+
+    # ── FluidModel proxy ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def _make_pipe_fluid(comp: BlackOilComposition, ref_p: float, ref_t: float):
+        """Wrap a per-pipe composition into a minimal FluidModel for the hydraulic solver."""
+        from angelica.properties.black_oil import BlackOilFluid
+        return BlackOilFluid(
+            api_gravity             = comp.api_gravity,
+            gas_gravity             = comp.gas_gravity,
+            gor_sc_m3_per_m3        = comp.gor_sc_m3_per_m3,
+            wor_sc_m3_per_m3        = comp.wor_sc_m3_per_m3,
+            reference_pressure_pa   = ref_p,
+            reference_temperature_c = ref_t,
+        )
+
+    # ── Mixed-composition FluidModel ──────────────────────────────────────────
+
+    def _build_mixed_fluid(
+        self,
+        network_state: NetworkState,
+        pipe_comps: Dict[int, BlackOilComposition],
+        default_comp: BlackOilComposition,
+        ref_t: float,
+    ):
+        """Return a FluidModel-compatible object that dispatches per link."""
+        from angelica.properties.black_oil import BlackOilFluid
+
+        # Build a lookup: component_object_id → per-pipe fluid
+        id_to_comp: Dict[int, BlackOilComposition] = {}
+        for idx, ps in enumerate(network_state.components):
+            id_to_comp[id(ps)] = pipe_comps.get(idx, default_comp)
+
+        ref_p = 5e6  # typical midpoint pressure
+        default_fluid = BlackOilFluid(
+            api_gravity             = default_comp.api_gravity,
+            gas_gravity             = default_comp.gas_gravity,
+            gor_sc_m3_per_m3        = default_comp.gor_sc_m3_per_m3,
+            wor_sc_m3_per_m3        = default_comp.wor_sc_m3_per_m3,
+            reference_pressure_pa   = ref_p,
+            reference_temperature_c = ref_t,
+        )
+
+        class _PerPipeFluid:
+            def _fluid_for(self, link_state) -> BlackOilFluid:
+                comp = id_to_comp.get(id(link_state), default_comp)
+                return BlackOilFluid(
+                    api_gravity             = comp.api_gravity,
+                    gas_gravity             = comp.gas_gravity,
+                    gor_sc_m3_per_m3        = comp.gor_sc_m3_per_m3,
+                    wor_sc_m3_per_m3        = comp.wor_sc_m3_per_m3,
+                    reference_pressure_pa   = ref_p,
+                    reference_temperature_c = ref_t,
+                )
+
+            def density_for_link(self, link_state) -> float:
+                return self._fluid_for(link_state).density_for_link(link_state)
+
+            def viscosity_for_link(self, link_state) -> float:
+                return self._fluid_for(link_state).viscosity_for_link(link_state)
+
+            def specific_heat_for_link(self, link_state) -> float:
+                return self._fluid_for(link_state).specific_heat_for_link(link_state)
+
+            def thermal_conductivity_for_link(self, link_state) -> float:
+                return self._fluid_for(link_state).thermal_conductivity_for_link(link_state)
+
+        return _PerPipeFluid() if id_to_comp else default_fluid
+
+    # ── Main solve ────────────────────────────────────────────────────────────
+
     def solve(self, case: NetworkCase, progress_callback=None) -> SolveResult:
         from angelica.numerics.energy import solve_energy_system
 
@@ -94,6 +280,30 @@ class SteadyBlackOilSolver(BaseSolver):
         network_state = build_network_state(case)
         settings      = self.black_oil_settings
         fluid_model   = case.fluid_model
+
+        # Determine whether per-inlet composition is active
+        use_per_inlet = bool(case.inlet_fluid_bcs)
+        if use_per_inlet:
+            # Build default composition from the global fluid_model as fallback
+            from angelica.properties.black_oil import BlackOilFluid
+            if isinstance(fluid_model, BlackOilFluid):
+                default_comp = BlackOilComposition(
+                    api_gravity      = fluid_model.api_gravity,
+                    gas_gravity      = fluid_model.gas_gravity,
+                    gor_sc_m3_per_m3 = fluid_model.gor_sc_m3_per_m3,
+                    wor_sc_m3_per_m3 = fluid_model.wor_sc_m3_per_m3,
+                )
+            else:
+                # Use first inlet's composition as default
+                ibc0 = case.inlet_fluid_bcs[0]
+                default_comp = BlackOilComposition(
+                    api_gravity      = ibc0.api_gravity,
+                    gas_gravity      = ibc0.gas_gravity,
+                    gor_sc_m3_per_m3 = ibc0.gor_sc_m3_per_m3,
+                    wor_sc_m3_per_m3 = ibc0.wor_sc_m3_per_m3,
+                )
+        else:
+            default_comp = None
 
         # ── initialise thermal BCs ────────────────────────────────────────────
         for tb in case.thermal_inlets:
@@ -106,7 +316,6 @@ class SteadyBlackOilSolver(BaseSolver):
             else:
                 node_st.thermal_gradient_dc_per_m = tb.gradient_dc_per_m
 
-        # ── initialise temperature field ──────────────────────────────────────
         T_init = self._initial_temperature(case)
         for node in network_state.nodes.values():
             if node.temperature_c is None:
@@ -128,15 +337,33 @@ class SteadyBlackOilSolver(BaseSolver):
         density_converged      = False
         temperature_converged  = False
 
+        # pipe_comps: per-pipe composition (None → use global fluid_model)
+        pipe_comps: Dict[int, BlackOilComposition] | None = None
+
         for _outer in range(settings.max_outer_iterations):
-            old_densities = [fluid_model.density_for_link(link) for link in network_state.components]
+
+            # ── build effective fluid model for this iteration ────────────────
+            if use_per_inlet:
+                pipe_comps = self._propagate_compositions(
+                    network_state, case, default_comp  # type: ignore[arg-type]
+                )
+                effective_fluid = self._build_mixed_fluid(
+                    network_state, pipe_comps, default_comp, T_init  # type: ignore[arg-type]
+                )
+            else:
+                effective_fluid = fluid_model
+
+            old_densities = [
+                effective_fluid.density_for_link(link)
+                for link in network_state.components
+            ]
 
             self._hydraulic_solver._initialise_pressure_field(network_state, case)
             lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
-                network_state, fluid_model, progress_callback=progress_callback
+                network_state, effective_fluid, progress_callback=progress_callback
             )
             turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
-                network_state, fluid_model, progress_callback=progress_callback
+                network_state, effective_fluid, progress_callback=progress_callback
             )
             all_lam_hist.extend(lam_hist)
             all_lam_metrics.extend(lam_metrics)
@@ -147,7 +374,7 @@ class SteadyBlackOilSolver(BaseSolver):
                 outer_turb_final.append(turb_metrics[-1])
 
             new_node_temps, pipe_mean_temps = solve_energy_system(
-                network_state, fluid_model, self.convection_scheme, T_ref=T_init
+                network_state, effective_fluid, self.convection_scheme, T_ref=T_init
             )
 
             max_delta_t = 0.0
@@ -161,7 +388,10 @@ class SteadyBlackOilSolver(BaseSolver):
             temperature_history.append(max_delta_t)
             self._update_component_temperatures(network_state, T_init, pipe_mean_temps)
 
-            new_densities = [fluid_model.density_for_link(link) for link in network_state.components]
+            new_densities = [
+                effective_fluid.density_for_link(link)
+                for link in network_state.components
+            ]
             max_rel_delta = max(
                 abs(n - o) / max(abs(o), 1e-10)
                 for n, o in zip(new_densities, old_densities)
@@ -183,8 +413,13 @@ class SteadyBlackOilSolver(BaseSolver):
             for nid in sorted(network_state.nodes)
         }
         component_flows = []
-        for link in network_state.components:
-            density = fluid_model.density_for_link(link)
+        for idx, link in enumerate(network_state.components):
+            if use_per_inlet and pipe_comps is not None:
+                comp = pipe_comps.get(idx, default_comp)  # type: ignore[arg-type]
+                density = effective_fluid.density_for_link(link)
+            else:
+                comp    = None
+                density = fluid_model.density_for_link(link)
             t_in  = node_temperatures.get(link.start_node.node_id)
             t_out = node_temperatures.get(link.end_node.node_id)
             component_flows.append(

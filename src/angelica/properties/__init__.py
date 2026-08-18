@@ -1,8 +1,10 @@
 from .base import FluidModel
 from .black_oil import (
+    BlackOilComposition,
     BlackOilFluid,
     BlackOilPVTState,
     bubble_point_pa,
+    compute_pvt,
     gas_fvf,
     gas_viscosity_pa_s,
     live_oil_viscosity_pa_s,
@@ -25,8 +27,10 @@ from .single_component import SingleComponentFluid
 from .thermal_fluid import ThermalFluid
 
 __all__ = [
+    "BlackOilComposition",
     "BlackOilFluid",
     "BlackOilPVTState",
+    "compute_pvt",
     "CompressibleFluid",
     "EquationOfState",
     "FluidModel",
