@@ -687,7 +687,68 @@ class NetSimGui:
         self._restore_snapshot(self._redo_stack.pop())
         self.status_var.set("Redo.")
 
+    def _open_black_oil_fluid_dialog(self) -> None:
+        sources = [n for n in self.scene.nodes if n.node_type == "source"]
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Fluid Definition — Black-oil")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+
+        outer = ttk.Frame(dialog, padding=12)
+        outer.pack(fill="both", expand=True)
+
+        bo_fields = [
+            ("api_gravity",      "API Gravity (°API)"),
+            ("gas_gravity",      "Gas Gravity (air = 1)"),
+            ("gor_sc_m3_per_m3", "GOR sc (m³/m³)"),
+            ("wor_sc_m3_per_m3", "WOR sc (m³/m³)"),
+        ]
+
+        # entries[node_id][field_key] = StringVar
+        entries: dict[int, dict[str, tk.StringVar]] = {}
+
+        if not sources:
+            ttk.Label(outer, text="No source nodes in the network.").pack()
+        else:
+            for node in sources:
+                label = node.properties.get("label", "") or f"N{node.node_id}"
+                group = ttk.LabelFrame(outer, text=f"Source {label}", padding=8)
+                group.pack(fill="x", pady=(0, 8))
+                group.columnconfigure(1, weight=1)
+
+                entries[node.node_id] = {}
+                for row_i, (key, display) in enumerate(bo_fields):
+                    ttk.Label(group, text=display).grid(
+                        row=row_i, column=0, sticky="w", pady=3, padx=(0, 8)
+                    )
+                    var = tk.StringVar(value=node.properties.get(key, ""))
+                    ttk.Entry(group, textvariable=var, width=18).grid(
+                        row=row_i, column=1, sticky="ew", pady=3
+                    )
+                    entries[node.node_id][key] = var
+
+        def _save() -> None:
+            for node in sources:
+                new_props = {k: v.get().strip() for k, v in entries[node.node_id].items()}
+                self.scene.update_node_properties(node.node_id, new_props)
+            self.material_summary_var.set(self._material_summary_text())
+            dialog.destroy()
+
+        btn_row = ttk.Frame(outer)
+        btn_row.pack(fill="x", pady=(4, 0))
+        ttk.Button(btn_row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
+        ttk.Button(btn_row, text="Save", command=_save).pack(side="right")
+
+        dialog.update_idletasks()
+        dialog.grab_set()
+        dialog.focus_set()
+
     def _open_material_dialog(self) -> None:
+        if self.scene.physics_mode == "black_oil":
+            self._open_black_oil_fluid_dialog()
+            return
+
         dialog = tk.Toplevel(self.root)
         dialog.title("Define Material")
         dialog.transient(self.root)
@@ -2127,7 +2188,17 @@ class NetSimGui:
             if viscosity:
                 lines.append(f"mu={viscosity} Pa·s")
         elif self.scene.physics_mode == "black_oil":
-            lines = ["Composition defined per source node"]
+            sources = [n for n in self.scene.nodes if n.node_type == "source"]
+            if not sources:
+                return "No source nodes"
+            lines = []
+            for n in sources:
+                lbl = n.properties.get("label", "") or f"N{n.node_id}"
+                api = n.properties.get("api_gravity", "—")
+                gor = n.properties.get("gor_sc_m3_per_m3", "—")
+                wor = n.properties.get("wor_sc_m3_per_m3", "—")
+                lines.append(f"{lbl}: {api}°API  GOR={gor}  WOR={wor}")
+            return "\n".join(lines)
         else:
             density = self.scene.material.get("density_kg_per_m3", "").strip()
             viscosity = self.scene.material.get("viscosity_pa_s", "").strip()
@@ -2874,29 +2945,6 @@ class NetSimGui:
                 thermal_bc_var.trace_add("write", _sync_thermal_bc)
                 _sync_thermal_bc()
 
-            if self.scene.physics_mode == "black_oil" and node.node_type == "source":
-                ttk.Separator(container, orient="horizontal").grid(
-                    row=8, column=0, columnspan=2, sticky="ew", pady=(6, 2)
-                )
-                ttk.Label(
-                    container, text="— Fluid composition —", foreground="gray"
-                ).grid(row=9, column=0, columnspan=2, pady=(0, 4))
-
-                bo_fields = [
-                    ("api_gravity",      "API Gravity (°API)"),
-                    ("gas_gravity",      "Gas Gravity (air = 1)"),
-                    ("gor_sc_m3_per_m3", "GOR sc (m³/m³)"),
-                    ("wor_sc_m3_per_m3", "WOR sc (m³/m³)"),
-                ]
-                for bo_row, (bo_key, bo_label) in enumerate(bo_fields):
-                    ttk.Label(container, text=bo_label).grid(
-                        row=10 + bo_row, column=0, sticky="w", pady=3
-                    )
-                    bo_var = tk.StringVar(value=node.properties.get(bo_key, ""))
-                    ttk.Entry(container, textvariable=bo_var, width=20).grid(
-                        row=10 + bo_row, column=1, sticky="ew", pady=3
-                    )
-                    entries[bo_key] = bo_var
         else:
             ttk.Label(container, text="Label").grid(row=0, column=0, sticky="w", pady=4)
             label_var = tk.StringVar(value=node.properties.get("label", ""))

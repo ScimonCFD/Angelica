@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.3] — 2026-08-18
+
+### GUI: Black-oil fluid composition moved to Material dialog
+
+- Composition parameters (API gravity, gas gravity, GOR, WOR) are no longer
+  part of the source node properties dialog.
+- In black-oil mode, "Material → Define Material" now opens a dedicated
+  "Fluid Definition" dialog listing one labeled group per source node, each
+  with the four composition fields.
+- The material summary panel updates to show each source node's composition
+  after saving.
+
 ## [1.6.2] — 2026-08-18
 
 ### Tutorials now installed with the package
