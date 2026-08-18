@@ -727,7 +727,6 @@ class NetSimGui:
         ttk.Radiobutton(mode_row, text="Crude oil", variable=mode_var, value="crude_oil").pack(side="left", padx=(8, 0))
         ttk.Radiobutton(mode_row, text="Gas (ideal)", variable=mode_var, value="gas").pack(side="left", padx=(8, 0))
         ttk.Radiobutton(mode_row, text="Gas (PR)", variable=mode_var, value="gas_pr").pack(side="left", padx=(8, 0))
-        ttk.Radiobutton(mode_row, text="Black-oil", variable=mode_var, value="black_oil").pack(side="left", padx=(8, 0))
 
         ttk.Label(frame, text="Material Library").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=4)
         library_box = ttk.Combobox(
@@ -826,42 +825,39 @@ class NetSimGui:
             is_crude_oil = mode == "crude_oil"
             is_gas = mode == "gas"
             is_gas_pr = mode == "gas_pr"
-            is_black_oil_mat = mode == "black_oil"
             is_any_gas = is_gas or is_gas_pr
             library_box.configure(state="readonly" if is_library else "disabled")
             std_state = "normal" if mode == "custom" else "disabled"
-            name_entry.configure(state="disabled" if (is_any_gas or is_black_oil_mat) else std_state)
-            viscosity_entry.configure(state="disabled" if is_black_oil_mat else (std_state if not is_any_gas else "normal"))
-            # density vs molecular weight vs black-oil (no density/MW field)
+            name_entry.configure(state="disabled" if is_any_gas else std_state)
+            viscosity_entry.configure(state=std_state if not is_any_gas else "normal")
             if is_any_gas:
                 density_label.grid_remove()
                 density_entry.grid_remove()
                 mw_label.grid()
                 mw_entry.grid()
                 mw_entry.configure(state="normal")
-            elif is_black_oil_mat:
-                density_label.grid_remove()
-                density_entry.grid_remove()
-                mw_label.grid_remove()
-                mw_entry.grid_remove()
             else:
                 mw_label.grid_remove()
                 mw_entry.grid_remove()
                 density_label.grid()
                 density_entry.grid()
                 density_entry.configure(state=std_state)
-            if is_crude_oil or is_black_oil_mat:
+            if is_crude_oil:
                 api_label.grid()
                 api_entry.grid()
-            else:
-                api_label.grid_remove()
-                api_entry.grid_remove()
-            if is_crude_oil:
                 temperature_label.grid()
                 temperature_entry.grid()
             else:
+                api_label.grid_remove()
+                api_entry.grid_remove()
                 temperature_label.grid_remove()
                 temperature_entry.grid_remove()
+            gas_gravity_label.grid_remove()
+            gas_gravity_entry.grid_remove()
+            gor_label.grid_remove()
+            gor_entry.grid_remove()
+            wor_label.grid_remove()
+            wor_entry.grid_remove()
             if is_gas_pr:
                 tc_label.grid()
                 tc_entry.grid()
@@ -1365,48 +1361,6 @@ class NetSimGui:
     ) -> None:
         mode = mode_var.get()
         is_non_isothermal = self.scene.physics_mode == "non_isothermal"
-
-        if mode == "black_oil":
-            try:
-                api = float(api_var.get().strip())
-                gg = float((gas_gravity_var.get() if gas_gravity_var else "").strip())
-                gor = float((gor_var.get() if gor_var else "").strip())
-                wor = float((wor_var.get() if wor_var else "").strip())
-            except ValueError:
-                messagebox.showerror(
-                    "Invalid material",
-                    "API gravity, gas gravity, GOR, and WOR must be valid numbers.",
-                    parent=dialog,
-                )
-                return
-            if gg <= 0:
-                messagebox.showerror(
-                    "Invalid material",
-                    "Gas gravity must be positive.",
-                    parent=dialog,
-                )
-                return
-            if gor < 0 or wor < 0:
-                messagebox.showerror(
-                    "Invalid material",
-                    "GOR and WOR must be non-negative.",
-                    parent=dialog,
-                )
-                return
-            material: dict = {
-                "definition_mode": "black_oil",
-                "library_key": "",
-                "name": f"Black-oil ({api:.1f}°API, GOR={gor:.0f} m³/m³)",
-                "api_gravity": str(api),
-                "gas_gravity": str(gg),
-                "gor_sc_m3_per_m3": str(gor),
-                "wor_sc_m3_per_m3": str(wor),
-            }
-            self.scene.update_material(material)
-            self._refresh_global_summaries()
-            self.status_var.set(f"Material set to {material['name']}.")
-            dialog.destroy()
-            return
 
         if mode == "gas":
             mw_text = (mw_var.get() if mw_var else "").strip()
@@ -2189,18 +2143,7 @@ class NetSimGui:
             if viscosity:
                 lines.append(f"mu={viscosity} Pa·s")
         elif self.scene.physics_mode == "black_oil":
-            api = self.scene.material.get("api_gravity", "").strip()
-            gg = self.scene.material.get("gas_gravity", "").strip()
-            gor = self.scene.material.get("gor_sc_m3_per_m3", "").strip()
-            wor = self.scene.material.get("wor_sc_m3_per_m3", "").strip()
-            if api:
-                lines.append(f"API={api}°")
-            if gg:
-                lines.append(f"gg={gg}")
-            if gor:
-                lines.append(f"GOR={gor} m³/m³")
-            if wor:
-                lines.append(f"WOR={wor} m³/m³")
+            lines = ["Composition defined per source node"]
         else:
             density = self.scene.material.get("density_kg_per_m3", "").strip()
             viscosity = self.scene.material.get("viscosity_pa_s", "").strip()
@@ -2946,6 +2889,30 @@ class NetSimGui:
 
                 thermal_bc_var.trace_add("write", _sync_thermal_bc)
                 _sync_thermal_bc()
+
+            if self.scene.physics_mode == "black_oil" and node.node_type == "source":
+                ttk.Separator(container, orient="horizontal").grid(
+                    row=8, column=0, columnspan=2, sticky="ew", pady=(6, 2)
+                )
+                ttk.Label(
+                    container, text="— Fluid composition —", foreground="gray"
+                ).grid(row=9, column=0, columnspan=2, pady=(0, 4))
+
+                bo_fields = [
+                    ("api_gravity",      "API Gravity (°API)"),
+                    ("gas_gravity",      "Gas Gravity (air = 1)"),
+                    ("gor_sc_m3_per_m3", "GOR sc (m³/m³)"),
+                    ("wor_sc_m3_per_m3", "WOR sc (m³/m³)"),
+                ]
+                for bo_row, (bo_key, bo_label) in enumerate(bo_fields):
+                    ttk.Label(container, text=bo_label).grid(
+                        row=10 + bo_row, column=0, sticky="w", pady=3
+                    )
+                    bo_var = tk.StringVar(value=node.properties.get(bo_key, ""))
+                    ttk.Entry(container, textvariable=bo_var, width=20).grid(
+                        row=10 + bo_row, column=1, sticky="ew", pady=3
+                    )
+                    entries[bo_key] = bo_var
         else:
             ttk.Label(container, text="Label").grid(row=0, column=0, sticky="w", pady=4)
             label_var = tk.StringVar(value=node.properties.get("label", ""))

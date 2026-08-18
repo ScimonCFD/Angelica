@@ -2,13 +2,7 @@
   "case_name": "Three-phase pipeline (black-oil)",
   "physics_mode": "black_oil",
   "material": {
-    "definition_mode": "black_oil",
-    "library_key": "",
-    "name": "Black-oil (32.0°API, GOR=25 m³/m³)",
-    "api_gravity": "32.0",
-    "gas_gravity": "0.65",
-    "gor_sc_m3_per_m3": "25.0",
-    "wor_sc_m3_per_m3": "0.5"
+    "name": "Black-oil (composition per source)"
   },
   "pressure_drop_model": {
     "library_key": "colebrook_white",
@@ -26,7 +20,11 @@
         "flow": "",
         "thermal_bc_type": "fixed_temperature",
         "inlet_temperature_c": "60.0",
-        "thermal_gradient_dc_per_m": "0.0"
+        "thermal_gradient_dc_per_m": "0.0",
+        "api_gravity": "32.0",
+        "gas_gravity": "0.65",
+        "gor_sc_m3_per_m3": "25.0",
+        "wor_sc_m3_per_m3": "0.5"
       }
     },
     {

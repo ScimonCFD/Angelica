@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.6.1] — 2026-08-18
+
+### GUI: Composition moved from Material dialog to source node properties
+
+- Removed the "Black-oil" option from the Material dialog — fluid composition
+  is no longer a global scene property.
+- Each source node in a black-oil network now carries its own four-parameter
+  composition (API gravity, gas gravity, GOR, WOR) directly in its Properties
+  panel.  This makes it impossible to run a multi-inlet network with a
+  single, ambiguous global composition.
+- `build_network_case_from_scene()` reads composition from each source node
+  and creates the corresponding `InletFluidBC` automatically; the solver path
+  is unchanged.
+- Tutorials 01–04 updated: the `material` section now contains only a display
+  name; composition fields appear on the source node.
+
 ## [1.6.0] — 2026-08-17
 
 ### New: Per-inlet fluid composition (multi-reservoir black-oil)

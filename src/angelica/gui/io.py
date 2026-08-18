@@ -4,7 +4,7 @@ import json
 import math
 from pathlib import Path
 
-from angelica.core.case import FlowBoundary, NetworkCase, PressureBoundary, ThermalBoundary
+from angelica.core.case import FlowBoundary, InletFluidBC, NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import FITTING_PRESET_LIBRARY, Fitting, HeatSource, Pipe, Pump
 from angelica.core.results import ComponentFlowResult, IterationMetrics
 from angelica.core.settings import SolverSettings
@@ -230,21 +230,16 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
         raise ValueError("The scene is empty. Add nodes before running the simulation.")
     if not scene.links:
         raise ValueError("The scene has no links. Add at least one connection before running.")
-    if not scene.material:
+
+    is_compressible    = scene.physics_mode == "compressible"
+    is_non_isothermal  = scene.physics_mode == "non_isothermal"
+    is_black_oil       = scene.physics_mode == "black_oil"
+    inlet_fluid_bcs: list[InletFluidBC] = []
+
+    if not is_black_oil and not scene.material:
         raise ValueError("No material is defined. Use Material → Define Material before running.")
 
-    is_compressible = scene.physics_mode == "compressible"
-    is_non_isothermal = scene.physics_mode == "non_isothermal"
-    is_black_oil = scene.physics_mode == "black_oil"
-
-    if is_black_oil:
-        for _field in ("api_gravity", "gas_gravity", "gor_sc_m3_per_m3", "wor_sc_m3_per_m3"):
-            if not scene.material.get(_field, "").strip():
-                raise ValueError(
-                    f"Black-oil mode requires '{_field}' in the material. "
-                    "Open Material → Define Material."
-                )
-    elif is_compressible:
+    if is_compressible:
         if not scene.material.get("molecular_weight_kg_per_mol", "").strip():
             raise ValueError(
                 "Compressible mode requires Molecular Weight (M) in the material. "
@@ -252,7 +247,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             )
         if not scene.material.get("viscosity_pa_s", "").strip():
             raise ValueError("The material is missing viscosity_pa_s.")
-    else:
+    elif not is_black_oil:
         if not scene.material.get("density_kg_per_m3", "").strip():
             raise ValueError("The material is missing density_kg_per_m3.")
         if not scene.material.get("viscosity_pa_s", "").strip():
@@ -517,11 +512,36 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 "condition to 'Fixed temperature'."
             )
     elif is_black_oil:
+        _BO_FIELDS = ("api_gravity", "gas_gravity", "gor_sc_m3_per_m3", "wor_sc_m3_per_m3")
+        inlet_fluid_bcs: list[InletFluidBC] = []
+        for node in scene.nodes:
+            if node.node_type != "source":
+                continue
+            missing = [f for f in _BO_FIELDS if not node.properties.get(f, "").strip()]
+            if missing:
+                raise ValueError(
+                    f"Source node #{node.node_id} is missing black-oil composition fields: "
+                    + ", ".join(missing)
+                    + ". Open the node properties and fill in all four fields."
+                )
+            inlet_fluid_bcs.append(InletFluidBC(
+                node_id          = node.node_id,
+                api_gravity      = float(node.properties["api_gravity"]),
+                gas_gravity      = float(node.properties["gas_gravity"]),
+                gor_sc_m3_per_m3 = float(node.properties["gor_sc_m3_per_m3"]),
+                wor_sc_m3_per_m3 = float(node.properties["wor_sc_m3_per_m3"]),
+            ))
+        if not inlet_fluid_bcs:
+            raise ValueError(
+                "Black-oil mode requires at least one source node with a defined "
+                "fluid composition (API, gas gravity, GOR, WOR)."
+            )
+        first = inlet_fluid_bcs[0]
         fluid_model = BlackOilFluid(
-            api_gravity=float(scene.material["api_gravity"]),
-            gas_gravity=float(scene.material["gas_gravity"]),
-            gor_sc_m3_per_m3=float(scene.material["gor_sc_m3_per_m3"]),
-            wor_sc_m3_per_m3=float(scene.material["wor_sc_m3_per_m3"]),
+            api_gravity      = first.api_gravity,
+            gas_gravity      = first.gas_gravity,
+            gor_sc_m3_per_m3 = first.gor_sc_m3_per_m3,
+            wor_sc_m3_per_m3 = first.wor_sc_m3_per_m3,
         )
         thermal_inlets = tuple(
             tb
@@ -556,6 +576,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
         node_ids=tuple(sorted(all_node_ids)),
         initial_node_pressures_pa=dict(scene.initial_node_pressures_pa),
         thermal_inlets=thermal_inlets,
+        inlet_fluid_bcs=tuple(inlet_fluid_bcs) if is_black_oil else (),
     )
 
 
