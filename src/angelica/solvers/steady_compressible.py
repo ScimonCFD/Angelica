@@ -207,5 +207,8 @@ class SteadyCompressibleSolver(BaseSolver):
             density_history=density_history,
             outer_turbulent_final_metrics=tuple(outer_turb_final),
             outer_iteration_boundaries=tuple(outer_boundaries),
+            global_balance=self._compute_global_balance(
+                network_state, case.fluid_model, thermal=True
+            ),
         )
 

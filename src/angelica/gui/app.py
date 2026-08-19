@@ -264,6 +264,7 @@ class NetSimGui:
         self.material_summary_var = tk.StringVar(value=self._material_summary_text())
         self.pressure_drop_summary_var = tk.StringVar(value=self._pressure_drop_summary_text())
         self.numerics_summary_var = tk.StringVar(value=self._numerics_summary_text())
+        self.balance_summary_var = tk.StringVar(value="Run a simulation to\nsee the global balance.")
 
         self._build_menu()
         self._build_layout()
@@ -426,6 +427,16 @@ class NetSimGui:
         ttk.Label(
             palette,
             textvariable=self.numerics_summary_var,
+            width=26,
+            relief="groove",
+            padding=6,
+            justify="left",
+        ).pack(anchor="w", pady=(4, 0), fill="x")
+
+        ttk.Label(palette, text="Global Balance").pack(anchor="w", pady=(10, 0))
+        ttk.Label(
+            palette,
+            textvariable=self.balance_summary_var,
             width=26,
             relief="groove",
             padding=6,
@@ -2157,6 +2168,20 @@ class NetSimGui:
                 lines.append(f"mu={viscosity} Pa·s")
         return "\n".join(lines)
 
+    def _balance_summary_text(self, result) -> str:
+        gb = result.global_balance
+        if gb is None:
+            return "—"
+        lines = [
+            f"in   {gb.mass_inlet_kg_per_s:.4g} kg/s",
+            f"out  {gb.mass_outlet_kg_per_s:.4g} kg/s",
+            f"err  {gb.mass_error_pct:.2e} %",
+        ]
+        if gb.heat_loss_kw is not None:
+            sign = "+" if gb.heat_loss_kw < 0 else ""
+            lines.append(f"Q    {sign}{gb.heat_loss_kw:.4g} kW lost")
+        return "\n".join(lines)
+
     def _pressure_drop_summary_text(self) -> str:
         model_name = self.scene.pressure_drop_model.get("name", "").strip()
         if model_name:
@@ -2313,6 +2338,7 @@ class NetSimGui:
         self.density_history = list(result.density_history)
         self.outer_turbulent_final_metrics = list(result.outer_turbulent_final_metrics)
         self.outer_iteration_boundaries = list(result.outer_iteration_boundaries)
+        self.balance_summary_var.set(self._balance_summary_text(result))
         self._redraw_scene()
         self._redraw_convergence_plot()
 

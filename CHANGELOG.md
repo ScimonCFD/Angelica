@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.6.13] — 2026-08-19
+
+### New: Global mass and energy balance
+
+- After every simulation, a **Global Balance** panel appears in the sidebar
+  showing:
+  - Total mass flow entering the network (kg/s)
+  - Total mass flow leaving the network (kg/s)
+  - Relative mass imbalance (%) — should be ~0 for a converged solution
+  - Total heat lost to surroundings (kW) — thermal solvers only
+    (non-isothermal, compressible, black-oil)
+- `SolveResult` gains a `global_balance` field (type `GlobalBalance`) with
+  `mass_inlet_kg_per_s`, `mass_outlet_kg_per_s`, `mass_error_pct`, and
+  `heat_loss_kw` (None for isothermal).
+- Balance is computed in `BaseSolver._compute_global_balance()` from the
+  converged network state and is available to all downstream users of
+  `SolveResult`.
+
 ## [1.6.12] — 2026-08-19
 
 ### Fix: title bar now shows the correct version

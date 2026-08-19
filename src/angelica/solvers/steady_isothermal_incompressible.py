@@ -77,6 +77,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             turbulent_history=turbulent_history,
             turbulent_metrics=turbulent_metrics,
             outer_turbulent_final_metrics=(turbulent_metrics[-1],) if turbulent_metrics else (),
+            global_balance=self._compute_global_balance(network_state),
         )
 
     def _component_label(self, link_state) -> str:

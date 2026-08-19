@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from angelica.core.case import NetworkCase
     from angelica.core.results import SolveResult
 
+from angelica.core.results import GlobalBalance
 from angelica.core.state import HeatSourceState, PipeState
 
 
@@ -43,6 +44,55 @@ class BaseSolver(ABC):
             if hasattr(comp, "ambient_temperature_c"):
                 return comp.ambient_temperature_c
         return 20.0
+
+    @staticmethod
+    def _compute_global_balance(
+        network_state,
+        fluid_model=None,
+        thermal: bool = False,
+    ) -> GlobalBalance:
+        # Net flow INTO each node (positive = fluid arriving at this node)
+        node_net_in: dict[int, float] = {nid: 0.0 for nid in network_state.nodes}
+        for link in network_state.components:
+            flow = link.mass_flow_kg_per_s
+            node_net_in[link.start_node.node_id] -= flow
+            node_net_in[link.end_node.node_id] += flow
+
+        mass_in = 0.0
+        mass_out = 0.0
+        for nid, node in network_state.nodes.items():
+            if not node.is_boundary:
+                continue
+            net = node_net_in[nid]
+            if net < 0:
+                mass_in += -net   # fluid injected into the network
+            else:
+                mass_out += net   # fluid absorbed from the network
+
+        heat_loss_kw: float | None = None
+        if thermal and fluid_model is not None:
+            heat_w = 0.0
+            for link in network_state.components:
+                T_start = network_state.nodes[link.start_node.node_id].temperature_c
+                T_end = network_state.nodes[link.end_node.node_id].temperature_c
+                if T_start is None or T_end is None:
+                    continue
+                try:
+                    cp = fluid_model.specific_heat_for_link(link)
+                except NotImplementedError:
+                    continue
+                flow = link.mass_flow_kg_per_s
+                if flow >= 0:
+                    heat_w += flow * cp * (T_start - T_end)
+                else:
+                    heat_w += (-flow) * cp * (T_end - T_start)
+            heat_loss_kw = heat_w / 1000.0
+
+        return GlobalBalance(
+            mass_inlet_kg_per_s=mass_in,
+            mass_outlet_kg_per_s=mass_out,
+            heat_loss_kw=heat_loss_kw,
+        )
 
     @staticmethod
     def _update_component_temperatures(
