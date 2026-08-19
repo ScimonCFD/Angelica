@@ -156,6 +156,19 @@ class GuiIoTests(unittest.TestCase):
                 result = build_solver_from_scene(scene).solve(case)
                 self.assertTrue(result.converged, msg=f"{gui_path} did not converge")
 
+    def test_all_black_oil_gui_tutorial_scenes_build_and_converge(self) -> None:
+        tutorial_root = TUTORIALS_ROOT / "steady_black_oil"
+        gui_paths = sorted(tutorial_root.glob("*/*.gui.json"))
+
+        self.assertGreaterEqual(len(gui_paths), 5)
+
+        for gui_path in gui_paths:
+            with self.subTest(gui_path=gui_path.name):
+                scene = load_scene_from_file(gui_path)
+                case = build_network_case_from_scene(scene)
+                result = build_solver_from_scene(scene).solve(case)
+                self.assertTrue(result.converged, msg=f"{gui_path} did not converge")
+
     def test_build_solver_uses_supported_default_pressure_drop_model(self) -> None:
         scene = load_scene_from_file(self._pipe_only_case_path())
 

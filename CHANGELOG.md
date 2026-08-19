@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.5] — 2026-08-19
+
+### Black-oil tutorials
+
+- Tutorial 05 (Two-Reservoir Blending) now has a GUI file
+  (`two_reservoir_blending.gui.json`), making it accessible directly from
+  the application. It is the only tutorial that demonstrates per-inlet
+  composition with two source nodes carrying different API gravity, GOR,
+  and WOR values.
+- Added README files for tutorials 03, 04, and 05.
+- Added automated test that loads and solves all five black-oil GUI tutorials.
+
 ## [1.6.4] — 2026-08-18
 
 ### Bug fixes
