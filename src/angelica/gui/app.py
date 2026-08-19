@@ -236,6 +236,7 @@ class NetSimGui:
         self._move_pre_snapshot: dict | None = None
         self.convergence_window: tk.Toplevel | None = None
         self.convergence_canvas: tk.Canvas | None = None
+        self.balance_canvas: tk.Canvas | None = None
         self.temperature_canvas: tk.Canvas | None = None
         self.temperature_history: list[float] = []
         self.density_history: list[float] = []
@@ -264,7 +265,6 @@ class NetSimGui:
         self.material_summary_var = tk.StringVar(value=self._material_summary_text())
         self.pressure_drop_summary_var = tk.StringVar(value=self._pressure_drop_summary_text())
         self.numerics_summary_var = tk.StringVar(value=self._numerics_summary_text())
-        self.balance_summary_var = tk.StringVar(value="Run a simulation to\nsee the global balance.")
 
         self._build_menu()
         self._build_layout()
@@ -285,8 +285,14 @@ class NetSimGui:
                 background=self._t["plot_bg"],
                 highlightbackground=self._t["canvas_hl"],
             )
+        if self.balance_canvas is not None:
+            self.balance_canvas.configure(
+                background=self._t["plot_bg"],
+                highlightbackground=self._t["canvas_hl"],
+            )
         self._redraw_scene()
         self._redraw_convergence_plot()
+        self._redraw_balance_diagram()
 
     def _build_menu(self) -> None:
         menu_bar = tk.Menu(self.root)
@@ -427,16 +433,6 @@ class NetSimGui:
         ttk.Label(
             palette,
             textvariable=self.numerics_summary_var,
-            width=26,
-            relief="groove",
-            padding=6,
-            justify="left",
-        ).pack(anchor="w", pady=(4, 0), fill="x")
-
-        ttk.Label(palette, text="Global Balance").pack(anchor="w", pady=(10, 0))
-        ttk.Label(
-            palette,
-            textvariable=self.balance_summary_var,
             width=26,
             relief="groove",
             padding=6,
@@ -2168,20 +2164,6 @@ class NetSimGui:
                 lines.append(f"mu={viscosity} Pa·s")
         return "\n".join(lines)
 
-    def _balance_summary_text(self, result) -> str:
-        gb = result.global_balance
-        if gb is None:
-            return "—"
-        lines = [
-            f"in   {gb.mass_inlet_kg_per_s:.4g} kg/s",
-            f"out  {gb.mass_outlet_kg_per_s:.4g} kg/s",
-            f"err  {gb.mass_error_pct:.2e} %",
-        ]
-        if gb.heat_loss_kw is not None:
-            sign = "+" if gb.heat_loss_kw < 0 else ""
-            lines.append(f"Q    {sign}{gb.heat_loss_kw:.4g} kW lost")
-        return "\n".join(lines)
-
     def _pressure_drop_summary_text(self) -> str:
         model_name = self.scene.pressure_drop_model.get("name", "").strip()
         if model_name:
@@ -2338,9 +2320,9 @@ class NetSimGui:
         self.density_history = list(result.density_history)
         self.outer_turbulent_final_metrics = list(result.outer_turbulent_final_metrics)
         self.outer_iteration_boundaries = list(result.outer_iteration_boundaries)
-        self.balance_summary_var.set(self._balance_summary_text(result))
         self._redraw_scene()
         self._redraw_convergence_plot()
+        self._redraw_balance_diagram()
 
         if result.converged:
             self.status_var.set(f"Simulation converged for case '{case.name}'.")
@@ -4142,9 +4124,9 @@ class NetSimGui:
     def _prepare_convergence_window(self) -> None:
         if self.convergence_window is None or not self.convergence_window.winfo_exists():
             self.convergence_window = tk.Toplevel(self.root)
-            self.convergence_window.title("Convergence Metrics")
+            self.convergence_window.title("Convergence and Balance")
             self.convergence_window.transient(self.root)
-            self.convergence_window.geometry("820x520")
+            self.convergence_window.geometry("860x680")
 
             frame = ttk.Frame(self.convergence_window, padding=12)
             frame.pack(fill="both", expand=True)
@@ -4184,6 +4166,21 @@ class NetSimGui:
                 lambda _event: self._redraw_convergence_plot(),
             )
             # Legend is drawn inside the canvas by _draw_history_plot
+
+            ttk.Label(frame, text="Global balance").pack(anchor="w", pady=(12, 4))
+            self.balance_canvas = tk.Canvas(
+                frame,
+                background=self._t["plot_bg"],
+                highlightthickness=1,
+                highlightbackground=self._t["canvas_hl"],
+                width=760,
+                height=170,
+            )
+            self.balance_canvas.pack(fill="x")
+            self.balance_canvas.bind(
+                "<Configure>",
+                lambda _event: self._redraw_balance_diagram(),
+            )
         else:
             self.convergence_window.deiconify()
             self.convergence_window.lift()
@@ -4191,6 +4188,8 @@ class NetSimGui:
         self.convergence_window.update_idletasks()
         if self.convergence_canvas is not None:
             self.convergence_canvas.after_idle(self._redraw_convergence_plot)
+        if self.balance_canvas is not None:
+            self.balance_canvas.after_idle(self._redraw_balance_diagram)
 
     def _on_solver_progress(self, stage: str, _iteration_index: int, metrics) -> None:
         self.convergence_history[stage].append(metrics)
@@ -4303,6 +4302,129 @@ class NetSimGui:
             outer_marker_x=outer_marker_x if outer_marker_x else None,
         )
 
+    def _redraw_balance_diagram(self) -> None:
+        if self.balance_canvas is None:
+            return
+
+        canvas = self.balance_canvas
+        canvas.delete("all")
+        width = int(canvas.winfo_width() or canvas["width"])
+        height = int(canvas.winfo_height() or canvas["height"])
+        if width < 360 or height < 130:
+            canvas.create_text(
+                20,
+                20,
+                anchor="nw",
+                text="Waiting for balance area...",
+                fill=self._t["plot_muted"],
+            )
+            return
+
+        result = self.latest_result
+        gb = result.global_balance if result is not None else None
+        if gb is None:
+            canvas.create_text(
+                20,
+                20,
+                anchor="nw",
+                text="Run a simulation to see global mass and energy balance.",
+                fill=self._t["plot_muted"],
+            )
+            return
+
+        mass_delta = gb.mass_inlet_kg_per_s - gb.mass_outlet_kg_per_s
+        mass_error_pct = gb.mass_error_pct
+        accent = self._t["plot_turbulent"] if mass_error_pct > 1e-3 else self._t["plot_temperature"]
+        text = self._t["plot_text"]
+        muted = self._t["plot_muted"]
+        arrow = self._t["plot_axis"]
+
+        y = 58
+        box_w = min(150, max(110, (width - 180) / 3))
+        box_h = 48
+        gap = max(20, (width - 3 * box_w - 80) / 2)
+        x1 = 40
+        x2 = x1 + box_w + gap
+        x3 = x2 + box_w + gap
+
+        self._draw_balance_box(canvas, x1, y, box_w, box_h, "Mass in", f"{gb.mass_inlet_kg_per_s:.5g} kg/s")
+        self._draw_balance_box(canvas, x2, y, box_w, box_h, "Network", f"Δm = {mass_delta:.3e} kg/s", outline=accent)
+        self._draw_balance_box(canvas, x3, y, box_w, box_h, "Mass out", f"{gb.mass_outlet_kg_per_s:.5g} kg/s")
+
+        mid_y = y + box_h / 2
+        canvas.create_line(x1 + box_w, mid_y, x2, mid_y, arrow=tk.LAST, fill=arrow, width=2)
+        canvas.create_line(x2 + box_w, mid_y, x3, mid_y, arrow=tk.LAST, fill=arrow, width=2)
+
+        canvas.create_text(
+            x2 + box_w / 2,
+            y + box_h + 20,
+            text=f"Relative mass error: {mass_error_pct:.3e} %",
+            fill=accent,
+            font=("TkDefaultFont", 9, "bold"),
+        )
+
+        if gb.heat_loss_kw is None:
+            energy_text = "Energy balance: not tracked for isothermal runs."
+        else:
+            direction = "lost by fluid" if gb.heat_loss_kw >= 0.0 else "added to fluid"
+            energy_text = f"Energy balance: ΔE = {gb.heat_loss_kw:.5g} kW ({direction})"
+            top_y = max(18, y - 30)
+            line_start = (x2 + box_w / 2, y)
+            line_end = (x2 + box_w / 2, top_y)
+            if gb.heat_loss_kw < 0.0:
+                line_start, line_end = line_end, line_start
+            canvas.create_line(
+                line_start[0],
+                line_start[1],
+                line_end[0],
+                line_end[1],
+                arrow=tk.LAST,
+                fill=self._t["plot_density"],
+                width=2,
+            )
+        canvas.create_text(
+            20,
+            height - 18,
+            anchor="sw",
+            text=energy_text,
+            fill=text if gb.heat_loss_kw is not None else muted,
+            font=("TkDefaultFont", 9),
+        )
+
+    def _draw_balance_box(
+        self,
+        canvas: tk.Canvas,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        title: str,
+        value: str,
+        outline: str | None = None,
+    ) -> None:
+        canvas.create_rectangle(
+            x,
+            y,
+            x + width,
+            y + height,
+            fill=self._t["canvas_bg"],
+            outline=outline or self._t["canvas_hl"],
+            width=2,
+        )
+        canvas.create_text(
+            x + width / 2,
+            y + 15,
+            text=title,
+            fill=self._t["plot_text"],
+            font=("TkDefaultFont", 9, "bold"),
+        )
+        canvas.create_text(
+            x + width / 2,
+            y + 33,
+            text=value,
+            fill=self._t["plot_text"],
+            font=("TkDefaultFont", 9),
+        )
 
     def _draw_history_plot(
         self,

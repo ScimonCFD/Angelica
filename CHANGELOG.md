@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.14] — 2026-08-19
+
+### GUI: balance diagram moved to convergence window
+
+- Moved the global mass/energy balance out of the sidebar and into the
+  convergence window, where it is shown as a separate diagram next to the
+  convergence history.
+- The balance view now shows mass entering the network, mass leaving the
+  network, net mass error, relative mass error, and thermal energy balance
+  when available.
+- Updated release metadata so the Windows installer generated from the tag
+  reports the current Angelica version.
+
 ## [1.6.13] — 2026-08-19
 
 ### New: Global mass and energy balance
