@@ -1,5 +1,5 @@
 #define MyAppName      "Angelica"
-#define MyAppVersion   "1.3.31"
+#define MyAppVersion   "1.6.5"
 #define MyAppPublisher "Simon Rodriguez"
 #define MyAppURL       "https://scimonCFD.github.io/Angelica_website/"
 #define MyAppExeName   "Angelica.exe"
@@ -37,7 +37,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "..\dist\Angelica\*";  DestDir: "{app}";           Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\tutorials\*";      DestDir: "{app}\tutorials"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\src\angelica\tutorials\*"; DestDir: "{app}\tutorials"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}";                                          Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"

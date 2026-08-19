@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.6] — 2026-08-19
+
+### Windows installer fix
+
+- Fixed the Inno Setup script: tutorials were referenced at the old repo-root
+  path (`tutorials\*`); updated to `src\angelica\tutorials\*` after the v1.6.2
+  move. This caused the Windows installer build to fail for v1.6.2–v1.6.5.
+- The build workflow now extracts the version from the git tag and passes it
+  to Inno Setup automatically, so `angelica.iss` no longer needs a manual
+  version update on each release.
+
 ## [1.6.5] — 2026-08-19
 
 ### Black-oil tutorials
