@@ -2,7 +2,10 @@
   "case_name": "Black-Oil — Two-Reservoir Blending",
   "physics_mode": "black_oil",
   "material": {
-    "name": "Black-oil (composition per source)"
+    "name": "Black-oil (PVT)",
+    "definition_mode": "black_oil",
+    "api_gravity": "32.0",
+    "gas_gravity": "0.65"
   },
   "pressure_drop_model": {
     "library_key": "colebrook_white",
@@ -21,8 +24,6 @@
         "thermal_bc_type": "fixed_temperature",
         "inlet_temperature_c": "70.0",
         "thermal_gradient_dc_per_m": "0.0",
-        "api_gravity": "32.0",
-        "gas_gravity": "0.65",
         "gor_sc_m3_per_m3": "25.0",
         "wor_sc_m3_per_m3": "0.3",
         "label": "Reservoir A"
@@ -40,8 +41,6 @@
         "thermal_bc_type": "fixed_temperature",
         "inlet_temperature_c": "60.0",
         "thermal_gradient_dc_per_m": "0.0",
-        "api_gravity": "22.0",
-        "gas_gravity": "0.70",
         "gor_sc_m3_per_m3": "10.0",
         "wor_sc_m3_per_m3": "1.5",
         "label": "Reservoir B"
@@ -52,7 +51,9 @@
       "node_type": "junction",
       "x": 400,
       "y": 240,
-      "properties": { "label": "Mixing point" }
+      "properties": {
+        "label": "Mixing point"
+      }
     },
     {
       "node_id": 4,
@@ -75,19 +76,61 @@
       "link_id": 1,
       "start_node_id": 1,
       "end_node_id": 3,
-      "components": [{ "component_id": 1, "component_type": "pipe", "properties": { "length_m": "5000.0", "diameter_m": "0.18", "height_change_m": "0.0", "roughness_m": "0.000046", "num_segments": "1", "heat_transfer_coefficient_w_per_m2k": "5.0", "ambient_temperature_c": "15.0" } }]
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "5000.0",
+            "diameter_m": "0.18",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
     },
     {
       "link_id": 2,
       "start_node_id": 2,
       "end_node_id": 3,
-      "components": [{ "component_id": 2, "component_type": "pipe", "properties": { "length_m": "5000.0", "diameter_m": "0.16", "height_change_m": "0.0", "roughness_m": "0.000046", "num_segments": "1", "heat_transfer_coefficient_w_per_m2k": "5.0", "ambient_temperature_c": "15.0" } }]
+      "components": [
+        {
+          "component_id": 2,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "5000.0",
+            "diameter_m": "0.16",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
     },
     {
       "link_id": 3,
       "start_node_id": 3,
       "end_node_id": 4,
-      "components": [{ "component_id": 3, "component_type": "pipe", "properties": { "length_m": "3000.0", "diameter_m": "0.22", "height_change_m": "0.0", "roughness_m": "0.000046", "num_segments": "1", "heat_transfer_coefficient_w_per_m2k": "5.0", "ambient_temperature_c": "15.0" } }]
+      "components": [
+        {
+          "component_id": 3,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "3000.0",
+            "diameter_m": "0.22",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
     }
   ]
 }

@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.6.9] — 2026-08-19
+
+### GUI: API gravity and gas gravity moved to Material dialog
+
+- In black-oil mode, **API gravity** and **gas gravity** are now global fluid
+  properties set once in Material → Define Material, not per source node.
+  These characterize the fluid type and apply to the whole network.
+- **GOR** and **WOR** remain per-inlet (source node dialog), since they
+  represent individual well production ratios that vary across reservoirs.
+- The Material → Define Material dialog for black-oil now shows a "Fluid
+  properties" section (API gravity, gas gravity) followed by a
+  "Production ratios per inlet" section (GOR and WOR per source node).
+- The source node properties dialog now shows only "Production ratios"
+  (GOR and WOR), with no fluid characterization fields.
+- The material summary panel shows `X°API  γg=Y` on the first line,
+  followed by per-inlet GOR/WOR rows.
+- Tutorials 01–05 updated: `api_gravity` and `gas_gravity` moved from
+  node properties to the `material` dict in each `.gui.json` file.
+  Tutorial 05 (two-reservoir blending) now uses a single global fluid
+  (32°API, γg=0.65) with different GOR and WOR per reservoir.
+
 ## [1.6.8] — 2026-08-19
 
 ### GUI: Fluid composition fields restored to source node dialog

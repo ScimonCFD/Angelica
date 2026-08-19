@@ -697,10 +697,40 @@ class NetSimGui:
 
         outer = ttk.Frame(dialog, padding=12)
         outer.pack(fill="both", expand=True)
+        outer.columnconfigure(1, weight=1)
 
-        bo_fields = [
-            ("api_gravity",      "API Gravity (°API)"),
-            ("gas_gravity",      "Gas Gravity (air = 1)"),
+        # ── Global fluid properties (API gravity and gas gravity) ──────────
+        ttk.Label(
+            outer, text="— Fluid properties —", foreground="gray"
+        ).grid(row=0, column=0, columnspan=2, pady=(0, 4))
+
+        mat = dict(self.scene.material)
+        api_var = tk.StringVar(value=mat.get("api_gravity", ""))
+        gg_var = tk.StringVar(value=mat.get("gas_gravity", ""))
+
+        ttk.Label(outer, text="API Gravity (°API)").grid(
+            row=1, column=0, sticky="w", pady=3, padx=(0, 8)
+        )
+        ttk.Entry(outer, textvariable=api_var, width=18).grid(
+            row=1, column=1, sticky="ew", pady=3
+        )
+        ttk.Label(outer, text="Gas Gravity (air = 1)").grid(
+            row=2, column=0, sticky="w", pady=3, padx=(0, 8)
+        )
+        ttk.Entry(outer, textvariable=gg_var, width=18).grid(
+            row=2, column=1, sticky="ew", pady=3
+        )
+
+        ttk.Separator(outer, orient="horizontal").grid(
+            row=3, column=0, columnspan=2, sticky="ew", pady=(8, 4)
+        )
+
+        # ── Per-inlet production ratios (GOR and WOR) ─────────────────────
+        ttk.Label(
+            outer, text="— Production ratios per inlet —", foreground="gray"
+        ).grid(row=4, column=0, columnspan=2, pady=(0, 4))
+
+        prod_fields = [
             ("gor_sc_m3_per_m3", "GOR sc (m³/m³)"),
             ("wor_sc_m3_per_m3", "WOR sc (m³/m³)"),
         ]
@@ -708,17 +738,22 @@ class NetSimGui:
         # entries[node_id][field_key] = StringVar
         entries: dict[int, dict[str, tk.StringVar]] = {}
 
+        next_row = 5
         if not sources:
-            ttk.Label(outer, text="No source nodes in the network.").pack()
+            ttk.Label(outer, text="No source nodes in the network.").grid(
+                row=next_row, column=0, columnspan=2
+            )
+            next_row += 1
         else:
             for node in sources:
-                label = node.properties.get("label", "") or f"N{node.node_id}"
-                group = ttk.LabelFrame(outer, text=f"Source {label}", padding=8)
-                group.pack(fill="x", pady=(0, 8))
+                lbl = node.properties.get("label", "") or f"N{node.node_id}"
+                group = ttk.LabelFrame(outer, text=f"Source {lbl}", padding=8)
+                group.grid(row=next_row, column=0, columnspan=2, sticky="ew", pady=(0, 6))
                 group.columnconfigure(1, weight=1)
+                next_row += 1
 
                 entries[node.node_id] = {}
-                for row_i, (key, display) in enumerate(bo_fields):
+                for row_i, (key, display) in enumerate(prod_fields):
                     ttk.Label(group, text=display).grid(
                         row=row_i, column=0, sticky="w", pady=3, padx=(0, 8)
                     )
@@ -729,6 +764,10 @@ class NetSimGui:
                     entries[node.node_id][key] = var
 
         def _save() -> None:
+            new_mat = {**dict(self.scene.material),
+                       "api_gravity": api_var.get().strip(),
+                       "gas_gravity": gg_var.get().strip()}
+            self.scene.update_material(new_mat)
             for node in sources:
                 new_props = {k: v.get().strip() for k, v in entries[node.node_id].items()}
                 self.scene.update_node_properties(node.node_id, new_props)
@@ -736,7 +775,7 @@ class NetSimGui:
             dialog.destroy()
 
         btn_row = ttk.Frame(outer)
-        btn_row.pack(fill="x", pady=(4, 0))
+        btn_row.grid(row=next_row, column=0, columnspan=2, sticky="e", pady=(4, 0))
         ttk.Button(btn_row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
         ttk.Button(btn_row, text="Save", command=_save).pack(side="right")
 
@@ -952,9 +991,6 @@ class NetSimGui:
                 tc_var,
                 pc_var,
                 omega_var,
-                gas_gravity_var,
-                gor_var,
-                wor_var,
             ),
         ).pack(side="right", padx=(0, 8))
 
@@ -1375,9 +1411,6 @@ class NetSimGui:
         tc_var: tk.StringVar | None = None,
         pc_var: tk.StringVar | None = None,
         omega_var: tk.StringVar | None = None,
-        gas_gravity_var: tk.StringVar | None = None,
-        gor_var: tk.StringVar | None = None,
-        wor_var: tk.StringVar | None = None,
     ) -> None:
         mode = mode_var.get()
         is_non_isothermal = self.scene.physics_mode == "non_isothermal"
@@ -2164,16 +2197,16 @@ class NetSimGui:
             if viscosity:
                 lines.append(f"mu={viscosity} Pa·s")
         elif self.scene.physics_mode == "black_oil":
-            sources = [n for n in self.scene.nodes if n.node_type == "source"]
-            if not sources:
-                return "No source nodes"
-            lines = []
-            for n in sources:
+            api = self.scene.material.get("api_gravity", "—")
+            gg = self.scene.material.get("gas_gravity", "—")
+            lines = [f"{api}°API  γg={gg}"]
+            for n in self.scene.nodes:
+                if n.node_type != "source":
+                    continue
                 lbl = n.properties.get("label", "") or f"N{n.node_id}"
-                api = n.properties.get("api_gravity", "—")
                 gor = n.properties.get("gor_sc_m3_per_m3", "—")
                 wor = n.properties.get("wor_sc_m3_per_m3", "—")
-                lines.append(f"{lbl}: {api}°API  GOR={gor}  WOR={wor}")
+                lines.append(f"{lbl}: GOR={gor}  WOR={wor}")
             return "\n".join(lines)
         else:
             density = self.scene.material.get("density_kg_per_m3", "").strip()
@@ -2926,11 +2959,9 @@ class NetSimGui:
                     row=8, column=0, columnspan=2, sticky="ew", pady=(8, 2)
                 )
                 ttk.Label(
-                    container, text="— Fluid composition —", foreground="gray"
+                    container, text="— Production ratios —", foreground="gray"
                 ).grid(row=9, column=0, columnspan=2, pady=(0, 4))
                 bo_fields = [
-                    ("api_gravity",      "API Gravity (°API)"),
-                    ("gas_gravity",      "Gas Gravity (air = 1)"),
                     ("gor_sc_m3_per_m3", "GOR sc (m³/m³)"),
                     ("wor_sc_m3_per_m3", "WOR sc (m³/m³)"),
                 ]

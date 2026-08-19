@@ -512,34 +512,50 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 "condition to 'Fixed temperature'."
             )
     elif is_black_oil:
-        _BO_FIELDS = ("api_gravity", "gas_gravity", "gor_sc_m3_per_m3", "wor_sc_m3_per_m3")
+        # API gravity and gas gravity are global fluid properties (from Material)
+        _mat_missing = [
+            f for f in ("api_gravity", "gas_gravity")
+            if not scene.material.get(f, "").strip()
+        ]
+        if _mat_missing:
+            raise ValueError(
+                "Black-oil material is missing: " + ", ".join(_mat_missing)
+                + ". Go to Material → Define Material to set the fluid properties."
+            )
+        api_gravity = float(scene.material["api_gravity"])
+        gas_gravity = float(scene.material["gas_gravity"])
+
+        # GOR and WOR are per-inlet production ratios (from each source node)
         inlet_fluid_bcs: list[InletFluidBC] = []
         for node in scene.nodes:
             if node.node_type != "source":
                 continue
-            missing = [f for f in _BO_FIELDS if not node.properties.get(f, "").strip()]
+            missing = [
+                f for f in ("gor_sc_m3_per_m3", "wor_sc_m3_per_m3")
+                if not node.properties.get(f, "").strip()
+            ]
             if missing:
                 raise ValueError(
-                    f"Source node #{node.node_id} is missing fluid composition fields: "
+                    f"Source node #{node.node_id} is missing production ratio fields: "
                     + ", ".join(missing)
-                    + ". Go to Material → Define Material to fill in the composition for each source node."
+                    + ". Double-click the source node to set GOR and WOR."
                 )
             inlet_fluid_bcs.append(InletFluidBC(
                 node_id          = node.node_id,
-                api_gravity      = float(node.properties["api_gravity"]),
-                gas_gravity      = float(node.properties["gas_gravity"]),
+                api_gravity      = api_gravity,
+                gas_gravity      = gas_gravity,
                 gor_sc_m3_per_m3 = float(node.properties["gor_sc_m3_per_m3"]),
                 wor_sc_m3_per_m3 = float(node.properties["wor_sc_m3_per_m3"]),
             ))
         if not inlet_fluid_bcs:
             raise ValueError(
-                "Black-oil mode requires fluid composition (API, gas gravity, GOR, WOR) "
-                "for each source node. Go to Material → Define Material to define it."
+                "Black-oil mode requires at least one source node with GOR and WOR. "
+                "Double-click a source node to set its production ratios."
             )
         first = inlet_fluid_bcs[0]
         fluid_model = BlackOilFluid(
-            api_gravity      = first.api_gravity,
-            gas_gravity      = first.gas_gravity,
+            api_gravity      = api_gravity,
+            gas_gravity      = gas_gravity,
             gor_sc_m3_per_m3 = first.gor_sc_m3_per_m3,
             wor_sc_m3_per_m3 = first.wor_sc_m3_per_m3,
         )
