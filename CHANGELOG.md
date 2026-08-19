@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.11] — 2026-08-19
+
+### GUI: Material summary panel simplified for black-oil
+
+- The sidebar material summary now shows only `X°API  γg=Y` in black-oil
+  mode. GOR and WOR are per-well properties visible in each source node's
+  dialog — they do not belong in the material panel.
+
 ## [1.6.10] — 2026-08-19
 
 ### GUI: Material dialog simplified to fluid characterization only

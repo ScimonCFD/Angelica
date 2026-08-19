@@ -2147,15 +2147,7 @@ class NetSimGui:
         elif self.scene.physics_mode == "black_oil":
             api = self.scene.material.get("api_gravity", "—")
             gg = self.scene.material.get("gas_gravity", "—")
-            lines = [f"{api}°API  γg={gg}"]
-            for n in self.scene.nodes:
-                if n.node_type != "source":
-                    continue
-                lbl = n.properties.get("label", "") or f"N{n.node_id}"
-                gor = n.properties.get("gor_sc_m3_per_m3", "—")
-                wor = n.properties.get("wor_sc_m3_per_m3", "—")
-                lines.append(f"{lbl}: GOR={gor}  WOR={wor}")
-            return "\n".join(lines)
+            return f"{api}°API  γg={gg}"
         else:
             density = self.scene.material.get("density_kg_per_m3", "").strip()
             viscosity = self.scene.material.get("viscosity_pa_s", "").strip()
