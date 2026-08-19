@@ -1,6 +1,10 @@
 """Angelica: open-source platform for pipe network simulation."""
 
-__version__ = "1.3.31"
+from importlib.metadata import version, PackageNotFoundError
+try:
+    __version__ = version("angelica")
+except PackageNotFoundError:
+    __version__ = "unknown"
 
 from .closures.convection_scheme import ConvectionScheme, HybridScheme, PowerLawScheme, UpwindScheme
 from .core.case import FlowBoundary, NetworkCase, PressureBoundary, ThermalBoundary

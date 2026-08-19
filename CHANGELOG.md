@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.12] — 2026-08-19
+
+### Fix: title bar now shows the correct version
+
+- `__version__` in `__init__.py` was hardcoded to `"1.3.31"` and never
+  updated. It now reads from the installed package metadata via
+  `importlib.metadata`, so the title bar always reflects the actual
+  installed version.
+
 ## [1.6.11] — 2026-08-19
 
 ### GUI: Material summary panel simplified for black-oil
