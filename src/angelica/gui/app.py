@@ -688,94 +688,42 @@ class NetSimGui:
         self.status_var.set("Redo.")
 
     def _open_black_oil_fluid_dialog(self) -> None:
-        sources = [n for n in self.scene.nodes if n.node_type == "source"]
-
         dialog = tk.Toplevel(self.root)
         dialog.title("Fluid Definition — Black-oil")
         dialog.transient(self.root)
         dialog.resizable(False, False)
 
-        outer = ttk.Frame(dialog, padding=12)
-        outer.pack(fill="both", expand=True)
-        outer.columnconfigure(1, weight=1)
-
-        # ── Global fluid properties (API gravity and gas gravity) ──────────
-        ttk.Label(
-            outer, text="— Fluid properties —", foreground="gray"
-        ).grid(row=0, column=0, columnspan=2, pady=(0, 4))
+        frame = ttk.Frame(dialog, padding=12)
+        frame.pack(fill="both", expand=True)
+        frame.columnconfigure(1, weight=1)
 
         mat = dict(self.scene.material)
         api_var = tk.StringVar(value=mat.get("api_gravity", ""))
         gg_var = tk.StringVar(value=mat.get("gas_gravity", ""))
 
-        ttk.Label(outer, text="API Gravity (°API)").grid(
-            row=1, column=0, sticky="w", pady=3, padx=(0, 8)
+        ttk.Label(frame, text="API Gravity (°API)").grid(
+            row=0, column=0, sticky="w", pady=4, padx=(0, 8)
         )
-        ttk.Entry(outer, textvariable=api_var, width=18).grid(
-            row=1, column=1, sticky="ew", pady=3
+        ttk.Entry(frame, textvariable=api_var, width=18).grid(
+            row=0, column=1, sticky="ew", pady=4
         )
-        ttk.Label(outer, text="Gas Gravity (air = 1)").grid(
-            row=2, column=0, sticky="w", pady=3, padx=(0, 8)
+        ttk.Label(frame, text="Gas Gravity (air = 1)").grid(
+            row=1, column=0, sticky="w", pady=4, padx=(0, 8)
         )
-        ttk.Entry(outer, textvariable=gg_var, width=18).grid(
-            row=2, column=1, sticky="ew", pady=3
+        ttk.Entry(frame, textvariable=gg_var, width=18).grid(
+            row=1, column=1, sticky="ew", pady=4
         )
-
-        ttk.Separator(outer, orient="horizontal").grid(
-            row=3, column=0, columnspan=2, sticky="ew", pady=(8, 4)
-        )
-
-        # ── Per-inlet production ratios (GOR and WOR) ─────────────────────
-        ttk.Label(
-            outer, text="— Production ratios per inlet —", foreground="gray"
-        ).grid(row=4, column=0, columnspan=2, pady=(0, 4))
-
-        prod_fields = [
-            ("gor_sc_m3_per_m3", "GOR sc (m³/m³)"),
-            ("wor_sc_m3_per_m3", "WOR sc (m³/m³)"),
-        ]
-
-        # entries[node_id][field_key] = StringVar
-        entries: dict[int, dict[str, tk.StringVar]] = {}
-
-        next_row = 5
-        if not sources:
-            ttk.Label(outer, text="No source nodes in the network.").grid(
-                row=next_row, column=0, columnspan=2
-            )
-            next_row += 1
-        else:
-            for node in sources:
-                lbl = node.properties.get("label", "") or f"N{node.node_id}"
-                group = ttk.LabelFrame(outer, text=f"Source {lbl}", padding=8)
-                group.grid(row=next_row, column=0, columnspan=2, sticky="ew", pady=(0, 6))
-                group.columnconfigure(1, weight=1)
-                next_row += 1
-
-                entries[node.node_id] = {}
-                for row_i, (key, display) in enumerate(prod_fields):
-                    ttk.Label(group, text=display).grid(
-                        row=row_i, column=0, sticky="w", pady=3, padx=(0, 8)
-                    )
-                    var = tk.StringVar(value=node.properties.get(key, ""))
-                    ttk.Entry(group, textvariable=var, width=18).grid(
-                        row=row_i, column=1, sticky="ew", pady=3
-                    )
-                    entries[node.node_id][key] = var
 
         def _save() -> None:
             new_mat = {**dict(self.scene.material),
                        "api_gravity": api_var.get().strip(),
                        "gas_gravity": gg_var.get().strip()}
             self.scene.update_material(new_mat)
-            for node in sources:
-                new_props = {k: v.get().strip() for k, v in entries[node.node_id].items()}
-                self.scene.update_node_properties(node.node_id, new_props)
             self.material_summary_var.set(self._material_summary_text())
             dialog.destroy()
 
-        btn_row = ttk.Frame(outer)
-        btn_row.grid(row=next_row, column=0, columnspan=2, sticky="e", pady=(4, 0))
+        btn_row = ttk.Frame(frame)
+        btn_row.grid(row=2, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(btn_row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
         ttk.Button(btn_row, text="Save", command=_save).pack(side="right")
 

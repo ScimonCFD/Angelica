@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.10] — 2026-08-19
+
+### GUI: Material dialog simplified to fluid characterization only
+
+- In black-oil mode, Material → Define Material now shows only the two
+  fluid characterization fields: **API Gravity** and **Gas Gravity**.
+  These are the properties needed to evaluate PVT correlations.
+- GOR and WOR are production ratios defined per well — they belong
+  exclusively in the source node properties dialog (double-click a
+  source node). They no longer appear in the Material dialog at all.
+
 ## [1.6.9] — 2026-08-19
 
 ### GUI: API gravity and gas gravity moved to Material dialog
