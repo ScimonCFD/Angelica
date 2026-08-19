@@ -110,7 +110,7 @@ class CanvasScene:
     def update_node_properties(self, node_id: int, properties: dict[str, str]) -> CanvasNode:
         for index, node in enumerate(self.nodes):
             if node.node_id == node_id:
-                updated_node = replace(node, properties=dict(properties))
+                updated_node = replace(node, properties={**node.properties, **properties})
                 self.nodes[index] = updated_node
                 return updated_node
         raise ValueError(f"Node {node_id} does not exist.")

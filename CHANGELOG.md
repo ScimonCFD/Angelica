@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.4] — 2026-08-18
+
+### Bug fixes
+
+- `update_node_properties` now merges into existing node properties instead
+  of replacing them wholesale. Previously, saving the node BC dialog would
+  wipe the fluid composition fields set via the Fluid Definition dialog,
+  and vice versa.
+- Removed dead `gas_gravity`, `gor`, `wor` widgets from the standard Material
+  dialog. They were created visible and immediately hidden by `sync_mode_state`,
+  causing a brief flash on open and leaving unreachable code in the dialog.
+
 ## [1.6.3] — 2026-08-18
 
 ### GUI: Black-oil fluid composition moved to Material dialog

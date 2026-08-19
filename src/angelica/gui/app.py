@@ -776,9 +776,6 @@ class NetSimGui:
         tc_var = tk.StringVar(master=dialog, value=material.get("critical_temperature_k", ""))
         pc_var = tk.StringVar(master=dialog, value=material.get("critical_pressure_pa", ""))
         omega_var = tk.StringVar(master=dialog, value=material.get("acentric_factor", ""))
-        gas_gravity_var = tk.StringVar(master=dialog, value=material.get("gas_gravity", "0.65"))
-        gor_var = tk.StringVar(master=dialog, value=material.get("gor_sc_m3_per_m3", "25.0"))
-        wor_var = tk.StringVar(master=dialog, value=material.get("wor_sc_m3_per_m3", "0.5"))
 
         ttk.Label(frame, text="Definition").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
         mode_row = ttk.Frame(frame)
@@ -842,21 +839,6 @@ class NetSimGui:
         omega_entry = ttk.Entry(frame, textvariable=omega_var, width=26)
         omega_entry.grid(row=7, column=1, sticky="ew", pady=4)
 
-        gas_gravity_label = ttk.Label(frame, text="Gas Gravity (air = 1)")
-        gas_gravity_label.grid(row=6, column=0, sticky="w", padx=(0, 8), pady=4)
-        gas_gravity_entry = ttk.Entry(frame, textvariable=gas_gravity_var, width=26)
-        gas_gravity_entry.grid(row=6, column=1, sticky="ew", pady=4)
-
-        gor_label = ttk.Label(frame, text="GOR sc (m³/m³)")
-        gor_label.grid(row=7, column=0, sticky="w", padx=(0, 8), pady=4)
-        gor_entry = ttk.Entry(frame, textvariable=gor_var, width=26)
-        gor_entry.grid(row=7, column=1, sticky="ew", pady=4)
-
-        wor_label = ttk.Label(frame, text="WOR sc (m³/m³)")
-        wor_label.grid(row=8, column=0, sticky="w", padx=(0, 8), pady=4)
-        wor_entry = ttk.Entry(frame, textvariable=wor_var, width=26)
-        wor_entry.grid(row=8, column=1, sticky="ew", pady=4)
-
         cp_label = ttk.Label(frame, text="Specific Heat cp (J/kg·K)")
         cp_label.grid(row=8, column=0, sticky="w", padx=(0, 8), pady=4)
         cp_entry = ttk.Entry(frame, textvariable=cp_var, width=26)
@@ -913,12 +895,6 @@ class NetSimGui:
                 api_entry.grid_remove()
                 temperature_label.grid_remove()
                 temperature_entry.grid_remove()
-            gas_gravity_label.grid_remove()
-            gas_gravity_entry.grid_remove()
-            gor_label.grid_remove()
-            gor_entry.grid_remove()
-            wor_label.grid_remove()
-            wor_entry.grid_remove()
             if is_gas_pr:
                 tc_label.grid()
                 tc_entry.grid()
