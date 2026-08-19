@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.8] — 2026-08-19
+
+### GUI: Fluid composition fields restored to source node dialog
+
+- In black-oil mode, double-clicking a source node now shows the four fluid
+  composition fields (API gravity, gas gravity, GOR, WOR) directly in the
+  node properties dialog, under a "Fluid composition" separator.
+- Material → Define Material still provides a summary view of all inlets.
+- Both dialogs read and write the same underlying node properties, so they
+  stay in sync.
+
 ## [1.6.7] — 2026-08-19
 
 ### Bug fix

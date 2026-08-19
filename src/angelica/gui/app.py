@@ -2921,6 +2921,29 @@ class NetSimGui:
                 thermal_bc_var.trace_add("write", _sync_thermal_bc)
                 _sync_thermal_bc()
 
+            if self.scene.physics_mode == "black_oil" and node.node_type == "source":
+                ttk.Separator(container, orient="horizontal").grid(
+                    row=8, column=0, columnspan=2, sticky="ew", pady=(8, 2)
+                )
+                ttk.Label(
+                    container, text="— Fluid composition —", foreground="gray"
+                ).grid(row=9, column=0, columnspan=2, pady=(0, 4))
+                bo_fields = [
+                    ("api_gravity",      "API Gravity (°API)"),
+                    ("gas_gravity",      "Gas Gravity (air = 1)"),
+                    ("gor_sc_m3_per_m3", "GOR sc (m³/m³)"),
+                    ("wor_sc_m3_per_m3", "WOR sc (m³/m³)"),
+                ]
+                for bo_i, (bo_key, bo_label) in enumerate(bo_fields):
+                    ttk.Label(container, text=bo_label).grid(
+                        row=10 + bo_i, column=0, sticky="w", pady=3
+                    )
+                    bo_var = tk.StringVar(value=node.properties.get(bo_key, ""))
+                    ttk.Entry(container, textvariable=bo_var, width=20).grid(
+                        row=10 + bo_i, column=1, sticky="ew", pady=3
+                    )
+                    entries[bo_key] = bo_var
+
         else:
             ttk.Label(container, text="Label").grid(row=0, column=0, sticky="w", pady=4)
             label_var = tk.StringVar(value=node.properties.get("label", ""))
@@ -2930,7 +2953,7 @@ class NetSimGui:
             entries["label"] = label_var
 
         button_row = ttk.Frame(container)
-        button_row.grid(row=10, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=15, column=0, columnspan=2, sticky="e", pady=(10, 0))
 
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
         ttk.Button(
