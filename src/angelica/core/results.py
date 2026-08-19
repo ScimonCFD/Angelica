@@ -19,6 +19,8 @@ class IterationMetrics:
     pressure_correction_mean_abs_pa: float
     pressure_correction_rel: float
     max_nodal_mass_imbalance_rel: float
+    global_mass_imbalance_kg_per_s: float = 0.0
+    global_mass_imbalance_rel: float = 0.0
 
 
 @dataclass(frozen=True)

@@ -14,7 +14,7 @@ authors:
   - family-names: Rodriguez
     given-names: Simon
     orcid: "https://orcid.org/0000-0001-6924-2428"
-version: "1.6.14"
+version: "1.6.15"
 license: MIT
 repository-code: "https://github.com/ScimonCFD/Angelica"
 url: "https://scimonCFD.github.io/Angelica_website/"

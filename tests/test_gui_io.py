@@ -43,6 +43,16 @@ class GuiIoTests(unittest.TestCase):
         self.assertEqual(len(case.components), 6)
         self.assertTrue(result.converged)
 
+    def test_iteration_metrics_include_global_mass_balance_error(self) -> None:
+        scene = load_scene_from_file(self._pipe_only_case_path())
+        case = build_network_case_from_scene(scene)
+        result = build_solver_from_scene(scene).solve(case)
+
+        self.assertTrue(result.turbulent_metrics)
+        final_metrics = result.turbulent_metrics[-1]
+        self.assertGreaterEqual(final_metrics.global_mass_imbalance_kg_per_s, 0.0)
+        self.assertLess(final_metrics.global_mass_imbalance_rel, 1.0e-7)
+
     def test_build_network_case_uses_scene_material(self) -> None:
         scene = load_scene_from_file(self._pipe_only_case_path())
         scene.update_material(

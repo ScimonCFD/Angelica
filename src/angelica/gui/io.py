@@ -144,6 +144,8 @@ def _metrics_to_dict(m: IterationMetrics) -> dict:
         "pressure_correction_mean_abs_pa": m.pressure_correction_mean_abs_pa,
         "pressure_correction_rel": m.pressure_correction_rel,
         "max_nodal_mass_imbalance_rel": m.max_nodal_mass_imbalance_rel,
+        "global_mass_imbalance_kg_per_s": m.global_mass_imbalance_kg_per_s,
+        "global_mass_imbalance_rel": m.global_mass_imbalance_rel,
     }
 
 
@@ -153,6 +155,8 @@ def _metrics_from_dict(d: dict) -> IterationMetrics:
         pressure_correction_mean_abs_pa=float(d["pressure_correction_mean_abs_pa"]),
         pressure_correction_rel=float(d["pressure_correction_rel"]),
         max_nodal_mass_imbalance_rel=float(d["max_nodal_mass_imbalance_rel"]),
+        global_mass_imbalance_kg_per_s=float(d.get("global_mass_imbalance_kg_per_s", 0.0)),
+        global_mass_imbalance_rel=float(d.get("global_mass_imbalance_rel", 0.0)),
     )
 
 

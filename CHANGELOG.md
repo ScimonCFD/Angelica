@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.15] — 2026-08-19
+
+### GUI: balance residuals selectable in convergence plot
+
+- Replaced the separate balance diagram introduced in v1.6.14 with selectable
+  convergence metrics in the existing convergence plot.
+- Added per-iteration global mass-balance error metrics:
+  `global_mass_imbalance_kg_per_s` and `global_mass_imbalance_rel`.
+- Added selectable outer-loop curves for thermal and density convergence:
+  `max |ΔT|` and `max |Δρ/ρ|`.
+
 ## [1.6.14] — 2026-08-19
 
 ### GUI: balance diagram moved to convergence window

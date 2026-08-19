@@ -149,12 +149,15 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             self._update_velocities(network_state, fluid_model, laminar=True)
             self._update_mass_flows(network_state, fluid_model)
             max_mass_imbalance_rel = self._compute_max_nodal_mass_imbalance(network_state)
+            global_balance = self._compute_global_balance(network_state)
             metrics_history.append(
                 self._build_iteration_metrics(
                     correction_abs,
                     correction_mean_abs,
                     correction_rel,
                     max_mass_imbalance_rel,
+                    abs(global_balance.mass_inlet_kg_per_s - global_balance.mass_outlet_kg_per_s),
+                    global_balance.mass_error_pct / 100.0,
                 )
             )
             if progress_callback is not None:
@@ -209,12 +212,15 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             self._update_velocities(network_state, fluid_model, laminar=False)
             self._update_mass_flows(network_state, fluid_model)
             max_mass_imbalance_rel = self._compute_max_nodal_mass_imbalance(network_state)
+            global_balance = self._compute_global_balance(network_state)
             metrics_history.append(
                 self._build_iteration_metrics(
                     correction_abs,
                     correction_mean_abs,
                     correction_rel,
                     max_mass_imbalance_rel,
+                    abs(global_balance.mass_inlet_kg_per_s - global_balance.mass_outlet_kg_per_s),
+                    global_balance.mass_error_pct / 100.0,
                 )
             )
             if progress_callback is not None:
@@ -245,12 +251,16 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         correction_mean_abs: float,
         correction_rel: float,
         max_mass_imbalance_rel: float,
+        global_mass_imbalance_kg_per_s: float,
+        global_mass_imbalance_rel: float,
     ) -> IterationMetrics:
         return IterationMetrics(
             pressure_correction_abs_pa=correction_abs,
             pressure_correction_mean_abs_pa=correction_mean_abs,
             pressure_correction_rel=correction_rel,
             max_nodal_mass_imbalance_rel=max_mass_imbalance_rel,
+            global_mass_imbalance_kg_per_s=global_mass_imbalance_kg_per_s,
+            global_mass_imbalance_rel=global_mass_imbalance_rel,
         )
 
     def _update_velocities(self, network_state, fluid_model, laminar: bool) -> None:
