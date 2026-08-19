@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.7] — 2026-08-19
+
+### Bug fix
+
+- Black-oil validation error now directs the user to
+  "Material → Define Material" instead of "node properties", since fluid
+  composition (API, GOR, WOR) was moved to the Material dialog in v1.6.3.
+
 ## [1.6.6] — 2026-08-19
 
 ### Windows installer fix

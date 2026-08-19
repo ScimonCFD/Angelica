@@ -520,9 +520,9 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             missing = [f for f in _BO_FIELDS if not node.properties.get(f, "").strip()]
             if missing:
                 raise ValueError(
-                    f"Source node #{node.node_id} is missing black-oil composition fields: "
+                    f"Source node #{node.node_id} is missing fluid composition fields: "
                     + ", ".join(missing)
-                    + ". Open the node properties and fill in all four fields."
+                    + ". Go to Material → Define Material to fill in the composition for each source node."
                 )
             inlet_fluid_bcs.append(InletFluidBC(
                 node_id          = node.node_id,
@@ -533,8 +533,8 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             ))
         if not inlet_fluid_bcs:
             raise ValueError(
-                "Black-oil mode requires at least one source node with a defined "
-                "fluid composition (API, gas gravity, GOR, WOR)."
+                "Black-oil mode requires fluid composition (API, gas gravity, GOR, WOR) "
+                "for each source node. Go to Material → Define Material to define it."
             )
         first = inlet_fluid_bcs[0]
         fluid_model = BlackOilFluid(
