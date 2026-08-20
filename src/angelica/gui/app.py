@@ -4228,6 +4228,14 @@ class NetSimGui:
                 lambda _event: self._redraw_convergence_plot(),
             )
             # Legend is drawn inside the canvas by _draw_history_plot
+
+            ttk.Separator(frame, orient="horizontal").pack(fill="x", pady=(8, 4))
+            ttk.Label(
+                frame,
+                textvariable=self.balance_summary_var,
+                justify="left",
+                padding=(4, 0),
+            ).pack(anchor="w", fill="x")
         else:
             self.convergence_window.deiconify()
             self.convergence_window.lift()

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.19] — 2026-08-20
+
+### GUI: energy balance visible in convergence window
+
+The balance panel (mass + energy) is now shown at the bottom of the
+Convergence Metrics window, below the plot, in addition to the sidebar.
+It is updated automatically when the solve finishes.
+
 ## [1.6.18] — 2026-08-20
 
 ### Feature: proper global energy balance (first law of thermodynamics)
