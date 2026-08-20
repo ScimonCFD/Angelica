@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.29] — 2026-08-20
+
+### Tests: Hanoi EPANET Darcy-Weisbach benchmark now covered in CI
+
+Added `HanoiBenchmarkTests` to `test_tutorial_suite.py`, covering the last
+previously untested tutorial (isothermal incompressible T07).
+
+The test loads the 34-pipe, 32-node Hanoi network from its GUI scene file,
+solves it with the settings stored in that file, and asserts:
+- All 32 nodal hydraulic heads match the EPANET reference within ±0.05 m.
+- Trunk link flows 1–34 match the EPANET reference within ±1 m³/h.
+
+All tutorials across all four solver types now have automated CI coverage.
+Total test count: 174 → 175.
+
 ## [1.6.28] — 2026-08-20
 
 ### Tests: CI coverage for compressible and black-oil tutorial series

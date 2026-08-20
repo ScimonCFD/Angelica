@@ -30,6 +30,11 @@ from angelica.cases import (
     build_inline_heater_case,
 )
 from angelica.closures import ColebrookPipeCorrelation
+from angelica.gui.io import (
+    build_network_case_from_scene,
+    build_solver_from_scene,
+    load_scene_from_file,
+)
 from angelica.core.case import (
     FlowBoundary,
     InletFluidBC,
@@ -585,3 +590,69 @@ class BlackOilTutorialTests(unittest.TestCase):
         self.assertAlmostEqual(
             result.node_pressures_pa[3], 3_723_268.0, delta=50_000.0
         )
+
+
+# ── Hanoi reference data (EPANET Darcy-Weisbach benchmark) ──────────────────
+# Node IDs 13 and 22 are represented internally as 112 and 121 in the GUI scene.
+_HANOI_NODE_MAP = {13: 112, 22: 121}
+
+_HANOI_EXPECTED_HEADS_M = {
+    1: 100.00, 2: 99.04, 3: 87.07, 4: 82.31, 5: 76.42,
+    6: 70.20,  7: 64.28, 8: 57.22, 9: 51.58, 10: 47.42,
+    11: 42.79, 12: 39.36, 13: 29.13, 14: 36.50, 15: 34.69,
+    16: 34.49, 17: 53.58, 18: 74.16, 19: 79.84, 20: 76.33,
+    21: 48.60, 22: 36.04, 23: 52.71, 24: 47.78, 25: 38.78,
+    26: 30.05, 27: 29.38, 28: 45.15, 29: 29.91, 30: 29.65,
+    31: 30.32, 32: 36.93,
+}
+
+_HANOI_EXPECTED_FLOWS_M3H = {
+    1: 19940.00, 2: 19050.00, 3: 8011.36, 4: 7881.36, 5: 7156.36,
+    6: 6151.36,  7: 4801.36,  8: 4251.36, 9: 3726.36, 10: 2000.00,
+    11: 1500.00, 12: 940.00,  13: 1201.36, 14: 586.36, 15: 306.36,
+    16: 243.22,  17: -1108.22, 18: -2453.22, 19: -2513.22, 20: 7675.42,
+    21: 1415.00, 22: 485.00,  23: 4985.42, 24: 3238.91, 25: 2418.91,
+    26: -1030.42, 27: -130.42, 28: 239.58, 29: 701.51, 30: 411.51,
+    31: 51.51,  32: -308.49, 33: 413.49, 34: 1218.49,
+}
+
+
+class HanoiBenchmarkTests(unittest.TestCase):
+    """Tutorial 07 — EPANET Hanoi Darcy-Weisbach benchmark."""
+
+    @staticmethod
+    def _scene_path() -> Path:
+        return (
+            _TUTORIALS_ROOT
+            / "steady_isothermal_incompressible"
+            / "07_hanoi_epanet_darcy_benchmark"
+            / "hanoi_epanet_darcy_benchmark.gui.json"
+        )
+
+    def test_hanoi_benchmark_matches_epanet_reference(self) -> None:
+        scene = load_scene_from_file(self._scene_path())
+        case = build_network_case_from_scene(scene)
+        result = build_solver_from_scene(scene).solve(case)
+
+        self.assertTrue(result.converged)
+
+        rho = case.fluid_model.density_kg_per_m3
+        g = 9.81
+
+        # Node hydraulic heads — tolerance ±0.05 m (matches EPANET to 2 d.p.)
+        for bmark_id, expected_head in _HANOI_EXPECTED_HEADS_M.items():
+            node_id = _HANOI_NODE_MAP.get(bmark_id, bmark_id)
+            head_m = result.node_pressures_pa[node_id] / (rho * g)
+            self.assertAlmostEqual(
+                head_m, expected_head, delta=0.05,
+                msg=f"Node {bmark_id}: head {head_m:.3f} m ≠ expected {expected_head:.3f} m",
+            )
+
+        # Trunk link flows (links 1–34) — tolerance ±1 m³/h
+        for component, cf in zip(case.components[:34], result.component_flows[:34]):
+            link_id = int(component.component_id.split("_")[1])
+            expected = _HANOI_EXPECTED_FLOWS_M3H[link_id]
+            self.assertAlmostEqual(
+                cf.volumetric_flow_m3_per_h, expected, delta=1.0,
+                msg=f"Link {link_id}: flow {cf.volumetric_flow_m3_per_h:.2f} m³/h ≠ expected {expected:.2f} m³/h",
+            )
