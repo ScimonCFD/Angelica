@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.31] — 2026-08-21
+
+### Fix: black-oil API now fully exported from top-level package
+
+`SteadyBlackOilSolver`, `BlackOilSolverSettings`, `BlackOilFluid`, `InletFluidBC`,
+and `build_water_thermal_fluid` were missing from `angelica/__init__.py`, making
+them the only solver type not importable via `from angelica import ...`.
+
+All five are now exported at the top level and listed in `__all__`. The
+`__all__` list has also been sorted alphabetically for consistency.
+
 ## [1.6.30] — 2026-08-21
 
 ### Refactor: remove legacy `examples/` package
