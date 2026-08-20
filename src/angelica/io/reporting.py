@@ -56,6 +56,7 @@ def export_solve_result_csv(result, output_path: str) -> None:
                         round(component.volumetric_flow_m3_per_h, 4),
                     ]
                 )
+        _write_balance_rows_csv(writer, result)
 
 
 def export_solve_result_workbook(result, output_path: str) -> None:
@@ -118,7 +119,49 @@ def export_solve_result_workbook(result, output_path: str) -> None:
                 ]
             )
 
+    _write_balance_sheet(workbook, result)
     workbook.save(output)
+
+
+def _write_balance_rows_csv(writer, result) -> None:
+    gb = result.global_balance
+    geb = result.global_energy_balance
+    if gb is None and geb is None:
+        return
+    writer.writerow([])
+    writer.writerow(["Global Balance"])
+    if gb is not None:
+        writer.writerow(["Quantity", "Value", "Unit"])
+        writer.writerow(["Mass flow in",  round(gb.mass_inlet_kg_per_s, 6),  "kg/s"])
+        writer.writerow(["Mass flow out", round(gb.mass_outlet_kg_per_s, 6), "kg/s"])
+        writer.writerow(["Mass balance error", round(gb.mass_error_pct, 6),  "%"])
+    if geb is not None:
+        writer.writerow(["Enthalpy in",       round(geb.enthalpy_in_kw, 6),    "kW"])
+        writer.writerow(["Enthalpy out",      round(geb.enthalpy_out_kw, 6),   "kW"])
+        writer.writerow(["Heat sources",      round(geb.heat_sources_kw, 6),   "kW"])
+        writer.writerow(["Heat wall loss",    round(geb.heat_wall_loss_kw, 6), "kW"])
+        writer.writerow(["Energy balance error (kW)", round(geb.energy_error_kw, 9), "kW"])
+        writer.writerow(["Energy balance error (%)",  round(geb.energy_error_pct, 6), "%"])
+
+
+def _write_balance_sheet(workbook, result) -> None:
+    gb = result.global_balance
+    geb = result.global_energy_balance
+    if gb is None and geb is None:
+        return
+    ws = workbook.create_sheet("Balance")
+    ws.append(["Quantity", "Value", "Unit"])
+    if gb is not None:
+        ws.append(["Mass flow in",  round(gb.mass_inlet_kg_per_s, 6),  "kg/s"])
+        ws.append(["Mass flow out", round(gb.mass_outlet_kg_per_s, 6), "kg/s"])
+        ws.append(["Mass balance error", round(gb.mass_error_pct, 6),  "%"])
+    if geb is not None:
+        ws.append(["Enthalpy in",       round(geb.enthalpy_in_kw, 6),    "kW"])
+        ws.append(["Enthalpy out",      round(geb.enthalpy_out_kw, 6),   "kW"])
+        ws.append(["Heat sources",      round(geb.heat_sources_kw, 6),   "kW"])
+        ws.append(["Heat wall loss",    round(geb.heat_wall_loss_kw, 6), "kW"])
+        ws.append(["Energy balance error (kW)", round(geb.energy_error_kw, 9), "kW"])
+        ws.append(["Energy balance error (%)",  round(geb.energy_error_pct, 6), "%"])
 
 
 def print_solve_result(result, detailed: bool = False) -> None:

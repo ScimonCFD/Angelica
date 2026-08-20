@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.23] — 2026-08-20
+
+### Feature: global balance included in exported reports
+
+Both CSV and Excel reports now include a **Global Balance** section with the
+final mass and energy balance quantities:
+
+- **CSV**: appended as a section at the end of the file.
+- **Excel**: written as a dedicated "Balance" sheet.
+
+Quantities reported: mass flow in/out, mass balance error (%); and for thermal
+solvers: enthalpy in/out, heat sources, heat wall loss, energy balance error
+(kW and %).
+
 ## [1.6.22] — 2026-08-20
 
 ### Fix: energy balance error now reported as % (consistent with mass balance)
