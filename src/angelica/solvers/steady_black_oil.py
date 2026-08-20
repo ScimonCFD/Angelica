@@ -453,7 +453,8 @@ class SteadyBlackOilSolver(BaseSolver):
             density_history=density_history,
             outer_turbulent_final_metrics=tuple(outer_turb_final),
             outer_iteration_boundaries=tuple(outer_boundaries),
-            global_balance=self._compute_global_balance(
-                network_state, effective_fluid, thermal=True
+            global_balance=self._compute_global_balance(network_state),
+            global_energy_balance=self._compute_global_energy_balance(
+                network_state, effective_fluid
             ),
         )

@@ -27,12 +27,39 @@ class IterationMetrics:
 class GlobalBalance:
     mass_inlet_kg_per_s: float
     mass_outlet_kg_per_s: float
-    heat_loss_kw: Optional[float] = None  # None for isothermal solvers
 
     @property
     def mass_error_pct(self) -> float:
         ref = max(self.mass_inlet_kg_per_s, self.mass_outlet_kg_per_s, 1e-30)
         return 100.0 * abs(self.mass_inlet_kg_per_s - self.mass_outlet_kg_per_s) / ref
+
+
+@dataclass(frozen=True)
+class GlobalEnergyBalance:
+    """Steady-state global energy balance for thermal solvers.
+
+    All quantities are in kW, relative to a 0 °C enthalpy reference.
+
+    Sign convention:
+        heat_sources_kw  > 0 : heat ADDED to the fluid (heaters, positive power_w)
+        heat_wall_loss_kw > 0 : heat LEAVING the fluid to the environment
+        energy_error_kw ≈ 0  : residual of (Ė_in + Q_src − Q_wall − Ė_out)
+    """
+
+    enthalpy_in_kw: float       # Σ ṁ × cp × T at inlet boundary nodes
+    enthalpy_out_kw: float      # Σ ṁ × cp × T at outlet boundary nodes
+    heat_sources_kw: float      # Σ power_w for all HeatSource links
+    heat_wall_loss_kw: float    # Σ U·π·D·L·(T_pipe − T_amb) for all pipes
+
+    @property
+    def energy_error_kw(self) -> float:
+        """Residual of the global first-law balance (should be ≈ 0)."""
+        return self.enthalpy_in_kw + self.heat_sources_kw - self.heat_wall_loss_kw - self.enthalpy_out_kw
+
+    @property
+    def energy_error_pct(self) -> float:
+        ref = max(abs(self.enthalpy_in_kw), abs(self.enthalpy_out_kw), 1e-30)
+        return 100.0 * abs(self.energy_error_kw) / ref
 
 
 @dataclass(frozen=True)
@@ -51,6 +78,7 @@ class SolveResult:
     outer_turbulent_final_metrics: tuple[IterationMetrics, ...] = field(default_factory=tuple)
     outer_iteration_boundaries: tuple[int, ...] = field(default_factory=tuple)
     global_balance: Optional[GlobalBalance] = None
+    global_energy_balance: Optional[GlobalEnergyBalance] = None
 
     @property
     def link_mass_flows_kg_per_s(self) -> list[float]:

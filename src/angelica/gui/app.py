@@ -271,6 +271,7 @@ class NetSimGui:
         self.material_summary_var = tk.StringVar(value=self._material_summary_text())
         self.pressure_drop_summary_var = tk.StringVar(value=self._pressure_drop_summary_text())
         self.numerics_summary_var = tk.StringVar(value=self._numerics_summary_text())
+        self.balance_summary_var = tk.StringVar(value="—")
 
         self._build_menu()
         self._build_layout()
@@ -439,6 +440,16 @@ class NetSimGui:
             justify="left",
         ).pack(anchor="w", pady=(4, 0), fill="x")
 
+        ttk.Label(palette, text="Balance").pack(anchor="w", pady=(10, 0))
+        ttk.Label(
+            palette,
+            textvariable=self.balance_summary_var,
+            width=26,
+            relief="groove",
+            padding=6,
+            justify="left",
+        ).pack(anchor="w", pady=(4, 0), fill="x")
+
         canvas_frame = ttk.Frame(container)
         canvas_frame.pack(side="left", fill="both", expand=True)
 
@@ -499,6 +510,7 @@ class NetSimGui:
         self.density_history = []
         self.outer_turbulent_final_metrics = []
         self.outer_iteration_boundaries = []
+        self.balance_summary_var.set("—")
         self.current_file_path = None
         self._undo_stack.clear()
         self._redo_stack.clear()
@@ -539,6 +551,7 @@ class NetSimGui:
         self.view_offset_y = 0.0
         self.view_scale = 1.0
         self.latest_result = None
+        self.balance_summary_var.set("—")
         self.current_file_path = file_path
         self._undo_stack.clear()
         self._redo_stack.clear()
@@ -676,6 +689,7 @@ class NetSimGui:
         self.moving_node_id = None
         self.latest_boundary_results = {}
         self.latest_result = None
+        self.balance_summary_var.set("—")
         self._redraw_scene()
 
     def _undo(self) -> None:
@@ -2220,6 +2234,37 @@ class NetSimGui:
             f"cont-tol={self._fmt_sci(continuity_tol)}"
         )
 
+    def _balance_summary_text(self, result) -> str:
+        gb = result.global_balance
+        geb = result.global_energy_balance
+
+        lines: list[str] = []
+
+        # Mass balance (always present)
+        if gb is not None:
+            lines += [
+                f"ṁ in   {gb.mass_inlet_kg_per_s:.4g} kg/s",
+                f"ṁ out  {gb.mass_outlet_kg_per_s:.4g} kg/s",
+                f"err    {gb.mass_error_pct:.2e} %",
+            ]
+
+        # Energy balance (thermal solvers only)
+        if geb is not None:
+            if lines:
+                lines.append("─" * 22)
+            lines += [
+                f"Ė in   {geb.enthalpy_in_kw:.4g} kW",
+                f"Ė out  {geb.enthalpy_out_kw:.4g} kW",
+            ]
+            if geb.heat_sources_kw != 0.0:
+                sign = "+" if geb.heat_sources_kw >= 0 else ""
+                lines.append(f"Q src  {sign}{geb.heat_sources_kw:.4g} kW")
+            if geb.heat_wall_loss_kw != 0.0:
+                lines.append(f"Q wall {geb.heat_wall_loss_kw:.4g} kW")
+            lines.append(f"err    {geb.energy_error_kw:.2e} kW")
+
+        return "\n".join(lines) if lines else "—"
+
     def _validate_scene(self) -> list[str]:
         errors: list[str] = []
         scene = self.scene
@@ -2336,6 +2381,7 @@ class NetSimGui:
             self.density_history = list(result.density_history)
             self.outer_turbulent_final_metrics = list(result.outer_turbulent_final_metrics)
             self.outer_iteration_boundaries = list(result.outer_iteration_boundaries)
+            self.balance_summary_var.set(self._balance_summary_text(result))
             self._redraw_scene()
             self._redraw_convergence_plot()
             if result.converged:

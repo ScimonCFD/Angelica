@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.6.18] — 2026-08-20
+
+### Feature: proper global energy balance (first law of thermodynamics)
+
+The global energy balance now tracks the three independent quantities that must
+satisfy the steady-state first law for the whole network:
+
+    Ė_in  +  Q̇_src  −  Q̇_wall  =  Ė_out   (residual ≈ 0)
+
+- **Ė_in** — enthalpy rate entering through inlet boundary nodes: Σ ṁ·cp·T
+- **Ė_out** — enthalpy rate leaving through outlet boundary nodes: Σ ṁ·cp·T
+- **Q̇_src** — heat added by `HeatSource` links (Σ `power_w`)
+- **Q̇_wall** — heat lost through pipe walls, computed rigorously:
+  - For `n_thermal_segments > 1`: U·π·D·L·(n_internal/n_segs)·(T̄_FV − T_amb),
+    matching the FV source terms exactly.
+  - For `n_thermal_segments = 1` (NTU analytical bypass): uses the
+    log-mean temperature difference (LMTD), which is exact for the bypass path.
+- **energy_error_kw** property: residual of the balance; validated at < 1e-8 kW
+  for all built-in thermal cases.
+
+A new `GlobalEnergyBalance` dataclass is added to `SolveResult`
+(`global_energy_balance`). It is populated by the non-isothermal,
+compressible, and black-oil solvers; `None` for the isothermal solver.
+
+The old (incorrect) `heat_loss_kw` field has been removed from `GlobalBalance`,
+which now contains only the mass balance.
+
+A "Balance" panel in the GUI sidebar shows the mass balance for all solvers
+and the energy balance for thermal solvers, updated live after each run.
+
 ## [1.6.17] — 2026-08-20
 
 ### Fix: composition convergence checks all four black-oil parameters
