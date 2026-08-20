@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.6.26] — 2026-08-20
+
+### Performance: sparse pressure solver — O(N³) → O(N·k²) scalability
+
+Replaced `np.linalg.solve` (dense) with `scipy.sparse.linalg.spsolve` (sparse)
+for the hydraulic pressure-correction system.
+
+The pressure matrix is a network Laplacian — each node only connects to its
+pipe neighbours, so the matrix has at most `2·E` off-diagonal non-zeros (E =
+number of pipes). The dense solver allocated O(N²) memory and ran in O(N³)
+time; the sparse solver needs only O(N + E) memory and O(N·k²) time where k
+is the average node degree (typically 2–4 in pipe networks).
+
+Impact: networks of 10 000+ nodes are now tractable. The EPANET Hanoi
+benchmark (34 pipes, 32 nodes) results are numerically unchanged (all 162
+tests pass). SciPy was already a required dependency.
+
 ## [1.6.25] — 2026-08-20
 
 ### Fix: compressible Tutorial 01 crash + reporting test coverage
