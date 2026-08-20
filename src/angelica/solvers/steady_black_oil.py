@@ -164,7 +164,12 @@ class SteadyBlackOilSolver(BaseSolver):
                     w_acc += m_i
                 prev = node_comp.get(nid)
                 node_comp[nid] = mixed
-                if prev is None or abs(mixed.gor_sc_m3_per_m3 - prev.gor_sc_m3_per_m3) > 1e-9:
+                if prev is None or (
+                    abs(mixed.api_gravity - prev.api_gravity) > 1e-9
+                    or abs(mixed.gas_gravity - prev.gas_gravity) > 1e-9
+                    or abs(mixed.gor_sc_m3_per_m3 - prev.gor_sc_m3_per_m3) > 1e-9
+                    or abs(mixed.wor_sc_m3_per_m3 - prev.wor_sc_m3_per_m3) > 1e-9
+                ):
                     changed = True
 
             if not changed:
@@ -449,6 +454,6 @@ class SteadyBlackOilSolver(BaseSolver):
             outer_turbulent_final_metrics=tuple(outer_turb_final),
             outer_iteration_boundaries=tuple(outer_boundaries),
             global_balance=self._compute_global_balance(
-                network_state, case.fluid_model, thermal=True
+                network_state, effective_fluid, thermal=True
             ),
         )

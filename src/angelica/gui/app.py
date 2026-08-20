@@ -4,6 +4,7 @@ import copy
 import math
 import os
 import sys
+import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -2297,35 +2298,52 @@ class NetSimGui:
 
         self._simulation_running = True
         self._run_button.configure(state="disabled")
-        try:
-            solver = build_solver_from_scene(self.scene)
-            self.convergence_history = {"laminar": [], "turbulent": []}
-            self._prepare_convergence_window()
-            result = solver.solve(case, progress_callback=self._on_solver_progress)
-        except Exception as exc:
-            messagebox.showerror("Run failed", str(exc))
-            return
-        finally:
+        self.status_var.set("Running simulation…")
+
+        solver = build_solver_from_scene(self.scene)
+        self.convergence_history = {"laminar": [], "turbulent": []}
+        self._prepare_convergence_window()
+
+        _result_holder: list = [None, None]  # [result, exception]
+
+        def _thread_safe_progress(stage, iter_idx, metrics):
+            self.root.after(0, self._on_solver_progress, stage, iter_idx, metrics)
+
+        def _worker():
+            try:
+                _result_holder[0] = solver.solve(
+                    case, progress_callback=_thread_safe_progress
+                )
+            except Exception as exc:
+                _result_holder[1] = exc
+            finally:
+                self.root.after(0, _finish)
+
+        def _finish():
             self._simulation_running = False
             self._run_button.configure(state="normal")
+            result, error = _result_holder
+            if error is not None:
+                messagebox.showerror("Run failed", str(error))
+                return
+            self.latest_result = result
+            self.latest_boundary_results = self._build_boundary_results(case, result)
+            self.convergence_history = {
+                "laminar": list(result.laminar_metrics),
+                "turbulent": list(result.turbulent_metrics),
+            }
+            self.temperature_history = list(result.temperature_history)
+            self.density_history = list(result.density_history)
+            self.outer_turbulent_final_metrics = list(result.outer_turbulent_final_metrics)
+            self.outer_iteration_boundaries = list(result.outer_iteration_boundaries)
+            self._redraw_scene()
+            self._redraw_convergence_plot()
+            if result.converged:
+                self.status_var.set(f"Simulation converged for case '{case.name}'.")
+            else:
+                self.status_var.set(f"Simulation did not converge for case '{case.name}'.")
 
-        self.latest_result = result
-        self.latest_boundary_results = self._build_boundary_results(case, result)
-        self.convergence_history = {
-            "laminar": list(result.laminar_metrics),
-            "turbulent": list(result.turbulent_metrics),
-        }
-        self.temperature_history = list(result.temperature_history)
-        self.density_history = list(result.density_history)
-        self.outer_turbulent_final_metrics = list(result.outer_turbulent_final_metrics)
-        self.outer_iteration_boundaries = list(result.outer_iteration_boundaries)
-        self._redraw_scene()
-        self._redraw_convergence_plot()
-
-        if result.converged:
-            self.status_var.set(f"Simulation converged for case '{case.name}'.")
-        else:
-            self.status_var.set(f"Simulation did not converge for case '{case.name}'.")
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _export_results_report(self) -> None:
         if self.latest_result is None:
@@ -4174,10 +4192,7 @@ class NetSimGui:
 
     def _on_solver_progress(self, stage: str, _iteration_index: int, metrics) -> None:
         self.convergence_history[stage].append(metrics)
-        if self.convergence_window is not None and self.convergence_window.winfo_exists():
-            self.convergence_window.update_idletasks()
         self._redraw_convergence_plot()
-        self.root.update()
 
     def _redraw_convergence_plot(self) -> None:
         if self.convergence_canvas is None:

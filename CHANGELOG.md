@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.6.17] — 2026-08-20
+
+### Fix: composition convergence checks all four black-oil parameters
+
+- `_propagate_compositions()` previously declared convergence after checking
+  only GOR. If two inlets share the same GOR but differ in API gravity, gas
+  gravity, or WOR the loop would exit early with wrong downstream compositions.
+- Fix: convergence now requires all four parameters (API, gas gravity, GOR,
+  WOR) to be stable across all junction nodes.
+
+### Fix: global energy balance uses per-pipe fluid in multi-inlet black-oil networks
+
+- `SteadyBlackOilSolver` was passing `case.fluid_model` (the global reference
+  fluid) to `_compute_global_balance`, so the reported heat loss was wrong
+  whenever different inlets had different compositions.
+- Fix: the call now passes `effective_fluid`, the per-pipe composition-aware
+  proxy built in the same outer iteration, so each link's specific heat is
+  evaluated at the correct composition.
+
+### Fix: solver runs in background thread — GUI no longer freezes
+
+- The hydraulic solver previously ran on the main thread, blocking the Tkinter
+  event loop and making the application unresponsive during long solves.
+- Fix: `_run_simulation()` now launches the solver in a `daemon` background
+  thread and schedules all UI updates back onto the main thread via
+  `root.after(0, ...)`. The convergence plot continues updating live during
+  the solve and the window remains interactive.
+
+### CI: test matrix expanded to Python 3.9 – 3.12
+
+- The test workflow previously only ran on Python 3.11. It now runs a parallel
+  matrix across 3.9, 3.10, 3.11, and 3.12 with `fail-fast: false`, matching
+  the declared `requires-python = ">=3.8"` support range.
+
 ## [1.6.16] — 2026-08-20
 
 ### Fix: secondary axis curve drawn outside plot area
