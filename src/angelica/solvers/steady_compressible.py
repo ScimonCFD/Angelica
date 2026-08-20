@@ -111,6 +111,8 @@ class SteadyCompressibleSolver(BaseSolver):
 
         density_history: list[float] = []
         temperature_history: list[float] = []
+        mass_balance_history: list[float] = []
+        energy_balance_history: list[float] = []
         all_lam_hist: list[float] = []
         all_lam_metrics = []
         all_turb_hist: list[float] = []
@@ -157,6 +159,11 @@ class SteadyCompressibleSolver(BaseSolver):
                     network_state.nodes[nid].temperature_c = T_old + delta
             temperature_history.append(max_delta_t)
             self._update_component_temperatures(network_state, T_init, pipe_mean_temps)
+
+            _gb = self._compute_global_balance(network_state)
+            mass_balance_history.append(_gb.mass_error_pct)
+            _geb = self._compute_global_energy_balance(network_state, fluid_model)
+            energy_balance_history.append(abs(_geb.energy_error_kw))
 
             new_densities = [fluid_model.density_for_link(link) for link in network_state.components]
             max_rel_delta = max(
@@ -211,5 +218,7 @@ class SteadyCompressibleSolver(BaseSolver):
             global_energy_balance=self._compute_global_energy_balance(
                 network_state, fluid_model
             ),
+            mass_balance_history=mass_balance_history,
+            energy_balance_history=energy_balance_history,
         )
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.6.20] — 2026-08-20
+
+### Feature: mass and energy balance convergence history in Convergence window
+
+The mass balance error (%) and energy balance error (kW) are now tracked at
+every iteration and selectable as metrics in the Convergence Metrics window,
+alongside the existing hydraulic metrics.
+
+- **Mass balance error (%)** — `|ṁ_in − ṁ_out| / max(ṁ_in, ṁ_out) × 100`.
+  For isothermal runs: tracked at every turbulent inner iteration.
+  For non-isothermal / compressible / black-oil runs: tracked at every outer
+  (temperature) iteration.
+- **Energy balance error (kW)** — `|Ė_in + Q̇_src − Q̇_wall − Ė_out|` in kW.
+  Tracked at every outer iteration; zero / not shown for isothermal runs.
+
+Both are exposed as new `mass_balance_history` and `energy_balance_history`
+list fields on `SolveResult`.
+
 ## [1.6.19] — 2026-08-20
 
 ### GUI: energy balance visible in convergence window

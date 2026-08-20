@@ -104,6 +104,8 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         settings = self.non_isothermal_settings
         temperature_converged = False
         temperature_history: list[float] = []
+        mass_balance_history: list[float] = []
+        energy_balance_history: list[float] = []
         all_lam_hist: list[float] = []
         all_lam_metrics = []
         all_turb_hist: list[float] = []
@@ -155,6 +157,11 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             # 4. Update representative temperature for pipes and heat sources
             # Use internal FV node mean temperatures for accurate property evaluation.
             self._update_component_temperatures(network_state, T_init, pipe_mean_temps)
+
+            _gb = self._compute_global_balance(network_state)
+            mass_balance_history.append(_gb.mass_error_pct)
+            _geb = self._compute_global_energy_balance(network_state, fluid_model)
+            energy_balance_history.append(abs(_geb.energy_error_kw))
 
             if max_delta_t < settings.temperature_tolerance_k:
                 temperature_converged = True
@@ -231,6 +238,8 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             global_energy_balance=self._compute_global_energy_balance(
                 network_state, fluid_model
             ),
+            mass_balance_history=mass_balance_history,
+            energy_balance_history=energy_balance_history,
         )
 
     @staticmethod

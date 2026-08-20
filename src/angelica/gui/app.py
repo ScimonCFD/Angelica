@@ -105,8 +105,10 @@ class NetSimGui:
             "plot_faint2":    "#666666",
             "plot_laminar":     "#1d3557",
             "plot_turbulent":   "#c1121f",
-            "plot_temperature": "#2a7d4f",
-            "plot_density":     "#0891b2",
+            "plot_temperature":    "#2a7d4f",
+            "plot_density":       "#0891b2",
+            "plot_mass_balance":  "#c77b2a",
+            "plot_energy_balance":"#7b52ab",
         },
         "dark": {
             "canvas_bg":      "#070c17",
@@ -128,8 +130,10 @@ class NetSimGui:
             "plot_faint2":    "#5a7a8a",
             "plot_laminar":     "#3a9fd4",
             "plot_turbulent":   "#e8633a",
-            "plot_temperature": "#52b788",
-            "plot_density":     "#22d3ee",
+            "plot_temperature":    "#52b788",
+            "plot_density":       "#22d3ee",
+            "plot_mass_balance":  "#f4a261",
+            "plot_energy_balance":"#b07ec4",
         },
     }
 
@@ -184,6 +188,8 @@ class NetSimGui:
         ("Global mass balance error (−)", "global_mass_imbalance_rel"),
         ("Max |ΔT| outer correction (K)", "temperature_delta_k"),
         ("Max |Δρ/ρ| outer correction (−)", "density_rel_change"),
+        ("Mass balance error per iteration (%)", "mass_balance_error_pct"),
+        ("Energy balance error per iteration (kW)", "energy_balance_error_kw"),
     )
     _METRIC_UNIT: dict[str, str] = {
         "pressure_correction_abs_pa": "Pa",
@@ -192,6 +198,8 @@ class NetSimGui:
         "global_mass_imbalance_rel": "−",
         "temperature_delta_k": "K",
         "density_rel_change": "−",
+        "mass_balance_error_pct": "%",
+        "energy_balance_error_kw": "kW",
     }
     UNIT_SYSTEMS: dict[str, dict] = {
         "si": {
@@ -246,6 +254,8 @@ class NetSimGui:
         self.temperature_canvas: tk.Canvas | None = None
         self.temperature_history: list[float] = []
         self.density_history: list[float] = []
+        self.mass_balance_history: list[float] = []
+        self.energy_balance_history: list[float] = []
         self.outer_turbulent_final_metrics: list = []
         self.outer_iteration_boundaries: list[int] = []
         self._dark = False
@@ -508,6 +518,8 @@ class NetSimGui:
         self.latest_boundary_results = {}
         self.temperature_history = []
         self.density_history = []
+        self.mass_balance_history = []
+        self.energy_balance_history = []
         self.outer_turbulent_final_metrics = []
         self.outer_iteration_boundaries = []
         self.balance_summary_var.set("—")
@@ -562,6 +574,8 @@ class NetSimGui:
             self.convergence_history = cached_results["convergence_history"]
             self.temperature_history = []
             self.density_history = []
+            self.mass_balance_history = []
+            self.energy_balance_history = []
             self.outer_turbulent_final_metrics = []
             self.outer_iteration_boundaries = []
             if cached_results["component_flows"]:
@@ -585,6 +599,8 @@ class NetSimGui:
             self.convergence_history = {"laminar": [], "turbulent": []}
             self.temperature_history = []
             self.density_history = []
+            self.mass_balance_history = []
+            self.energy_balance_history = []
             self.outer_turbulent_final_metrics = []
             self.outer_iteration_boundaries = []
             status_suffix = ""
@@ -2379,6 +2395,8 @@ class NetSimGui:
             }
             self.temperature_history = list(result.temperature_history)
             self.density_history = list(result.density_history)
+            self.mass_balance_history = list(result.mass_balance_history)
+            self.energy_balance_history = list(result.energy_balance_history)
             self.outer_turbulent_final_metrics = list(result.outer_turbulent_final_metrics)
             self.outer_iteration_boundaries = list(result.outer_iteration_boundaries)
             self.balance_summary_var.set(self._balance_summary_text(result))
@@ -4254,11 +4272,17 @@ class NetSimGui:
 
         metric_name = self.metric_label_to_name[self.convergence_metric_var.get()]
 
-        if metric_name in {"temperature_delta_k", "density_rel_change"}:
+        _outer_metric_map = {
+            "temperature_delta_k":   (self.temperature_history,    self._t["plot_temperature"],    "Outer iteration"),
+            "density_rel_change":    (self.density_history,         self._t["plot_density"],        "Outer iteration"),
+            "mass_balance_error_pct":(self.mass_balance_history,   self._t["plot_mass_balance"],
+                                      "Iteration" if self.scene.physics_mode == "isothermal" else "Outer iteration"),
+            "energy_balance_error_kw":(self.energy_balance_history, self._t["plot_energy_balance"], "Outer iteration"),
+        }
+        if metric_name in _outer_metric_map:
             if hasattr(self, "_detail_checkbutton"):
                 self._detail_checkbutton.pack_forget()
-            values = self.temperature_history if metric_name == "temperature_delta_k" else self.density_history
-            color = self._t["plot_temperature"] if metric_name == "temperature_delta_k" else self._t["plot_density"]
+            values, color, x_label_outer = _outer_metric_map[metric_name]
             if not values:
                 self.convergence_canvas.delete("all")
                 self.convergence_canvas.create_text(
@@ -4273,7 +4297,7 @@ class NetSimGui:
                 self.convergence_canvas,
                 [(self._pretty_metric_name(metric_name), values, color, 0)],
                 metric_name,
-                x_label="Outer iteration",
+                x_label=x_label_outer,
             )
             return
 

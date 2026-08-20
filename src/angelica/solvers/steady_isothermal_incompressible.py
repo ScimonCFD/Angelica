@@ -67,6 +67,10 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
                 )
             )
 
+        mass_balance_history = [
+            m.global_mass_imbalance_rel * 100.0 for m in turbulent_metrics
+        ]
+
         return SolveResult(
             case_name=case.name,
             converged=converged,
@@ -79,6 +83,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             outer_turbulent_final_metrics=(turbulent_metrics[-1],) if turbulent_metrics else (),
             global_balance=self._compute_global_balance(network_state),
             global_energy_balance=None,
+            mass_balance_history=mass_balance_history,
         )
 
     def _component_label(self, link_state) -> str:

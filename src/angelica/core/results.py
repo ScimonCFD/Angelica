@@ -79,6 +79,8 @@ class SolveResult:
     outer_iteration_boundaries: tuple[int, ...] = field(default_factory=tuple)
     global_balance: Optional[GlobalBalance] = None
     global_energy_balance: Optional[GlobalEnergyBalance] = None
+    mass_balance_history: list[float] = field(default_factory=list)
+    energy_balance_history: list[float] = field(default_factory=list)
 
     @property
     def link_mass_flows_kg_per_s(self) -> list[float]:
