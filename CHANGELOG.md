@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.16] — 2026-08-20
+
+### Fix: secondary axis curve drawn outside plot area
+
+- The right-axis (green ΔT / Δρ) curve could extend above or below the plot
+  boundary when running with tight tolerances (many outer iterations).
+- Root cause: the secondary y-axis range was the exact data min/max with no
+  margin, so the first (largest) point landed exactly at `y = top` and its
+  diamond marker (±4 px) poked outside the canvas.
+- Fix: secondary axis now rounds to whole-decade boundaries the same way the
+  primary axis does, giving one decade of headroom. `y` is also clamped to
+  `[top, bottom]` before drawing, and markers whose centre falls outside the
+  plot area are skipped.
+
 ## [1.6.15] — 2026-08-19
 
 ### GUI: balance residuals selectable in convergence plot

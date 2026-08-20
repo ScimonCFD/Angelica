@@ -4467,13 +4467,12 @@ class NetSimGui:
                 v for item in secondary_series for v in item[1] if v > 0.0
             ]
             if sec_all_values:
-                sec_min_log = math.log10(min(sec_all_values))
-                sec_max_log = math.log10(max(sec_all_values))
-                if math.isclose(sec_min_log, sec_max_log):
-                    sec_min_log -= 1.0
-                    sec_max_log += 1.0
-                sec_decade_min = math.floor(sec_min_log)
-                sec_decade_max = math.ceil(sec_max_log)
+                sec_decade_min = math.floor(math.log10(min(sec_all_values)))
+                sec_decade_max = math.ceil(math.log10(max(sec_all_values)))
+                if sec_decade_max <= sec_decade_min:
+                    sec_decade_max = sec_decade_min + 1
+                sec_min_log = float(sec_decade_min)
+                sec_max_log = float(sec_decade_max)
                 sec_num_decades = sec_decade_max - sec_decade_min
                 sec_decade_step = 1 if sec_num_decades <= 6 else 2 if sec_num_decades <= 12 else 3
 
@@ -4519,17 +4518,19 @@ class NetSimGui:
                             x = left + (right - left) * (x_positions[i] / x_den)
                         else:
                             x = right if n == 1 else left + (right - left) * (i / (n - 1))
-                        y = top + (sec_max_log - vlog) * (bottom - top) / (sec_max_log - sec_min_log)
+                        y_raw = top + (sec_max_log - vlog) * (bottom - top) / (sec_max_log - sec_min_log)
+                        y = max(top, min(bottom, y_raw))
                         pts.extend((x, y))
                     if len(pts) >= 4:
                         canvas.create_line(*pts, fill=color, width=2, smooth=False, dash=(6, 3))
+                    size = 4
                     for k in range(0, len(pts), 2):
                         px, py = pts[k], pts[k + 1]
-                        size = 4
-                        canvas.create_polygon(
-                            px, py - size, px + size, py, px, py + size, px - size, py,
-                            fill=color, outline=color,
-                        )
+                        if top - size <= py <= bottom + size:
+                            canvas.create_polygon(
+                                px, py - size, px + size, py, px, py + size, px - size, py,
+                                fill=color, outline=color,
+                            )
 
         # Canvas legend (bottom-left, inside plot area)
         legend_items: list[tuple[str, str, str]] = []  # (label, color, style)
