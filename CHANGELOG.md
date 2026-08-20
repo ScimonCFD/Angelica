@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.6.30] — 2026-08-21
+
+### Refactor: remove legacy `examples/` package
+
+Deleted `src/angelica/examples/` (7 thin wrapper modules that re-exported
+case builders from `cases/` and called `main()`). The logic has been inlined
+directly into the 7 affected tutorial `run.py` files:
+
+- `steady_isothermal_incompressible/01_pipe_only/run.py`
+- `steady_isothermal_incompressible/02_fittings_no_elevation/run.py`
+- `steady_isothermal_incompressible/03_fittings_with_elevation/run.py`
+- `steady_isothermal_incompressible/04_inlet_flow/run.py`
+- `steady_isothermal_incompressible/05_outlet_flow/run.py`
+- `steady_isothermal_incompressible/06_inlet_and_outlet_flow/run.py`
+- `steady_isothermal_incompressible/09_three_reservoir_junction/run.py`
+
+Each tutorial `run.py` now directly imports from `angelica.cases` and
+configures its own solver, matching the style of the other tutorials.
+All 175 tests pass.
+
 ## [1.6.29] — 2026-08-20
 
 ### Tests: Hanoi EPANET Darcy-Weisbach benchmark now covered in CI
