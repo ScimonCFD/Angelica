@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "angelica"
-version = "1.6.23"
+version = "1.6.24"
 description = "Open-source platform for steady isothermal, non-isothermal, compressible, and black-oil pipe network simulation."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -41,8 +41,6 @@ Source = "https://github.com/ScimonCFD/Angelica"
 [project.optional-dependencies]
 gui = [
   "sv-ttk>=2.5",
-]
-excel = [
   "openpyxl>=3.0",
 ]
 dev = [

@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.24] — 2026-08-20
+
+### Fix: openpyxl bundled with the GUI install
+
+`openpyxl` was an optional extra (`angelica[excel]`) that most users never
+installed, causing Excel export to fail with an ImportError. It is now part
+of the `[gui]` extras so `pip install 'angelica[gui]'` includes it automatically.
+The separate `[excel]` extra is removed.
+
 ## [1.6.23] — 2026-08-20
 
 ### Feature: global balance included in exported reports
