@@ -25,6 +25,9 @@ from .looped_network_heat_loss import build_looped_network_heat_loss_case
 from .thermal_mixing_junction import build_thermal_mixing_junction_case
 from .inline_heater_case import build_inline_heater_case
 from .natural_gas_pipeline import build_natural_gas_pipeline_case
+from .hilly_hot_water_network import build_hilly_hot_water_network_case
+from .gas_pipeline_hill_crossing import build_gas_pipeline_hill_crossing_case
+from .black_oil_gathering_elevation import build_black_oil_gathering_elevation_case
 
 __all__ = [
     "build_crude_oil_pipeline_case",
@@ -46,4 +49,7 @@ __all__ = [
     "build_looped_network_heat_loss_case",
     "build_inline_heater_case",
     "build_natural_gas_pipeline_case",
+    "build_hilly_hot_water_network_case",
+    "build_gas_pipeline_hill_crossing_case",
+    "build_black_oil_gathering_elevation_case",
 ]

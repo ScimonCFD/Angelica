@@ -1,5 +1,74 @@
 # Changelog
 
+## [1.6.28] — 2026-08-20
+
+### Tests: CI coverage for compressible and black-oil tutorial series
+
+Extended `test_tutorial_suite.py` with 12 new tests covering all tutorials
+that were previously untested in automated CI.
+
+**`CompressibleTutorialTests` (4 tests)**
+- T01 — natural gas pipeline: nodal pressures, pipe flows, and mass balance
+- T02 — flow-BC cross-validation: confirms outlet pressures match pressure-BC case
+- T03 — looped heat-loss network: convergence, temperature monotone decrease,
+  feeder/collector mass balance
+- T04 — hill crossing: gravity pressure recovery (P_node4 > P_node2), outflow BC satisfied
+
+**`BlackOilTutorialTests` (6 tests)**
+- T01 — single three-phase pipe: flow rate, free-gas appearance below bubble point
+- T02 — looped gathering network: loop split, mass balance at T-junctions
+- T03 — flow-outlet demand: total throughput equals prescribed 100 kg/s BC
+- T04 — two separators: both flow BCs satisfied simultaneously
+- T05 — two-reservoir blending: both inlets contribute, mass balance at junction
+- T06 — elevation gathering: Well A (lower P, downhill) out-flows Well B (higher P, uphill)
+
+**`NonIsothermalExtendedTests` (2 tests)**
+- T05 — crude-oil pipeline thermal: temperature monotone decrease, trunk throughput
+- T06 — hilly hot-water network: gravity-assist pressure (P_node3 > P_node1),
+  outflow BC satisfied (branch_a = 3.0 kg/s)
+
+Total test count: 162 → 174.
+
+## [1.6.27] — 2026-08-20
+
+### Tutorials: elevation + outflow BC coverage for all solvers
+
+Three new tutorials demonstrate that the elevation source term ρ·g·Δz is
+correctly handled across all solver types, including the interaction with
+outflow (prescribed-flow) boundary conditions and mixed elevation directions
+(some pipes ascending, others descending in the same network).
+
+**Non-isothermal incompressible — Tutorial 06: Hilly hot-water network**
+- Branched district-heating network: supply trunk ascends +40 m to a hilltop
+  junction, then splits into two downhill branches (−60 m and −30 m).
+- Outflow BC at the lower consumer node (ṁ_out = 3.0 kg/s, pressure free).
+- Key result: the lower consumer node (−20 m from supply) reaches 694 kPa —
+  higher than the 600 kPa inlet — because the 60 m descent from the hilltop
+  provides 574 kPa of gravity-assisted driving pressure.
+
+**Compressible — Tutorial 04: Gas pipeline hill crossing**
+- Pipeline climbs +500 m to a hilltop junction, then forks into a partial
+  descent (−300 m to a pressure outlet) and a full descent past the inlet
+  elevation (−550 m to an outflow BC at 8.0 kg/s).
+- Elevation correction ρ·g·Δz is re-evaluated each outer iteration as gas
+  density varies with pressure.
+
+**Black-oil — Tutorial 06: Gathering network with two wells at different elevations**
+- Well A (+150 m, P = 6 MPa) flows downhill to a central manifold — gravity
+  provides ~1 MPa of extra driving pressure.
+- Well B (−100 m, P = 9 MPa) flows uphill — gravity opposes with ~0.69 MPa.
+- Despite its lower wellhead pressure, Well A contributes 58.4 % of total
+  production because the elevation advantage more than compensates.
+
+### Improvement: Pipe geometry validation
+
+`Pipe.__post_init__` now raises `ValueError` when
+`abs(height_change_m) > length_m`, which is geometrically impossible (a pipe
+cannot have a larger elevation change than its own length).  Note that
+`length_m` is always the actual pipe axis length (used for friction), not the
+horizontal projection — inclined pipes are correctly specified by providing
+both `length_m` and `height_change_m` independently.
+
 ## [1.6.26] — 2026-08-20
 
 ### Performance: sparse pressure solver — O(N³) → O(N·k²) scalability
