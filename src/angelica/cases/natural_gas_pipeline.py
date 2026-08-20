@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from angelica.core.case import NetworkCase, PressureBoundary
+from angelica.core.case import NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import Pipe
 from angelica.properties.compressible_fluid import CompressibleFluid
 from angelica.properties.eos import IdealGasEOS
@@ -43,6 +43,9 @@ def build_natural_gas_pipeline_case() -> NetworkCase:
         fluid_model=fluid,
         pressure_inlets=(
             PressureBoundary(node_id=1, pressure_pa=800_000.0),
+        ),
+        thermal_inlets=(
+            ThermalBoundary(node_id=1, temperature_c=15.0),
         ),
         pressure_outlets=(
             PressureBoundary(node_id=3, pressure_pa=500_000.0),

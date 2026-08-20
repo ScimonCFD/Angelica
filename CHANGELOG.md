@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.25] — 2026-08-20
+
+### Fix: compressible Tutorial 01 crash + reporting test coverage
+
+- `build_natural_gas_pipeline_case()` was missing `thermal_inlets`, causing
+  `SteadyCompressibleSolver` to raise `ValueError` ("requires at least one
+  ThermalBoundary"). Added `ThermalBoundary(node_id=1, temperature_c=15.0)`,
+  consistent with the docstring ("ideal gas, T = 15 °C").
+- `test_reporting.py`: renamed the existing test to `test_export_solve_result_workbook_no_balance`
+  (tests path with `global_balance=None`, 2-sheet workbook) and added
+  `test_export_solve_result_workbook_with_balance_sheet` which provides real
+  `GlobalBalance` and `GlobalEnergyBalance` objects and asserts the "Balance"
+  sheet is created with the correct row labels.
+- Test count: 161 → 162.
+
 ## [1.6.24] — 2026-08-20
 
 ### Fix: openpyxl bundled with the GUI install
