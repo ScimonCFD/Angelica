@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.21] — 2026-08-20
+
+### GUI: clean up convergence window and remove balance text panel
+
+- Removed the "Balance" text panel from the sidebar (outside the convergence
+  window) — balance information is now exclusively visible as convergence curves.
+- Removed the text summary at the bottom of the Convergence Metrics window.
+- Removed duplicate mass-balance metrics from the metric dropdown:
+  `global_mass_imbalance_kg_per_s` and `global_mass_imbalance_rel` are no
+  longer listed (they overlapped with the new per-iteration balance curves).
+- Final dropdown now has 6 clean metrics:
+  Max |ΔP|, Max nodal mass imbalance, Max |ΔT|, Max |Δρ/ρ|,
+  Mass balance error (%), Energy balance error (kW).
+
 ## [1.6.20] — 2026-08-20
 
 ### Feature: mass and energy balance convergence history in Convergence window

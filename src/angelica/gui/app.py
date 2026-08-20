@@ -183,19 +183,15 @@ class NetSimGui:
     }
     METRIC_OPTIONS = (
         ("Max |ΔP| correction (Pa)", "pressure_correction_abs_pa"),
-        ("Max rel. mass imbalance (−)", "max_nodal_mass_imbalance_rel"),
-        ("Global mass balance error (kg/s)", "global_mass_imbalance_kg_per_s"),
-        ("Global mass balance error (−)", "global_mass_imbalance_rel"),
+        ("Max nodal mass imbalance (−)", "max_nodal_mass_imbalance_rel"),
         ("Max |ΔT| outer correction (K)", "temperature_delta_k"),
         ("Max |Δρ/ρ| outer correction (−)", "density_rel_change"),
-        ("Mass balance error per iteration (%)", "mass_balance_error_pct"),
-        ("Energy balance error per iteration (kW)", "energy_balance_error_kw"),
+        ("Mass balance error (%)", "mass_balance_error_pct"),
+        ("Energy balance error (kW)", "energy_balance_error_kw"),
     )
     _METRIC_UNIT: dict[str, str] = {
         "pressure_correction_abs_pa": "Pa",
         "max_nodal_mass_imbalance_rel": "−",
-        "global_mass_imbalance_kg_per_s": "kg/s",
-        "global_mass_imbalance_rel": "−",
         "temperature_delta_k": "K",
         "density_rel_change": "−",
         "mass_balance_error_pct": "%",
@@ -281,7 +277,6 @@ class NetSimGui:
         self.material_summary_var = tk.StringVar(value=self._material_summary_text())
         self.pressure_drop_summary_var = tk.StringVar(value=self._pressure_drop_summary_text())
         self.numerics_summary_var = tk.StringVar(value=self._numerics_summary_text())
-        self.balance_summary_var = tk.StringVar(value="—")
 
         self._build_menu()
         self._build_layout()
@@ -450,16 +445,6 @@ class NetSimGui:
             justify="left",
         ).pack(anchor="w", pady=(4, 0), fill="x")
 
-        ttk.Label(palette, text="Balance").pack(anchor="w", pady=(10, 0))
-        ttk.Label(
-            palette,
-            textvariable=self.balance_summary_var,
-            width=26,
-            relief="groove",
-            padding=6,
-            justify="left",
-        ).pack(anchor="w", pady=(4, 0), fill="x")
-
         canvas_frame = ttk.Frame(container)
         canvas_frame.pack(side="left", fill="both", expand=True)
 
@@ -522,7 +507,6 @@ class NetSimGui:
         self.energy_balance_history = []
         self.outer_turbulent_final_metrics = []
         self.outer_iteration_boundaries = []
-        self.balance_summary_var.set("—")
         self.current_file_path = None
         self._undo_stack.clear()
         self._redo_stack.clear()
@@ -563,7 +547,6 @@ class NetSimGui:
         self.view_offset_y = 0.0
         self.view_scale = 1.0
         self.latest_result = None
-        self.balance_summary_var.set("—")
         self.current_file_path = file_path
         self._undo_stack.clear()
         self._redo_stack.clear()
@@ -705,7 +688,6 @@ class NetSimGui:
         self.moving_node_id = None
         self.latest_boundary_results = {}
         self.latest_result = None
-        self.balance_summary_var.set("—")
         self._redraw_scene()
 
     def _undo(self) -> None:
@@ -2250,37 +2232,6 @@ class NetSimGui:
             f"cont-tol={self._fmt_sci(continuity_tol)}"
         )
 
-    def _balance_summary_text(self, result) -> str:
-        gb = result.global_balance
-        geb = result.global_energy_balance
-
-        lines: list[str] = []
-
-        # Mass balance (always present)
-        if gb is not None:
-            lines += [
-                f"ṁ in   {gb.mass_inlet_kg_per_s:.4g} kg/s",
-                f"ṁ out  {gb.mass_outlet_kg_per_s:.4g} kg/s",
-                f"err    {gb.mass_error_pct:.2e} %",
-            ]
-
-        # Energy balance (thermal solvers only)
-        if geb is not None:
-            if lines:
-                lines.append("─" * 22)
-            lines += [
-                f"Ė in   {geb.enthalpy_in_kw:.4g} kW",
-                f"Ė out  {geb.enthalpy_out_kw:.4g} kW",
-            ]
-            if geb.heat_sources_kw != 0.0:
-                sign = "+" if geb.heat_sources_kw >= 0 else ""
-                lines.append(f"Q src  {sign}{geb.heat_sources_kw:.4g} kW")
-            if geb.heat_wall_loss_kw != 0.0:
-                lines.append(f"Q wall {geb.heat_wall_loss_kw:.4g} kW")
-            lines.append(f"err    {geb.energy_error_kw:.2e} kW")
-
-        return "\n".join(lines) if lines else "—"
-
     def _validate_scene(self) -> list[str]:
         errors: list[str] = []
         scene = self.scene
@@ -2399,7 +2350,6 @@ class NetSimGui:
             self.energy_balance_history = list(result.energy_balance_history)
             self.outer_turbulent_final_metrics = list(result.outer_turbulent_final_metrics)
             self.outer_iteration_boundaries = list(result.outer_iteration_boundaries)
-            self.balance_summary_var.set(self._balance_summary_text(result))
             self._redraw_scene()
             self._redraw_convergence_plot()
             if result.converged:
@@ -4246,14 +4196,6 @@ class NetSimGui:
                 lambda _event: self._redraw_convergence_plot(),
             )
             # Legend is drawn inside the canvas by _draw_history_plot
-
-            ttk.Separator(frame, orient="horizontal").pack(fill="x", pady=(8, 4))
-            ttk.Label(
-                frame,
-                textvariable=self.balance_summary_var,
-                justify="left",
-                padding=(4, 0),
-            ).pack(anchor="w", fill="x")
         else:
             self.convergence_window.deiconify()
             self.convergence_window.lift()
