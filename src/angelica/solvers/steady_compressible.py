@@ -163,7 +163,7 @@ class SteadyCompressibleSolver(BaseSolver):
             _gb = self._compute_global_balance(network_state)
             mass_balance_history.append(_gb.mass_error_pct)
             _geb = self._compute_global_energy_balance(network_state, fluid_model)
-            energy_balance_history.append(abs(_geb.energy_error_kw))
+            energy_balance_history.append(_geb.energy_error_pct)
 
             new_densities = [fluid_model.density_for_link(link) for link in network_state.components]
             max_rel_delta = max(

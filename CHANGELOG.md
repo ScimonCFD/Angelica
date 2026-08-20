@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.22] — 2026-08-20
+
+### Fix: energy balance error now reported as % (consistent with mass balance)
+
+`energy_balance_history` now stores `energy_error_pct` instead of
+`abs(energy_error_kw)`, making both balance metrics dimensionless and directly
+comparable. The convergence dropdown label is updated to "Energy balance error (%)".
+
 ## [1.6.21] — 2026-08-20
 
 ### GUI: clean up convergence window and remove balance text panel

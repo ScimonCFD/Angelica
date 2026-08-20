@@ -187,7 +187,7 @@ class NetSimGui:
         ("Max |ΔT| outer correction (K)", "temperature_delta_k"),
         ("Max |Δρ/ρ| outer correction (−)", "density_rel_change"),
         ("Mass balance error (%)", "mass_balance_error_pct"),
-        ("Energy balance error (kW)", "energy_balance_error_kw"),
+        ("Energy balance error (%)", "energy_balance_error_pct"),
     )
     _METRIC_UNIT: dict[str, str] = {
         "pressure_correction_abs_pa": "Pa",
@@ -195,7 +195,7 @@ class NetSimGui:
         "temperature_delta_k": "K",
         "density_rel_change": "−",
         "mass_balance_error_pct": "%",
-        "energy_balance_error_kw": "kW",
+        "energy_balance_error_pct": "%",
     }
     UNIT_SYSTEMS: dict[str, dict] = {
         "si": {
@@ -4219,7 +4219,7 @@ class NetSimGui:
             "density_rel_change":    (self.density_history,         self._t["plot_density"],        "Outer iteration"),
             "mass_balance_error_pct":(self.mass_balance_history,   self._t["plot_mass_balance"],
                                       "Iteration" if self.scene.physics_mode == "isothermal" else "Outer iteration"),
-            "energy_balance_error_kw":(self.energy_balance_history, self._t["plot_energy_balance"], "Outer iteration"),
+            "energy_balance_error_pct":(self.energy_balance_history, self._t["plot_energy_balance"], "Outer iteration"),
         }
         if metric_name in _outer_metric_map:
             if hasattr(self, "_detail_checkbutton"):

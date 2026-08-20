@@ -161,7 +161,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             _gb = self._compute_global_balance(network_state)
             mass_balance_history.append(_gb.mass_error_pct)
             _geb = self._compute_global_energy_balance(network_state, fluid_model)
-            energy_balance_history.append(abs(_geb.energy_error_kw))
+            energy_balance_history.append(_geb.energy_error_pct)
 
             if max_delta_t < settings.temperature_tolerance_k:
                 temperature_converged = True

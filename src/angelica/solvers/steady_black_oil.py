@@ -398,7 +398,7 @@ class SteadyBlackOilSolver(BaseSolver):
             _gb = self._compute_global_balance(network_state)
             mass_balance_history.append(_gb.mass_error_pct)
             _geb = self._compute_global_energy_balance(network_state, effective_fluid)
-            energy_balance_history.append(abs(_geb.energy_error_kw))
+            energy_balance_history.append(_geb.energy_error_pct)
 
             new_densities = [
                 effective_fluid.density_for_link(link)
