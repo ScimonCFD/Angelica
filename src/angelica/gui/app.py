@@ -46,6 +46,10 @@ from .model import (
 )
 
 
+class _SolverCancelled(Exception):
+    """Raised inside the solver thread when the user presses Stop."""
+
+
 class ToolTip:
     def __init__(self, widget: tk.Widget, text: str) -> None:
         self.widget = widget
@@ -257,6 +261,8 @@ class NetSimGui:
         self._dark = False
         self._unit_system_key = "si"
         self._simulation_running = False
+        self._stop_event = threading.Event()
+        self._stop_button: ttk.Button | None = None
         self.root = tk.Tk()
         sv_ttk.set_theme("light")
         self.root.title(f"Angelica v{angelica.__version__}")
@@ -2414,7 +2420,10 @@ class NetSimGui:
             return
 
         self._simulation_running = True
+        self._stop_event.clear()
         self._run_button.configure(state="disabled")
+        if self._stop_button is not None and self._stop_button.winfo_exists():
+            self._stop_button.configure(state="normal")
         self.status_var.set("Running simulation…")
 
         solver = build_solver_from_scene(self.scene)
@@ -2424,6 +2433,8 @@ class NetSimGui:
         _result_holder: list = [None, None]  # [result, exception]
 
         def _thread_safe_progress(stage, iter_idx, metrics):
+            if self._stop_event.is_set():
+                raise _SolverCancelled()
             self.root.after(0, self._on_solver_progress, stage, iter_idx, metrics)
 
         def _worker():
@@ -2439,8 +2450,14 @@ class NetSimGui:
         def _finish():
             self._simulation_running = False
             self._run_button.configure(state="normal")
+            if self._stop_button is not None and self._stop_button.winfo_exists():
+                self._stop_button.configure(state="disabled")
             result, error = _result_holder
             if error is not None:
+                if isinstance(error, _SolverCancelled):
+                    self.status_var.set("Simulation stopped by user.")
+                    self._redraw_convergence_plot()
+                    return
                 messagebox.showerror("Run failed", str(error))
                 return
             self.latest_result = result
@@ -2928,11 +2945,33 @@ class NetSimGui:
         entries: dict[str, tk.StringVar] = {}
 
         if node.node_type in {"source", "sink"}:
-            ttk.Label(container, text="Boundary Type").grid(row=0, column=0, sticky="w", pady=4)
+            # For compositional source nodes the dialog uses a two-tab Notebook.
+            # For all other cases the existing flat layout is preserved.
+            _comp_source = (
+                self.scene.physics_mode == "compositional"
+                and node.node_type == "source"
+            )
+            if _comp_source:
+                notebook = ttk.Notebook(container)
+                notebook.grid(row=0, column=0, columnspan=2, sticky="nsew")
+                container.rowconfigure(0, weight=1)
+                _props_tab = ttk.Frame(notebook, padding=8)
+                _props_tab.columnconfigure(1, weight=1)
+                notebook.add(_props_tab, text="Properties")
+                _comp_tab = ttk.Frame(notebook, padding=8)
+                _comp_tab.columnconfigure(1, weight=1)
+                notebook.add(_comp_tab, text="Composition")
+                pf = _props_tab   # property widgets go here
+                _btn_row_idx = 1  # button row sits at container row 1
+            else:
+                pf = container    # flat layout as before
+                _btn_row_idx = 15
+
+            ttk.Label(pf, text="Boundary Type").grid(row=0, column=0, sticky="w", pady=4)
             condition_var = tk.StringVar(value=node.properties.get("condition_type", "pressure"))
             entries["condition_type"] = condition_var
 
-            condition_frame = ttk.Frame(container)
+            condition_frame = ttk.Frame(pf)
             condition_frame.grid(row=0, column=1, sticky="w", pady=4)
 
             ttk.Radiobutton(
@@ -2948,15 +2987,15 @@ class NetSimGui:
                 variable=condition_var,
             ).pack(side="left")
 
-            ttk.Label(container, text=f"Pressure ({self._unit_label('pressure')})").grid(row=1, column=0, sticky="w", pady=4)
+            ttk.Label(pf, text=f"Pressure ({self._unit_label('pressure')})").grid(row=1, column=0, sticky="w", pady=4)
             pressure_var = tk.StringVar(value=self._si_to_display(node.properties.get("pressure", ""), "pressure"))
-            pressure_entry = ttk.Entry(container, textvariable=pressure_var, width=20)
+            pressure_entry = ttk.Entry(pf, textvariable=pressure_var, width=20)
             pressure_entry.grid(row=1, column=1, sticky="ew", pady=4)
             entries["pressure"] = pressure_var
 
-            ttk.Label(container, text=f"Flow ({self._unit_label('flow')})").grid(row=2, column=0, sticky="w", pady=4)
+            ttk.Label(pf, text=f"Flow ({self._unit_label('flow')})").grid(row=2, column=0, sticky="w", pady=4)
             flow_var = tk.StringVar(value=self._si_to_display(node.properties.get("flow", ""), "flow"))
-            flow_entry = ttk.Entry(container, textvariable=flow_var, width=20)
+            flow_entry = ttk.Entry(pf, textvariable=flow_var, width=20)
             flow_entry.grid(row=2, column=1, sticky="ew", pady=4)
             entries["flow"] = flow_var
 
@@ -2975,11 +3014,11 @@ class NetSimGui:
             )
 
             if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil", "compositional"):
-                ttk.Separator(container, orient="horizontal").grid(
+                ttk.Separator(pf, orient="horizontal").grid(
                     row=3, column=0, columnspan=2, sticky="ew", pady=(6, 2)
                 )
                 ttk.Label(
-                    container, text="— Thermal boundary —", foreground="gray"
+                    pf, text="— Thermal boundary —", foreground="gray"
                 ).grid(row=4, column=0, columnspan=2, pady=(0, 4))
 
                 # Infer default bc_type for old files that lack the property
@@ -2991,7 +3030,7 @@ class NetSimGui:
                 thermal_bc_var = tk.StringVar(value=default_bc)
                 entries["thermal_bc_type"] = thermal_bc_var
 
-                bc_frame = ttk.Frame(container)
+                bc_frame = ttk.Frame(pf)
                 bc_frame.grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 4))
                 ttk.Radiobutton(bc_frame, text="Zero gradient  (∂T/∂x = 0)",
                                 value="zero_gradient", variable=thermal_bc_var).pack(anchor="w")
@@ -3001,18 +3040,18 @@ class NetSimGui:
                                 value="fixed_gradient", variable=thermal_bc_var).pack(anchor="w")
 
                 # Temperature entry (row 6)
-                t_label = ttk.Label(container, text="Temperature (°C)")
+                t_label = ttk.Label(pf, text="Temperature (°C)")
                 t_label.grid(row=6, column=0, sticky="w", pady=4)
                 t_in_var = tk.StringVar(value=node.properties.get("inlet_temperature_c", ""))
-                t_entry = ttk.Entry(container, textvariable=t_in_var, width=20)
+                t_entry = ttk.Entry(pf, textvariable=t_in_var, width=20)
                 t_entry.grid(row=6, column=1, sticky="ew", pady=4)
                 entries["inlet_temperature_c"] = t_in_var
 
                 # Gradient entry (row 7)
-                g_label = ttk.Label(container, text="Gradient g (°C/m)")
+                g_label = ttk.Label(pf, text="Gradient g (°C/m)")
                 g_label.grid(row=7, column=0, sticky="w", pady=4)
                 g_var = tk.StringVar(value=node.properties.get("thermal_gradient_dc_per_m", "0.0"))
-                g_entry = ttk.Entry(container, textvariable=g_var, width=20)
+                g_entry = ttk.Entry(pf, textvariable=g_var, width=20)
                 g_entry.grid(row=7, column=1, sticky="ew", pady=4)
                 entries["thermal_gradient_dc_per_m"] = g_var
 
@@ -3038,63 +3077,86 @@ class NetSimGui:
                 _sync_thermal_bc()
 
             if self.scene.physics_mode == "black_oil" and node.node_type == "source":
-                ttk.Separator(container, orient="horizontal").grid(
+                ttk.Separator(pf, orient="horizontal").grid(
                     row=8, column=0, columnspan=2, sticky="ew", pady=(8, 2)
                 )
                 ttk.Label(
-                    container, text="— Production ratios —", foreground="gray"
+                    pf, text="— Production ratios —", foreground="gray"
                 ).grid(row=9, column=0, columnspan=2, pady=(0, 4))
                 bo_fields = [
                     ("gor_sc_m3_per_m3", "GOR sc (m³/m³)"),
                     ("wor_sc_m3_per_m3", "WOR sc (m³/m³)"),
                 ]
                 for bo_i, (bo_key, bo_label) in enumerate(bo_fields):
-                    ttk.Label(container, text=bo_label).grid(
+                    ttk.Label(pf, text=bo_label).grid(
                         row=10 + bo_i, column=0, sticky="w", pady=3
                     )
                     bo_var = tk.StringVar(value=node.properties.get(bo_key, ""))
-                    ttk.Entry(container, textvariable=bo_var, width=20).grid(
+                    ttk.Entry(pf, textvariable=bo_var, width=20).grid(
                         row=10 + bo_i, column=1, sticky="ew", pady=3
                     )
                     entries[bo_key] = bo_var
 
-            if self.scene.physics_mode == "compositional" and node.node_type == "source":
-                ttk.Separator(container, orient="horizontal").grid(
-                    row=8, column=0, columnspan=2, sticky="ew", pady=(8, 2)
-                )
-                ttk.Label(
-                    container, text="— Inlet composition —", foreground="gray"
-                ).grid(row=9, column=0, columnspan=2, pady=(0, 4))
-                comp_names = self.scene.material.get("component_names", "")
-                ttk.Label(container, text=f"Components: {comp_names or '(not set)'}", foreground="gray").grid(
-                    row=10, column=0, columnspan=2, sticky="w", pady=(0, 4)
-                )
-                ttk.Label(container, text="Mole fracs (CSV)").grid(
-                    row=11, column=0, sticky="w", pady=4
-                )
-                zs_var = tk.StringVar(value=node.properties.get("zs", ""))
-                ttk.Entry(container, textvariable=zs_var, width=20).grid(
-                    row=11, column=1, sticky="ew", pady=4
-                )
-                entries["zs"] = zs_var
+            # ── Composition tab (compositional source nodes only) ─────────────
+            _comp_vars: list[tk.StringVar] = []
+            if _comp_source:
+                comp_names_raw = self.scene.material.get("component_names", "").strip()
+                comp_name_list = [n.strip() for n in comp_names_raw.split(",") if n.strip()]
+                existing_zs_raw = node.properties.get("zs", "")
+                existing_zs_parts = [z.strip() for z in existing_zs_raw.split(",") if z.strip()]
+
+                if not comp_name_list:
+                    ttk.Label(_comp_tab, text="No components defined in the material.",
+                              foreground="gray").grid(row=0, column=0, columnspan=2, pady=8)
+                else:
+                    ttk.Label(_comp_tab, text="Component", foreground="gray").grid(
+                        row=0, column=0, sticky="w", pady=(0, 4))
+                    ttk.Label(_comp_tab, text="Mole fraction", foreground="gray").grid(
+                        row=0, column=1, sticky="w", pady=(0, 4), padx=(8, 0))
+                    ttk.Separator(_comp_tab, orient="horizontal").grid(
+                        row=1, column=0, columnspan=2, sticky="ew", pady=(0, 6))
+                    for _ci, _cname in enumerate(comp_name_list):
+                        ttk.Label(_comp_tab, text=_cname).grid(
+                            row=2 + _ci, column=0, sticky="w", pady=4)
+                        _zval = existing_zs_parts[_ci] if _ci < len(existing_zs_parts) else ""
+                        _cvar = tk.StringVar(value=_zval)
+                        ttk.Entry(_comp_tab, textvariable=_cvar, width=14).grid(
+                            row=2 + _ci, column=1, sticky="ew", pady=4, padx=(8, 0))
+                        _comp_vars.append(_cvar)
+
+                # Synthetic entry that is built from _comp_vars when Save is pressed.
+                _zs_synthetic = tk.StringVar(value=existing_zs_raw)
+                entries["zs"] = _zs_synthetic
 
         else:
+            _comp_source = False
+            _comp_vars = []
             ttk.Label(container, text="Label").grid(row=0, column=0, sticky="w", pady=4)
             label_var = tk.StringVar(value=node.properties.get("label", ""))
             ttk.Entry(container, textvariable=label_var, width=20).grid(
                 row=0, column=1, sticky="ew", pady=4
             )
             entries["label"] = label_var
+            _btn_row_idx = 15
 
         button_row = ttk.Frame(container)
-        button_row.grid(row=15, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=_btn_row_idx, column=0, columnspan=2, sticky="e", pady=(10, 0))
+
+        def _do_save() -> None:
+            # For compositional source nodes, build the zs CSV from individual entries.
+            if _comp_source and _comp_vars:
+                zs_parts = []
+                for _cv in _comp_vars:
+                    _txt = _cv.get().strip()
+                    try:
+                        zs_parts.append(str(float(_txt)) if _txt else "0.0")
+                    except ValueError:
+                        zs_parts.append("0.0")
+                entries["zs"].set(", ".join(zs_parts))
+            self._save_node_properties(node.node_id, entries, dialog)
 
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
-        ttk.Button(
-            button_row,
-            text="Save",
-            command=lambda: self._save_node_properties(node.node_id, entries, dialog),
-        ).pack(side="right")
+        ttk.Button(button_row, text="Save", command=_do_save).pack(side="right")
 
         dialog.update_idletasks()
         dialog.grab_set()
@@ -4345,6 +4407,14 @@ class NetSimGui:
                 command=self._redraw_convergence_plot,
             )
             self._detail_checkbutton.pack(side="left", padx=(16, 0))
+
+            self._stop_button = ttk.Button(
+                control_row,
+                text="Stop",
+                command=self._stop_event.set,
+                state="disabled",
+            )
+            self._stop_button.pack(side="right")
 
             self.convergence_canvas = tk.Canvas(
                 frame,

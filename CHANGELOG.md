@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.6.42] — 2026-08-21
+
+### Feature: Stop button in Convergence window
+
+A **Stop** button now appears in the top-right corner of the Convergence
+Metrics window.  It is enabled while a simulation is running and disabled
+otherwise.  Pressing it signals the solver thread to abort at the next
+iteration callback, so heavy simulations can be cancelled without closing
+the application.  The status bar shows "Simulation stopped by user."
+
+### Feature: per-component composition tab for inlet nodes (compositional mode)
+
+The source-node dialog in compositional mode now has two tabs:
+
+- **Properties** — boundary type (pressure / flow), thermal BC (unchanged).
+- **Composition** — one row per component as defined in the material:
+
+  ```
+  Component     Mole fraction
+  ─────────────────────────────
+  methane       [ 0.8 ]
+  ethane        [ 0.2 ]
+  propane       [     ]   ← blank → 0
+  ```
+
+  Blank fields are treated as 0.  The CSV `zs` string saved to the scene is
+  built automatically from the individual entries when the user clicks Save.
+  Old files with a pre-existing CSV value are pre-populated correctly.
+
 ## [1.6.41] — 2026-08-21
 
 ### Feature: outlet compositions shown on the canvas after a compositional solve
