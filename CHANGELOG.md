@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.56] — 2026-08-22
+
+### Feature: global default segments per pipe in Numerics
+
+A new **Segments per pipe (default)** field in the Numerics dialog sets the
+number of segments for all pipes whose own `num_segments` field is left blank.
+
+* Default is 1 (same as before — no behaviour change for existing scenes).
+* Individual pipes can still override the default with their own explicit value.
+* The active default is shown in the Numerics summary panel on the canvas.
+* `build_network_case_from_scene` reads `num_segments` from `solver_settings`
+  and uses it as the fallback when a pipe's field is empty.
+* `build_solver_from_scene` now correctly excludes `num_segments` from the
+  `SolverSettings` kwargs (it is a geometry parameter, not a solver parameter).
+
 ## [1.6.55] — 2026-08-22
 
 ### Feature: component mass flows and mixture MW in compositional results report

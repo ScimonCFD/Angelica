@@ -245,6 +245,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
     is_non_isothermal  = scene.physics_mode == "non_isothermal"
     is_black_oil       = scene.physics_mode == "black_oil"
     is_compositional   = scene.physics_mode == "compositional"
+    default_num_segments = max(1, int(scene.solver_settings.get("num_segments", 1)))
     inlet_fluid_bcs: list[InletFluidBC] = []
 
     if not is_black_oil and not is_compositional and not scene.material:
@@ -400,7 +401,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 ambient_temp = _optional_float(
                     component, "ambient_temperature_c", default=20.0
                 ) if _needs_heat else 20.0
-                num_segs = max(1, int(_optional_float(component, "num_segments", default=1.0)))
+                num_segs = max(1, int(_optional_float(component, "num_segments", default=float(default_num_segments))))
                 seg_length = length / num_segs
                 seg_height = height_change / num_segs
                 seg_nodes = [current_start]
@@ -715,7 +716,8 @@ def build_solver_from_scene(scene: CanvasScene):
         "max_outer_iterations", "max_density_iterations", "density_rel_tolerance",
         "temperature_tolerance_k", "temperature_relaxation", "convection_scheme",
     }
-    _OUTER_KEYS = _NI_KEYS | _COMP_KEYS
+    _GEOM_KEYS = {"num_segments"}   # geometry keys — consumed by build_network_case, not the solver
+    _OUTER_KEYS = _NI_KEYS | _COMP_KEYS | _GEOM_KEYS
     ni_raw = {k: scene.solver_settings[k] for k in _NI_KEYS if k in scene.solver_settings}
     comp_raw = {k: scene.solver_settings[k] for k in _COMP_KEYS if k in scene.solver_settings}
     hyd_raw = {k: v for k, v in scene.solver_settings.items() if k not in _OUTER_KEYS}

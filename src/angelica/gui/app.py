@@ -1166,12 +1166,15 @@ class NetSimGui:
         current_dp_tol = self._fmt_sci(self.scene.solver_settings.get("pressure_correction_abs_tolerance_pa", 1e-3))
         current_continuity_tol = self._fmt_sci(self.scene.solver_settings.get("nodal_mass_imbalance_rel_tolerance", 1e-3))
 
+        current_num_segments = str(self.scene.solver_settings.get("num_segments", 1))
+
         # Non-isothermal energy settings
         current_convection_scheme = str(self.scene.solver_settings.get("convection_scheme", "upwind"))
         current_max_temp_iter = str(self.scene.solver_settings.get("max_temperature_iterations", "50"))
         current_temp_tol = self._fmt_sci(self.scene.solver_settings.get("temperature_tolerance_k", 0.01))
         current_temp_relax = str(self.scene.solver_settings.get("temperature_relaxation", "1.0"))
 
+        num_segments_var = tk.StringVar(master=dialog, value=current_num_segments)
         convection_scheme_var = tk.StringVar(master=dialog, value=current_convection_scheme)
         max_temp_iter_var = tk.StringVar(master=dialog, value=current_max_temp_iter)
         temp_tol_var = tk.StringVar(master=dialog, value=current_temp_tol)
@@ -1406,6 +1409,19 @@ class NetSimGui:
             row=22, column=1, sticky="ew", pady=4
         )
 
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=23, column=0, columnspan=2, sticky="ew", pady=(6, 2)
+        )
+        ttk.Label(frame, text="— Pipe discretisation —", foreground="gray").grid(
+            row=24, column=0, columnspan=2, pady=(0, 4)
+        )
+        ttk.Label(frame, text="Segments per pipe (default)").grid(
+            row=25, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=num_segments_var, width=26).grid(
+            row=25, column=1, sticky="ew", pady=4
+        )
+
         def apply_velocity_method_selection(_event: tk.Event | None = None) -> None:
             velocity_name_var.set(
                 self.VELOCITY_LOOP_METHOD_LIBRARY[velocity_method_var.get()]["name"]
@@ -1426,7 +1442,7 @@ class NetSimGui:
         friction_method_box.bind("<<ComboboxSelected>>", apply_friction_method_selection)
 
         button_row = ttk.Frame(frame)
-        button_row.grid(row=23, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=26, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
         ttk.Button(
             button_row,
@@ -1449,6 +1465,7 @@ class NetSimGui:
                 max_temp_iter_var,
                 temp_tol_var,
                 temp_relax_var,
+                num_segments_var,
             ),
         ).pack(side="right", padx=(0, 8))
 
@@ -1711,6 +1728,7 @@ class NetSimGui:
         max_temp_iter_var: tk.StringVar,
         temp_tol_var: tk.StringVar,
         temp_relax_var: tk.StringVar,
+        num_segments_var: tk.StringVar,
     ) -> None:
         laminar_iterations_text = laminar_iterations_var.get().strip()
         if laminar_iterations_text.lower() in ("", "auto"):
@@ -1964,6 +1982,23 @@ class NetSimGui:
             )
             return
 
+        try:
+            num_segments = int(num_segments_var.get().strip())
+        except ValueError:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Segments per pipe must be an integer.",
+                parent=dialog,
+            )
+            return
+        if num_segments < 1:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Segments per pipe must be at least 1.",
+                parent=dialog,
+            )
+            return
+
         self.scene.update_solver_settings(
             {
                 "laminar_iterations": laminar_iterations,
@@ -1982,6 +2017,7 @@ class NetSimGui:
                 "max_temperature_iterations": max_temp_iter,
                 "temperature_tolerance_k": temp_tol,
                 "temperature_relaxation": temp_relax,
+                "num_segments": num_segments,
             }
         )
         self._refresh_global_summaries()
@@ -1991,7 +2027,8 @@ class NetSimGui:
             f"turbulent={turbulent_iterations}, "
             f"alpha={alpha:g}, "
             f"f-tol={self._fmt_sci(colebrook_tol)}, V*-tol={self._fmt_sci(velocity_loop_tol)}, "
-            f"ΔP-tol={self._fmt_sci(dp_tol)} Pa, continuity-tol={self._fmt_sci(continuity_tol)}."
+            f"ΔP-tol={self._fmt_sci(dp_tol)} Pa, continuity-tol={self._fmt_sci(continuity_tol)}, "
+            f"segs={num_segments}."
         )
         dialog.destroy()
 
@@ -2337,7 +2374,8 @@ class NetSimGui:
             f"f-tol={self._fmt_sci(colebrook_tol)}\n"
             f"V*-tol={self._fmt_sci(velocity_loop_tol)} m/s\n"
             f"ΔP-tol={self._fmt_sci(dp_tol)} Pa\n"
-            f"cont-tol={self._fmt_sci(continuity_tol)}"
+            f"cont-tol={self._fmt_sci(continuity_tol)}\n"
+            f"segs={self.scene.solver_settings.get('num_segments', 1)}"
         )
 
     def _validate_scene(self) -> list[str]:
