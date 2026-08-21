@@ -82,6 +82,8 @@ class SolveResult:
     global_energy_balance: Optional[GlobalEnergyBalance] = None
     mass_balance_history: list[float] = field(default_factory=list)
     energy_balance_history: list[float] = field(default_factory=list)
+    component_names: tuple[str, ...] = ()
+    node_compositions: dict[int, tuple[float, ...]] = field(default_factory=dict)
 
     @property
     def link_mass_flows_kg_per_s(self) -> list[float]:

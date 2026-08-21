@@ -57,6 +57,7 @@ def export_solve_result_csv(result, output_path: str) -> None:
                     ]
                 )
         _write_balance_rows_csv(writer, result)
+        _write_compositions_csv(writer, result)
 
 
 def export_solve_result_workbook(result, output_path: str) -> None:
@@ -120,7 +121,53 @@ def export_solve_result_workbook(result, output_path: str) -> None:
             )
 
     _write_balance_sheet(workbook, result)
+    _write_compositions_sheet(workbook, result)
     workbook.save(output)
+
+
+def _write_compositions_csv(writer, result) -> None:
+    names = getattr(result, "component_names", ())
+    if not names:
+        return
+    has_pipe = any(getattr(cf, "zs", ()) for cf in result.component_flows)
+    has_node = bool(getattr(result, "node_compositions", {}))
+    if not has_pipe and not has_node:
+        return
+    writer.writerow([])
+    writer.writerow(["Compositions (mole fractions)"])
+    if has_pipe:
+        writer.writerow(["Pipe", *names])
+        for cf in result.component_flows:
+            zs = getattr(cf, "zs", ())
+            writer.writerow([cf.label, *[round(z, 6) for z in zs]])
+    if has_node:
+        writer.writerow([])
+        writer.writerow(["Node", *names])
+        for nid in sorted(result.node_compositions):
+            zs = result.node_compositions[nid]
+            writer.writerow([nid, *[round(z, 6) for z in zs]])
+
+
+def _write_compositions_sheet(workbook, result) -> None:
+    names = getattr(result, "component_names", ())
+    if not names:
+        return
+    has_pipe = any(getattr(cf, "zs", ()) for cf in result.component_flows)
+    has_node = bool(getattr(result, "node_compositions", {}))
+    if not has_pipe and not has_node:
+        return
+    ws = workbook.create_sheet("Compositions")
+    if has_pipe:
+        ws.append(["Pipe", *names])
+        for cf in result.component_flows:
+            zs = getattr(cf, "zs", ())
+            ws.append([cf.label, *[round(z, 6) for z in zs]])
+    if has_node:
+        ws.append([])
+        ws.append(["Node", *names])
+        for nid in sorted(result.node_compositions):
+            zs = result.node_compositions[nid]
+            ws.append([nid, *[round(z, 6) for z in zs]])
 
 
 def _write_balance_rows_csv(writer, result) -> None:

@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.6.43] — 2026-08-21
+
+### Change: Compositions moved to results report instead of canvas
+
+Outlet and inlet compositions are no longer printed on the main canvas.
+With mixtures of many components the canvas labels became cluttered and
+unreadable.
+
+Compositions now appear in the **results report** (CSV and Excel):
+
+- **CSV** — a "Compositions" section at the end of the file with one row
+  per pipe (mole fractions) and one row per node (mass-flow-weighted
+  mixture at that junction).
+- **Excel** — a dedicated **Compositions** sheet with the same data,
+  formatted with a header row.
+
+`SolveResult` carries `component_names` and `node_compositions` (both
+computed by the compositional solver); the reporting functions use them
+to write the new section/sheet automatically.  Non-compositional runs
+produce no compositions section.
+
 ## [1.6.42] — 2026-08-21
 
 ### Feature: Stop button in Convergence window

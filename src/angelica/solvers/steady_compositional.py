@@ -314,6 +314,25 @@ class SteadyCompositionalSolver(BaseSolver):
                 )
             )
 
+        # Derive per-node compositions (mass-flow-weighted mix of incoming pipes).
+        _incoming: Dict[int, list] = {}
+        for link in network_state.components:
+            _zs = getattr(link, "zs", ())
+            if not _zs:
+                continue
+            _mdot = link.mass_flow_kg_per_s
+            _nid = link.end_node.node_id if _mdot >= 0.0 else link.start_node.node_id
+            _incoming.setdefault(_nid, []).append((abs(_mdot), tuple(_zs)))
+        node_compositions: Dict[int, tuple] = {}
+        for _nid, _arr in _incoming.items():
+            _tot = sum(m for m, _ in _arr)
+            if _tot <= 0.0:
+                continue
+            _nc = len(_arr[0][1])
+            node_compositions[_nid] = tuple(
+                sum(m * zs[i] for m, zs in _arr) / _tot for i in range(_nc)
+            )
+
         return SolveResult(
             case_name=case.name,
             converged=(hydraulic_converged and density_converged and temperature_converged),
@@ -332,4 +351,6 @@ class SteadyCompositionalSolver(BaseSolver):
             global_energy_balance=self._compute_global_energy_balance(network_state, fluid),
             mass_balance_history=mass_balance_history,
             energy_balance_history=energy_balance_history,
+            component_names=fluid.component_names,
+            node_compositions=node_compositions,
         )
