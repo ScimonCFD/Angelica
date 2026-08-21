@@ -42,6 +42,7 @@ class PipeState(PressureChangerState):
     friction_factor: float | None = None
     reynolds: float = 0.0
     temperature_c: float | None = None
+    zs: tuple[float, ...] = ()
 
 
 @dataclass

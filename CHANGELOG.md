@@ -1,5 +1,46 @@
 # Changelog
 
+## [1.6.32] — 2026-08-21
+
+### Feature: compositional pipe network solver (`SteadyCompositionalSolver`)
+
+First fully compositional solver, backed by the `thermo` library (v0.5+) for
+equation-of-state PT flashes at each pipe's local pressure and temperature.
+
+**New public API:**
+
+| Symbol | Location |
+|--------|----------|
+| `CompositionalFluid` | `angelica.properties.compositional_fluid` |
+| `CompositionalSolverSettings` | `angelica.solvers.steady_compositional` |
+| `SteadyCompositionalSolver` | `angelica.solvers.steady_compositional` |
+| `InletCompositionBC` | `angelica.core.case` |
+
+**`CompositionalFluid`** — `FluidModel` implementation that calls
+`thermo.Mixture` for PT flashes.  Two-phase VLE regions use the no-slip
+homogeneous model (volumetric-fraction-weighted mixture properties).  Results
+are cached by `(component_names, P, T, z)` via `functools.lru_cache` to
+avoid redundant flash evaluations.
+
+**`SteadyCompositionalSolver`** — Outer loop: propagate compositions →
+SIMPLE hydraulics → energy equation → temperature update.  Converges when
+`max|Δρ/ρ| < density_rel_tolerance` and `max|ΔT| < temperature_tolerance_k`.
+
+**Multi-inlet composition propagation** — `InletCompositionBC` sets a
+mole-fraction Dirichlet condition at each inlet.  In each outer iteration
+the solver propagates compositions downstream by BFS-like fixed-point
+iteration, mixing streams at junctions by molar-flow-weighted average and
+writing the result to `PipeState.zs`.  Handles T-junctions, loops, and
+flow reversals automatically.
+
+**Other changes:**
+
+- `PipeState` gains a new field `zs: tuple[float, ...] = ()`.
+- `NetworkCase` gains a new field `inlet_composition_bcs: tuple[InletCompositionBC, ...]`.
+- New case builder: `angelica.cases.gas_mixing_junction.build_gas_mixing_junction_case`.
+- `thermo>=0.5` added as optional dependency (`pip install angelica[compositional]`).
+- 24 new tests (all pass); total suite: 199 tests.
+
 ## [1.6.31] — 2026-08-21
 
 ### Fix: black-oil API now fully exported from top-level package

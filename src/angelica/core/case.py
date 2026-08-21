@@ -30,6 +30,35 @@ class InletFluidBC:
 
 
 @dataclass(frozen=True)
+class InletCompositionBC:
+    """Mole-fraction composition boundary condition at an inlet node.
+
+    Specifies the overall mole-fraction vector ``zs`` at a pressure or flow
+    inlet for use with the compositional solver.  The solver propagates
+    compositions from inlet nodes through the network following the flow
+    direction, mixing streams at junctions by molar-flow-weighted average.
+
+    Args:
+        node_id: ID of the inlet node this composition is assigned to.
+        zs: Overall mole fractions of each component (must sum to 1.0).
+    """
+
+    node_id: int
+    zs: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        zs = tuple(self.zs)
+        object.__setattr__(self, "zs", zs)
+        if not zs:
+            raise ValueError("InletCompositionBC.zs must not be empty")
+        if any(z < 0.0 for z in zs):
+            raise ValueError("Mole fractions must be non-negative")
+        s = sum(zs)
+        if abs(s - 1.0) > 1e-6:
+            raise ValueError(f"Mole fractions must sum to 1.0 (got {s:.6f})")
+
+
+@dataclass(frozen=True)
 class PressureBoundary:
     node_id: int
     pressure_pa: float
@@ -97,12 +126,13 @@ class NetworkCase:
     initial_node_pressures_pa: dict[int, float] = field(default_factory=dict)
     thermal_inlets: tuple[ThermalBoundary, ...] = field(default_factory=tuple)
     inlet_fluid_bcs: tuple[InletFluidBC, ...] = field(default_factory=tuple)
+    inlet_composition_bcs: tuple[InletCompositionBC, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         _tuple_fields = (
             "pressure_inlets", "pressure_outlets", "components",
             "flow_inlets", "flow_outlets", "node_ids", "thermal_inlets",
-            "inlet_fluid_bcs",
+            "inlet_fluid_bcs", "inlet_composition_bcs",
         )
         for attr in _tuple_fields:
             val = getattr(self, attr)

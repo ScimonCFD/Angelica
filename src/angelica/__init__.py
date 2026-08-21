@@ -7,12 +7,20 @@ except PackageNotFoundError:
     __version__ = "unknown"
 
 from .closures.convection_scheme import ConvectionScheme, HybridScheme, PowerLawScheme, UpwindScheme
-from .core.case import FlowBoundary, InletFluidBC, NetworkCase, PressureBoundary, ThermalBoundary
+from .core.case import (
+    FlowBoundary,
+    InletCompositionBC,
+    InletFluidBC,
+    NetworkCase,
+    PressureBoundary,
+    ThermalBoundary,
+)
 from .core.components import Fitting, HeatSource, Pipe, PressureChanger, Pump
 from .core.results import ComponentFlowResult, SolveResult
 from .core.settings import SolverSettings
 from .io.reporting import print_solve_result
 from .properties.black_oil import BlackOilFluid
+from .properties.compositional_fluid import CompositionalFluid
 from .properties.compressible_fluid import CompressibleFluid
 from .properties.gas_correlations import lee_gonzalez_eakin_viscosity
 from .properties.dead_oil import build_thermal_dead_oil
@@ -23,9 +31,11 @@ from .properties.water_liquid import build_water_thermal_fluid
 from .solvers import (
     BaseSolver,
     BlackOilSolverSettings,
+    CompositionalSolverSettings,
     CompressibleSolverSettings,
     NonIsothermalSolverSettings,
     SteadyBlackOilSolver,
+    SteadyCompositionalSolver,
     SteadyCompressibleSolver,
     SteadyIsothermalIncompressibleSolver,
     SteadyNonIsothermalIncompressibleSolver,
@@ -36,6 +46,8 @@ __all__ = [
     "BlackOilFluid",
     "BlackOilSolverSettings",
     "ComponentFlowResult",
+    "CompositionalFluid",
+    "CompositionalSolverSettings",
     "CompressibleFluid",
     "CompressibleSolverSettings",
     "ConvectionScheme",
@@ -45,6 +57,7 @@ __all__ = [
     "HeatSource",
     "HybridScheme",
     "IdealGasEOS",
+    "InletCompositionBC",
     "InletFluidBC",
     "NetworkCase",
     "NonIsothermalSolverSettings",
@@ -58,6 +71,7 @@ __all__ = [
     "SolveResult",
     "SolverSettings",
     "SteadyBlackOilSolver",
+    "SteadyCompositionalSolver",
     "SteadyCompressibleSolver",
     "SteadyIsothermalIncompressibleSolver",
     "SteadyNonIsothermalIncompressibleSolver",
