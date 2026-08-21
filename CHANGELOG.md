@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.39] — 2026-08-21
+
+### Fix: convergence plot markers no longer draw outside the plot area
+
+Primary-series circle markers and secondary-series diamond markers could
+extend a few pixels beyond the top or bottom boundary of the plot when a
+data value landed exactly at the axis limits.
+
+- Primary series: `y` pixel coordinate is now clamped to `[top, bottom]`
+  before drawing both the polyline and the circle markers.
+- Secondary series (right axis): diamond marker centres are clamped to
+  `[top + size, bottom - size]` so the full diamond always stays inside
+  the plot rectangle, regardless of where the value sits on the right axis.
+
 ## [1.6.38] — 2026-08-21
 
 ### Fix: Windows installer now bundles `thermo`, `chemicals`, and `fluids`

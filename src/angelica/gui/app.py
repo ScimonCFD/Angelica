@@ -4600,7 +4600,7 @@ class NetSimGui:
                 safe_value = value if value > 0.0 else min(all_values)
                 value_log = math.log10(safe_value)
                 x = left + (right - left) * ((offset + idx) / x_den)
-                y = top + (max_log - value_log) * (bottom - top) / (max_log - min_log)
+                y = max(top, min(bottom, top + (max_log - value_log) * (bottom - top) / (max_log - min_log)))
                 points.extend((x, y))
             if len(points) >= 4:
                 canvas.create_line(*points, fill=color, width=2, smooth=False)
@@ -4609,7 +4609,7 @@ class NetSimGui:
                         safe_value = value if value > 0.0 else min(all_values)
                         value_log = math.log10(safe_value)
                         x = left + (right - left) * ((offset + idx) / x_den)
-                        y = top + (max_log - value_log) * (bottom - top) / (max_log - min_log)
+                        y = max(top + 2, min(bottom - 2, top + (max_log - value_log) * (bottom - top) / (max_log - min_log)))
                         canvas.create_oval(
                             x - 2,
                             y - 2,
@@ -4686,11 +4686,11 @@ class NetSimGui:
                     size = 4
                     for k in range(0, len(pts), 2):
                         px, py = pts[k], pts[k + 1]
-                        if top - size <= py <= bottom + size:
-                            canvas.create_polygon(
-                                px, py - size, px + size, py, px, py + size, px - size, py,
-                                fill=color, outline=color,
-                            )
+                        py_m = max(top + size, min(bottom - size, py))
+                        canvas.create_polygon(
+                            px, py_m - size, px + size, py_m, px, py_m + size, px - size, py_m,
+                            fill=color, outline=color,
+                        )
 
         # Canvas legend (bottom-left, inside plot area)
         legend_items: list[tuple[str, str, str]] = []  # (label, color, style)
