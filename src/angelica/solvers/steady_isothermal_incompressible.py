@@ -365,7 +365,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             correction_value = float(correction[idx])
             delta_p = alpha * correction_value
             old_pressure = float(network_state.nodes[node_id].pressure_pa)
-            new_pressure = old_pressure + delta_p
+            new_pressure = max(old_pressure + delta_p, 1.0)
             network_state.nodes[node_id].pressure_pa = new_pressure
             scaled_correction.append(delta_p)
             denominator = max(abs(new_pressure), 1.0)

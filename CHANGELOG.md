@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.49] — 2026-08-21
+
+### Fix: clamp nodal pressures to physical minimum (≥ 1 Pa)
+
+Absolute pressure can never be negative.  `_apply_pressure_correction` now
+clamps every updated nodal pressure to at least 1 Pa, so a large correction
+that would drive a node below vacuum is rejected and the solver can continue
+iterating instead of crashing on the next EOS property call.
+
 ## [1.6.48] — 2026-08-21
 
 ### Fix: clear error message when EOS flash fails due to solver divergence
