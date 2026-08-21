@@ -63,6 +63,15 @@
       }
     },
     {
+      "node_id": 6,
+      "node_type": "junction",
+      "x": 600.0,
+      "y": 300.0,
+      "properties": {
+        "label": "Junction 6"
+      }
+    },
+    {
       "node_id": 5,
       "node_type": "sink",
       "x": 700.0,
@@ -123,7 +132,7 @@
     {
       "link_id": 3,
       "start_node_id": 3,
-      "end_node_id": 5,
+      "end_node_id": 6,
       "components": [
         {
           "component_id": 3,
@@ -165,7 +174,7 @@
     {
       "link_id": 5,
       "start_node_id": 4,
-      "end_node_id": 5,
+      "end_node_id": 6,
       "components": [
         {
           "component_id": 5,
@@ -178,6 +187,27 @@
             "hazen_williams_c": "130.0",
             "num_segments": "4",
             "heat_transfer_coefficient_w_per_m2k": "2.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 6,
+      "start_node_id": 6,
+      "end_node_id": 5,
+      "components": [
+        {
+          "component_id": 6,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "1.0",
+            "diameter_m": "1.0",
+            "height_change_m": "0.0",
+            "roughness_m": "0.0",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "0.0",
             "ambient_temperature_c": "15.0"
           }
         }

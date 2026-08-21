@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.6.53] — 2026-08-21
+
+### Validation: all source/sink nodes must connect to exactly one pipe
+
+Tightened the topology rule: every **source** (inlet) and every **sink**
+(outlet) node must be connected to exactly **one** pipe link, regardless of
+boundary-condition type (pressure or flow).
+
+If a source or sink is wired to more than one pipe the solver raises a clear
+error and instructs the user to insert a junction node to split or merge flows.
+
+**Tutorial scenes updated** to comply:
+
+* *Laminar Poiseuille Benchmark* — the three parallel pipes previously ran
+  directly from the source to the sink.  Two junction nodes (inlet junction and
+  outlet junction) are now inserted so the source and sink each have a single
+  connection, while the three parallel pipes connect the two junctions.
+
+* *Compositional looped gas network (Tutorial 03)* — the sink was previously
+  fed by two separate pipes.  A merger junction is now inserted before the sink,
+  and the two converging pipes connect to that junction instead.
+
 ## [1.6.52] — 2026-08-21
 
 ### Validation: flow-BC source/sink nodes must connect to exactly one pipe

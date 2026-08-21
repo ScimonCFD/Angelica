@@ -21,16 +21,53 @@
         "pressure": "0.0",
         "flow": ""
       }
+    },
+    {
+      "node_id": 3,
+      "node_type": "junction",
+      "x": 220.0,
+      "y": 280.0,
+      "properties": {
+        "label": "Inlet junction"
+      }
+    },
+    {
+      "node_id": 4,
+      "node_type": "junction",
+      "x": 580.0,
+      "y": 280.0,
+      "properties": {
+        "label": "Outlet junction"
+      }
     }
   ],
   "links": [
     {
       "link_id": 1,
       "start_node_id": 1,
-      "end_node_id": 2,
+      "end_node_id": 3,
       "components": [
         {
           "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "0.001",
+            "diameter_m": "1.0",
+            "height_change_m": "0.0",
+            "roughness_m": "0.0",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 3,
+      "end_node_id": 4,
+      "components": [
+        {
+          "component_id": 2,
           "component_type": "pipe",
           "properties": {
             "length_m": "10.0",
@@ -44,12 +81,12 @@
       ]
     },
     {
-      "link_id": 2,
-      "start_node_id": 1,
-      "end_node_id": 2,
+      "link_id": 3,
+      "start_node_id": 3,
+      "end_node_id": 4,
       "components": [
         {
-          "component_id": 2,
+          "component_id": 3,
           "component_type": "pipe",
           "properties": {
             "length_m": "8.0",
@@ -63,16 +100,35 @@
       ]
     },
     {
-      "link_id": 3,
-      "start_node_id": 1,
-      "end_node_id": 2,
+      "link_id": 4,
+      "start_node_id": 3,
+      "end_node_id": 4,
       "components": [
         {
-          "component_id": 3,
+          "component_id": 4,
           "component_type": "pipe",
           "properties": {
             "length_m": "12.0",
             "diameter_m": "0.025",
+            "height_change_m": "0.0",
+            "roughness_m": "0.0",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 5,
+      "start_node_id": 4,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": 5,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "0.001",
+            "diameter_m": "1.0",
             "height_change_m": "0.0",
             "roughness_m": "0.0",
             "hazen_williams_c": "130.0",
@@ -101,6 +157,8 @@
   },
   "initial_node_pressures_pa": {
     "1": 50000.0,
-    "2": 0.0
+    "2": 0.0,
+    "3": 50000.0,
+    "4": 0.0
   }
 }
