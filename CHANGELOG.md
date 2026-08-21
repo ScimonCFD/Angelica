@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.6.34] — 2026-08-21
+
+### Tutorial: compositional looped gas network
+
+New tutorial `tutorials/steady_compositional/03_looped_network/run.py` and
+case builder `cases/looped_gas_gathering.py`.
+
+Two gas sources at different pressures and compositions feed a looped
+five-pipe gathering network (Nodes 1-5, Pipes A-E).  PipeD is the loop
+pipe connecting the two junction nodes; its flow direction emerges from the
+hydraulic solution (SIMPLE finds the pressure field that satisfies both
+nodal mass balance and the Kirchhoff pressure law around the loop).
+
+The tutorial reports junction pressures and temperatures, per-pipe mass
+flows with loop-pipe direction, and the blended mole-fraction composition
+at both junctions and the outlet, computed analytically from the converged
+flow field.
+
 ## [1.6.33] — 2026-08-21
 
 ### Tutorials: two compositional solver tutorials; CI fix
