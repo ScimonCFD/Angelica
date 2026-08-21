@@ -4608,19 +4608,14 @@ class NetSimGui:
                     for idx, value in enumerate(values):
                         safe_value = value if value > 0.0 else min(all_values)
                         value_log = math.log10(safe_value)
-                        x = left + (right - left) * ((offset + idx) / x_den)
-                        y = max(top + 2, min(bottom - 2, top + (max_log - value_log) * (bottom - top) / (max_log - min_log)))
-                        canvas.create_oval(
-                            x - 2,
-                            y - 2,
-                            x + 2,
-                            y + 2,
-                            fill=color,
-                            outline=color,
-                        )
+                        xm = max(left + 2, min(right - 2, left + (right - left) * ((offset + idx) / x_den)))
+                        ym = max(top + 2, min(bottom - 2, top + (max_log - value_log) * (bottom - top) / (max_log - min_log)))
+                        canvas.create_oval(xm - 2, ym - 2, xm + 2, ym + 2, fill=color, outline=color)
             elif len(points) == 2:
                 x, y = points
-                canvas.create_oval(x - 2, y - 2, x + 2, y + 2, fill=color, outline=color)
+                xm = max(left + 2, min(right - 2, x))
+                ym = max(top + 2, min(bottom - 2, y))
+                canvas.create_oval(xm - 2, ym - 2, xm + 2, ym + 2, fill=color, outline=color)
 
         if has_secondary and secondary_series:
             sec_all_values = [
@@ -4686,9 +4681,10 @@ class NetSimGui:
                     size = 4
                     for k in range(0, len(pts), 2):
                         px, py = pts[k], pts[k + 1]
+                        px_m = max(left + size, min(right - size, px))
                         py_m = max(top + size, min(bottom - size, py))
                         canvas.create_polygon(
-                            px, py_m - size, px + size, py_m, px, py_m + size, px - size, py_m,
+                            px_m, py_m - size, px_m + size, py_m, px_m, py_m + size, px_m - size, py_m,
                             fill=color, outline=color,
                         )
 

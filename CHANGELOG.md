@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.40] — 2026-08-21
+
+### Fix: convergence plot markers clipped on the X axis too
+
+v1.6.39 fixed vertical overflow of markers; this release fixes horizontal
+overflow. When the first outer-pass boundary fell very close to `x = left`
+(e.g. only one turbulent iteration in the first outer pass), the secondary-axis
+diamond markers extended up to `size = 4 px` outside the left border.
+Primary-series circle markers at the first or last iteration had the same
+2 px overflow on the left/right borders.
+
+Both marker types now clamp their pixel centres in both axes:
+- Diamond: `px_m ∈ [left+4, right-4]`, `py_m ∈ [top+4, bottom-4]`
+- Circle:  `xm  ∈ [left+2, right-2]`, `ym  ∈ [top+2, bottom-2]`
+
 ## [1.6.39] — 2026-08-21
 
 ### Fix: convergence plot markers no longer draw outside the plot area
