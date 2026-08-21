@@ -26,7 +26,16 @@ def _flash_properties(
     from thermo import Mixture  # optional dependency
 
     T_K = temperature_c + 273.15
-    m = Mixture(list(component_names), zs=list(zs), T=T_K, P=pressure_pa)
+    try:
+        m = Mixture(list(component_names), zs=list(zs), T=T_K, P=pressure_pa)
+    except Exception as _exc:
+        raise RuntimeError(
+            f"EOS flash failed at T={temperature_c:.1f} °C, "
+            f"P={pressure_pa / 1e6:.3f} MPa. "
+            "The solver likely diverged to unphysical pressures. "
+            "Check boundary conditions (pressure/flow BCs) and try reducing "
+            "the relaxation factor in Numerics settings."
+        ) from _exc
     rho = m.rho  # always available; homogeneous (no-slip) density
 
     if m.phase in ("g", "l", "s"):
@@ -108,7 +117,7 @@ class CompositionalFluid(FluidModel):
         try:
             P_s = link_state.start_node.pressure_pa or 101325.0
             P_e = link_state.end_node.pressure_pa or 101325.0
-            return 0.5 * (P_s + P_e)
+            return max(0.5 * (P_s + P_e), 1.0)
         except AttributeError:
             return 101325.0
 

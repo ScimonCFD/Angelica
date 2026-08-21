@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.48] — 2026-08-21
+
+### Fix: clear error message when EOS flash fails due to solver divergence
+
+When the hydraulic solver diverges to unphysical pressures (e.g. deeply
+negative Pa), `thermo` was raising a cryptic internal error about EOS roots.
+
+Two changes in `compositional_fluid.py`:
+- `_get_pressure_pa`: clamp the average pipe pressure to at least 1 Pa so
+  that minor numerical noise never passes a non-positive value to thermo.
+- `_flash_properties`: wrap `Mixture(...)` in a try/except and re-raise as
+  a `RuntimeError` with a human-readable message pointing the user to check
+  their boundary conditions and relaxation factor.
+
 ## [1.6.47] — 2026-08-21
 
 ### Fix: Stop button disabled during first simulation run
