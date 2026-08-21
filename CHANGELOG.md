@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.51] — 2026-08-21
+
+### Fix: pressure floor set to 0.0 Pa — allows 0 Pa boundary conditions
+
+The adaptive pressure relaxation used 1.0 Pa as floor, which silently moved
+0 Pa outlet boundary nodes to 1 Pa on every iteration (since the correction
+for a Dirichlet node is 0, `max(0 + 0, 1.0) = 1.0`).  This broke the
+Poiseuille benchmark test.
+
+Changed `_P_MIN` to 0.0 Pa.  The adaptive loop halves α until no node goes
+negative; the final clamp ensures no node falls below 0.  Boundary nodes
+that are legitimately at 0 Pa are unaffected.
+
 ## [1.6.50] — 2026-08-21
 
 ### Improvement: adaptive pressure relaxation to prevent unphysical pressures

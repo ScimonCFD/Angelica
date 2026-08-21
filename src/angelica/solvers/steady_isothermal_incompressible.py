@@ -358,12 +358,12 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         raise TypeError(f"Unsupported state type: {type(link_state).__name__}")
 
     def _apply_pressure_correction(self, network_state, correction) -> tuple[float, float, float]:
-        _P_MIN = 1.0  # Pa — absolute pressure is always positive
+        _P_MIN = 0.0  # Pa — absolute pressure cannot be negative
         node_ids = sorted(network_state.nodes)
         old_pressures = [float(network_state.nodes[nid].pressure_pa) for nid in node_ids]
         raw_corrections = [float(correction[i]) for i in range(len(node_ids))]
 
-        # Adaptive relaxation: halve alpha until all new pressures are physical.
+        # Adaptive relaxation: halve alpha until all new pressures are non-negative.
         alpha = float(self.settings.pressure_relaxation)
         alpha_floor = alpha * (0.5 ** 20)  # ~20 halvings before giving up
         while alpha > alpha_floor:
