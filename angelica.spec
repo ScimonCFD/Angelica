@@ -39,7 +39,7 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     # matplotlib is only used by the optional CLI reporting function, not the GUI
-    excludes=["matplotlib", "IPython", "pandas"],
+    excludes=["matplotlib", "IPython"],
     noarchive=False,
 )
 

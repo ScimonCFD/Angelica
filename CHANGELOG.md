@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.44] — 2026-08-21
+
+### Fix: Windows installer — "No module named pandas"
+
+`pandas` was explicitly excluded from the PyInstaller bundle.  One or more
+modules inside `thermo` (collected via `collect_all`) import pandas at runtime,
+causing an immediate crash on Windows.  Removed `pandas` from the `excludes`
+list so PyInstaller bundles it automatically alongside the other dependencies.
+
 ## [1.6.43] — 2026-08-21
 
 ### Change: Compositions moved to results report instead of canvas
