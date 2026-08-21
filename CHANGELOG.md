@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.6.54] — 2026-08-22
+
+### Fix: compositional solver settings (density_rel_tolerance, etc.) now respected from scene JSON
+
+`build_solver_from_scene` was reading `density_rel_tolerance`, `temperature_tolerance_k`,
+and `temperature_relaxation` from `solver_settings` in the scene JSON but never passing
+them to `SteadyCompositionalSolver`.  All those keys were silently ignored.
+
+Fixed by constructing a `CompositionalSolverSettings` from the parsed values and passing
+it to the solver, matching the existing pattern used for the compressible solver.
+
+Also added `max_outer_iterations` to the set of recognised compositional keys.
+
+**Tutorial 03 — Compositional looped gas network** now sets
+`"density_rel_tolerance": 0.001` in its `solver_settings` to accommodate the mild
+density 2-cycle (~3 × 10⁻⁴) that arises at the composition-mixing junction.  The
+pressures, temperatures, and flow rates are fully converged; only the strict default
+criterion (10⁻⁴) was preventing the solver from declaring success.
+
 ## [1.6.53] — 2026-08-21
 
 ### Validation: all source/sink nodes must connect to exactly one pipe

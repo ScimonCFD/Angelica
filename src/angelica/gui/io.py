@@ -18,6 +18,7 @@ from angelica.properties.single_component import SingleComponentFluid
 from angelica.properties.thermal_fluid import ThermalFluid
 from angelica.solvers import (
     BlackOilSolverSettings,
+    CompositionalSolverSettings,
     CompressibleSolverSettings,
     NonIsothermalSolverSettings,
     SteadyBlackOilSolver,
@@ -711,7 +712,7 @@ def build_solver_from_scene(scene: CanvasScene):
         "convection_scheme",
     }
     _COMP_KEYS = {
-        "max_density_iterations", "density_rel_tolerance",
+        "max_outer_iterations", "max_density_iterations", "density_rel_tolerance",
         "temperature_tolerance_k", "temperature_relaxation", "convection_scheme",
     }
     _OUTER_KEYS = _NI_KEYS | _COMP_KEYS
@@ -727,10 +728,20 @@ def build_solver_from_scene(scene: CanvasScene):
             "hybrid": HybridScheme,
             "power_law": PowerLawScheme,
         }
+        comp_kwargs: dict = {}
+        if "max_outer_iterations" in comp_raw:
+            comp_kwargs["max_outer_iterations"] = int(comp_raw["max_outer_iterations"])
+        if "density_rel_tolerance" in comp_raw:
+            comp_kwargs["density_rel_tolerance"] = float(comp_raw["density_rel_tolerance"])
+        if "temperature_tolerance_k" in comp_raw:
+            comp_kwargs["temperature_tolerance_k"] = float(comp_raw["temperature_tolerance_k"])
+        if "temperature_relaxation" in comp_raw:
+            comp_kwargs["temperature_relaxation"] = float(comp_raw["temperature_relaxation"])
         scheme_key = str(comp_raw.get("convection_scheme", "hybrid"))
         convection_scheme = _CONVECTION_SCHEMES.get(scheme_key, HybridScheme)()
         return SteadyCompositionalSolver(
             hydraulic_settings=settings if hyd_raw else None,
+            compositional_settings=CompositionalSolverSettings(**comp_kwargs) if comp_kwargs else None,
             turbulent_pipe_correlation=turbulent_pipe_correlation,
             convection_scheme=convection_scheme,
         )

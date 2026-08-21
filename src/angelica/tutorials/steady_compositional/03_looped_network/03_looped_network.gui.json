@@ -11,7 +11,9 @@
     "library_key": "colebrook_white",
     "name": "Colebrook-White"
   },
-  "solver_settings": {},
+  "solver_settings": {
+    "density_rel_tolerance": 0.001
+  },
   "initial_node_pressures_pa": {},
   "nodes": [
     {
