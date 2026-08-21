@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.6.52] — 2026-08-21
+
+### Validation: flow-BC source/sink nodes must connect to exactly one pipe
+
+A source or sink node with a **flow** boundary condition specifies a fixed
+flow rate for a single pipe.  Connecting it to multiple pipes is ambiguous —
+the solver cannot split the flow automatically.
+
+`build_network_case_from_scene` now raises a clear error in this case and
+suggests using a junction node to distribute the flow or switching to a
+pressure BC.
+
+**Pressure-BC** nodes are unaffected — connecting a pressure source to
+multiple parallel pipes (classic manifold / Poiseuille topology) remains
+valid.
+
 ## [1.6.51] — 2026-08-21
 
 ### Fix: pressure floor set to 0.0 Pa — allows 0 Pa boundary conditions

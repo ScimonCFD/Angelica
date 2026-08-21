@@ -311,6 +311,28 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 "it acts as a dead end. Add another connection or change this node to a source or sink."
             )
 
+    for node in scene.nodes:
+        if node.node_type == "junction":
+            continue
+        connection_count = sum(
+            1 for link in scene.links
+            if link.start_node_id == node.node_id or link.end_node_id == node.node_id
+        )
+        if connection_count == 0:
+            raise ValueError(
+                f"{node.node_type.capitalize()} #{node.node_id} is not connected to any pipe."
+            )
+        # Flow-BC nodes specify a fixed flow rate for a single pipe.
+        # Multiple connections are ambiguous — the solver cannot split the flow automatically.
+        # Pressure-BC nodes are fine with multiple connections (manifold / parallel pipes).
+        if connection_count > 1 and node.properties.get("condition_type", "pressure") == "flow":
+            kind = "Source" if node.node_type == "source" else "Sink"
+            raise ValueError(
+                f"{kind} #{node.node_id} has a flow boundary condition but is connected "
+                f"to {connection_count} pipes. A flow BC applies to exactly one pipe — "
+                "use a junction node to distribute the flow, or switch to a pressure BC."
+            )
+
     pressure_inlets: list[PressureBoundary] = []
     pressure_outlets: list[PressureBoundary] = []
     flow_inlets: list[FlowBoundary] = []
