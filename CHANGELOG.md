@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.6.33] — 2026-08-21
+
+### Tutorials: two compositional solver tutorials; CI fix
+
+**New tutorials** (`tutorials/steady_compositional/`):
+
+- `01_single_pipe/run.py` — methane/ethane binary mixture, 10 km pipe,
+  100 → 20 bar.  Prints a PT flash preview (ρ, μ, Cp, k) at inlet and
+  outlet conditions, then solves and reports flows, temperatures, and
+  gas velocity expansion.
+- `02_gas_mixing_junction/run.py` — three-component system (CH₄/C₂H₆/C₃H₈),
+  two source nodes at different pressures and compositions, one junction,
+  one delivery pipe.  Reports the molar-flow-weighted blend composition
+  delivered to the separator.
+
+**CI fix** (`test.yml`): the test workflow now installs `.[dev,compositional]`
+so `thermo` is available during CI runs.  The `TestCompositionalFluidProperties`
+and `TestSteadyCompositionalSolver` classes also received `@requires_thermo`
+skip markers for developers running tests without `thermo` installed.
+
 ## [1.6.32] — 2026-08-21
 
 ### Feature: compositional pipe network solver (`SteadyCompositionalSolver`)
