@@ -9,10 +9,18 @@ Coverage
 """
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
+
+# Tests that call thermo.Mixture are skipped when thermo is not installed.
+_thermo_available = importlib.util.find_spec("thermo") is not None
+requires_thermo = pytest.mark.skipif(
+    not _thermo_available,
+    reason="thermo not installed — pip install angelica[compositional]",
+)
 
 SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_ROOT) not in sys.path:
@@ -119,6 +127,7 @@ class TestCompositionalFluidValidation:
 # CompositionalFluid property evaluation
 # ---------------------------------------------------------------------------
 
+@requires_thermo
 class TestCompositionalFluidProperties:
     """Flash methane/ethane at high-pressure gas conditions (single phase)."""
 
@@ -275,6 +284,7 @@ class TestPropagateCompositions:
 # SteadyCompositionalSolver — end-to-end
 # ---------------------------------------------------------------------------
 
+@requires_thermo
 class TestSteadyCompositionalSolver:
 
     def test_wrong_fluid_type_raises(self):
