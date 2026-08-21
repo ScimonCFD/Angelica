@@ -4,7 +4,7 @@ import json
 import math
 from pathlib import Path
 
-from angelica.core.case import FlowBoundary, InletFluidBC, NetworkCase, PressureBoundary, ThermalBoundary
+from angelica.core.case import FlowBoundary, InletCompositionBC, InletFluidBC, NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import FITTING_PRESET_LIBRARY, Fitting, HeatSource, Pipe, Pump
 from angelica.core.results import ComponentFlowResult, IterationMetrics
 from angelica.core.settings import SolverSettings
@@ -12,6 +12,7 @@ from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrela
 from angelica.closures.convection_scheme import HybridScheme, PowerLawScheme, UpwindScheme
 from angelica.properties.black_oil import BlackOilFluid
 from angelica.properties.compressible_fluid import CompressibleFluid
+from angelica.properties.compositional_fluid import CompositionalFluid
 from angelica.properties.eos import IdealGasEOS, PengRobinsonEOS
 from angelica.properties.single_component import SingleComponentFluid
 from angelica.properties.thermal_fluid import ThermalFluid
@@ -21,6 +22,7 @@ from angelica.solvers import (
     NonIsothermalSolverSettings,
     SteadyBlackOilSolver,
     SteadyCompressibleSolver,
+    SteadyCompositionalSolver,
     SteadyIsothermalIncompressibleSolver,
     SteadyNonIsothermalIncompressibleSolver,
 )
@@ -238,10 +240,13 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
     is_compressible    = scene.physics_mode == "compressible"
     is_non_isothermal  = scene.physics_mode == "non_isothermal"
     is_black_oil       = scene.physics_mode == "black_oil"
+    is_compositional   = scene.physics_mode == "compositional"
     inlet_fluid_bcs: list[InletFluidBC] = []
 
-    if not is_black_oil and not scene.material:
+    if not is_black_oil and not is_compositional and not scene.material:
         raise ValueError("No material is defined. Use Material → Define Material before running.")
+    if is_compositional and not scene.material:
+        raise ValueError("No fluid is defined. Use Material → Define Material before running.")
 
     if is_compressible:
         if not scene.material.get("molecular_weight_kg_per_mol", "").strip():
@@ -251,13 +256,13 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             )
         if not scene.material.get("viscosity_pa_s", "").strip():
             raise ValueError("The material is missing viscosity_pa_s.")
-    elif not is_black_oil:
+    elif not is_black_oil and not is_compositional:
         if not scene.material.get("density_kg_per_m3", "").strip():
             raise ValueError("The material is missing density_kg_per_m3.")
         if not scene.material.get("viscosity_pa_s", "").strip():
             raise ValueError("The material is missing viscosity_pa_s.")
 
-    if not (is_non_isothermal or is_compressible or is_black_oil):
+    if not (is_non_isothermal or is_compressible or is_black_oil or is_compositional):
         heat_source_link_ids = [
             link.link_id
             for link in scene.links
@@ -365,12 +370,13 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                     default=130.0,
                 )
                 height_change = _optional_float(component, "height_change_m", default=0.0)
+                _needs_heat = is_non_isothermal or is_compressible or is_black_oil or is_compositional
                 heat_transfer = _optional_float(
                     component, "heat_transfer_coefficient_w_per_m2k", default=0.0
-                ) if (is_non_isothermal or is_compressible or is_black_oil) else 0.0
+                ) if _needs_heat else 0.0
                 ambient_temp = _optional_float(
                     component, "ambient_temperature_c", default=20.0
-                ) if (is_non_isothermal or is_compressible or is_black_oil) else 20.0
+                ) if _needs_heat else 20.0
                 num_segs = max(1, int(_optional_float(component, "num_segments", default=1.0)))
                 seg_length = length / num_segs
                 seg_height = height_change / num_segs
@@ -435,7 +441,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 mdot_rated = _optional_float(component, "rated_mass_flow_kg_per_s", default=1.0)
                 n_segs = max(2, int(_optional_float(
                     component, "n_thermal_segments", default=10.0
-                ))) if (is_non_isothermal or is_compressible or is_black_oil) else 2
+                ))) if (is_non_isothermal or is_compressible or is_black_oil or is_compositional) else 2
                 components.append(
                     HeatSource(
                         start_node=current_start,
@@ -578,6 +584,70 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 "temperature. Open a source or sink node and set its thermal boundary "
                 "condition to 'Fixed temperature'."
             )
+    elif is_compositional:
+        comp_names_raw = scene.material.get("component_names", "").strip()
+        default_zs_raw = scene.material.get("default_zs", "").strip()
+        if not comp_names_raw:
+            raise ValueError(
+                "Compositional fluid has no component names. "
+                "Open Material → Define Material to set the component list."
+            )
+        if not default_zs_raw:
+            raise ValueError(
+                "Compositional fluid has no default mole fractions. "
+                "Open Material → Define Material to set the composition."
+            )
+        component_names = [c.strip() for c in comp_names_raw.split(",") if c.strip()]
+        default_zs_list = [float(z.strip()) for z in default_zs_raw.split(",") if z.strip()]
+        if len(component_names) != len(default_zs_list):
+            raise ValueError(
+                f"Number of component names ({len(component_names)}) does not match "
+                f"number of mole fractions ({len(default_zs_list)})."
+            )
+        fluid_model = CompositionalFluid(
+            components=component_names,
+            default_zs=default_zs_list,
+        )
+        inlet_comp_bcs: list[InletCompositionBC] = []
+        for node in scene.nodes:
+            if node.node_type != "source":
+                continue
+            zs_text = node.properties.get("zs", "").strip()
+            if not zs_text:
+                raise ValueError(
+                    f"Source node #{node.node_id} is missing inlet composition (zs). "
+                    "Double-click the source node to set its mole fractions."
+                )
+            zs_list = [float(z.strip()) for z in zs_text.split(",") if z.strip()]
+            if len(zs_list) != len(component_names):
+                raise ValueError(
+                    f"Source node #{node.node_id} has {len(zs_list)} mole fractions "
+                    f"but the fluid has {len(component_names)} components."
+                )
+            inlet_comp_bcs.append(InletCompositionBC(
+                node_id=node.node_id,
+                zs=tuple(zs_list),
+            ))
+        if not inlet_comp_bcs:
+            raise ValueError(
+                "Compositional mode requires at least one source node with inlet composition. "
+                "Double-click a source node to set its mole fractions."
+            )
+        thermal_inlets = tuple(
+            tb
+            for tb in (
+                _build_thermal_boundary(node)
+                for node in scene.nodes
+                if node.node_type in ("source", "sink")
+            )
+            if tb is not None
+        )
+        if not any(tb.bc_type == "fixed_temperature" for tb in thermal_inlets):
+            raise ValueError(
+                "Compositional mode requires at least one boundary node with a fixed "
+                "temperature. Open a source node and set its thermal boundary "
+                "condition to 'Fixed temperature'."
+            )
     else:
         fluid_model = SingleComponentFluid(
             density_kg_per_m3=float(scene.material["density_kg_per_m3"]),
@@ -597,6 +667,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
         initial_node_pressures_pa=dict(scene.initial_node_pressures_pa),
         thermal_inlets=thermal_inlets,
         inlet_fluid_bcs=tuple(inlet_fluid_bcs) if is_black_oil else (),
+        inlet_composition_bcs=tuple(inlet_comp_bcs) if is_compositional else (),
     )
 
 
@@ -627,6 +698,20 @@ def build_solver_from_scene(scene: CanvasScene):
     hyd_raw = {k: v for k, v in scene.solver_settings.items() if k not in _OUTER_KEYS}
 
     settings = SolverSettings(**hyd_raw) if hyd_raw else SolverSettings()
+
+    if scene.physics_mode == "compositional":
+        _CONVECTION_SCHEMES = {
+            "upwind": UpwindScheme,
+            "hybrid": HybridScheme,
+            "power_law": PowerLawScheme,
+        }
+        scheme_key = str(comp_raw.get("convection_scheme", "hybrid"))
+        convection_scheme = _CONVECTION_SCHEMES.get(scheme_key, HybridScheme)()
+        return SteadyCompositionalSolver(
+            hydraulic_settings=settings if hyd_raw else None,
+            turbulent_pipe_correlation=turbulent_pipe_correlation,
+            convection_scheme=convection_scheme,
+        )
 
     if scene.physics_mode == "black_oil":
         return SteadyBlackOilSolver(

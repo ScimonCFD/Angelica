@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.6.36] — 2026-08-21
+
+### Feature: GUI support for compositional physics mode
+
+The desktop GUI now supports the **Compositional (EOS)** physics mode end-to-end:
+
+**Physics → Case Type…**
+- New "Compositional (EOS)" radio button in the Compressibility row.
+- Energy row is disabled (compositional always solves the energy equation).
+
+**Material → Define Material**
+- Opens a dedicated compositional fluid dialog: comma-separated component
+  names and default mole fractions (validated to sum to 1.0).
+- Material summary panel shows component list and default zs.
+
+**Node dialog (source nodes)**
+- New "Inlet composition" section with a CSV mole-fractions field (zs).
+- Required for every source node in compositional mode.
+- Thermal boundary section is shown (same as non-isothermal/compressible).
+
+**Pipe component properties**
+- Heat-transfer coefficient and ambient temperature fields appear when the
+  mode is compositional (same as other thermal modes).
+- Heat Source component is available in the palette.
+
+**Solver**
+- `build_solver_from_scene` returns `SteadyCompositionalSolver` when
+  `physics_mode == "compositional"`.
+- `build_network_case_from_scene` constructs `CompositionalFluid` and
+  `InletCompositionBC` objects from the scene data.
+
+**Tutorial `.gui.json` files (NEW)**
+- `tutorials/steady_compositional/01_single_pipe/01_single_pipe.gui.json`
+- `tutorials/steady_compositional/02_gas_mixing_junction/02_gas_mixing_junction.gui.json`
+- `tutorials/steady_compositional/03_looped_network/03_looped_network.gui.json`
+
+All three open, build, and solve from the GUI without writing any Python.
+
 ## [1.6.35] — 2026-08-21
 
 ### Docs: README files for the three compositional tutorials

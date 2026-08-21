@@ -750,9 +750,100 @@ class NetSimGui:
         dialog.grab_set()
         dialog.focus_set()
 
+    def _open_compositional_fluid_dialog(self) -> None:
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Fluid Definition — Compositional (EOS)")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+
+        frame = ttk.Frame(dialog, padding=12)
+        frame.pack(fill="both", expand=True)
+        frame.columnconfigure(1, weight=1)
+
+        mat = dict(self.scene.material)
+        names_var = tk.StringVar(value=mat.get("component_names", ""))
+        zs_var = tk.StringVar(value=mat.get("default_zs", ""))
+
+        ttk.Label(frame, text="Components (CSV)").grid(
+            row=0, column=0, sticky="w", pady=4, padx=(0, 8)
+        )
+        ttk.Entry(frame, textvariable=names_var, width=32).grid(
+            row=0, column=1, sticky="ew", pady=4
+        )
+        ttk.Label(frame, text="e.g.  methane, ethane, propane", foreground="gray").grid(
+            row=1, column=0, columnspan=2, sticky="w", pady=(0, 6)
+        )
+
+        ttk.Label(frame, text="Default mole fracs (CSV)").grid(
+            row=2, column=0, sticky="w", pady=4, padx=(0, 8)
+        )
+        ttk.Entry(frame, textvariable=zs_var, width=32).grid(
+            row=2, column=1, sticky="ew", pady=4
+        )
+        ttk.Label(frame, text="e.g.  0.9, 0.08, 0.02  (must sum to 1)", foreground="gray").grid(
+            row=3, column=0, columnspan=2, sticky="w", pady=(0, 6)
+        )
+
+        ttk.Label(
+            frame,
+            text="Each source node must also specify its inlet composition\n"
+                 "(double-click the source node → Composition section).",
+            foreground="gray",
+            justify="left",
+        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(0, 4))
+
+        def _save() -> None:
+            names_text = names_var.get().strip()
+            zs_text = zs_var.get().strip()
+            if not names_text:
+                messagebox.showerror("Invalid fluid", "Component names cannot be empty.", parent=dialog)
+                return
+            names_list = [c.strip() for c in names_text.split(",") if c.strip()]
+            try:
+                zs_list = [float(z.strip()) for z in zs_text.split(",") if z.strip()]
+            except ValueError:
+                messagebox.showerror("Invalid fluid", "Mole fractions must be numbers.", parent=dialog)
+                return
+            if len(names_list) != len(zs_list):
+                messagebox.showerror(
+                    "Invalid fluid",
+                    f"{len(names_list)} component(s) but {len(zs_list)} mole fraction(s).",
+                    parent=dialog,
+                )
+                return
+            total = sum(zs_list)
+            if abs(total - 1.0) > 1e-4:
+                messagebox.showerror(
+                    "Invalid fluid",
+                    f"Mole fractions must sum to 1.0 (got {total:.4f}).",
+                    parent=dialog,
+                )
+                return
+            new_mat = {
+                "definition_mode": "compositional",
+                "component_names": ", ".join(names_list),
+                "default_zs": ", ".join(f"{z:.6g}" for z in zs_list),
+                "name": " + ".join(names_list),
+            }
+            self.scene.update_material(new_mat)
+            self.material_summary_var.set(self._material_summary_text())
+            dialog.destroy()
+
+        btn_row = ttk.Frame(frame)
+        btn_row.grid(row=5, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        ttk.Button(btn_row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
+        ttk.Button(btn_row, text="Save", command=_save).pack(side="right")
+
+        dialog.update_idletasks()
+        dialog.grab_set()
+        dialog.focus_set()
+
     def _open_material_dialog(self) -> None:
         if self.scene.physics_mode == "black_oil":
             self._open_black_oil_fluid_dialog()
+            return
+        if self.scene.physics_mode == "compositional":
+            self._open_compositional_fluid_dialog()
             return
 
         dialog = tk.Toplevel(self.root)
@@ -1948,11 +2039,13 @@ class NetSimGui:
         current_mode = self.scene.physics_mode
         is_currently_compressible = current_mode == "compressible"
         is_currently_black_oil = current_mode == "black_oil"
+        is_currently_compositional = current_mode == "compositional"
 
         compressibility_var = tk.StringVar(
             value=(
                 "compressible" if is_currently_compressible
-                else ("black_oil" if is_currently_black_oil else "incompressible")
+                else ("black_oil" if is_currently_black_oil
+                      else ("compositional" if is_currently_compositional else "incompressible"))
             )
         )
         energy_var = tk.StringVar(
@@ -1970,6 +2063,9 @@ class NetSimGui:
         ).pack(side="left")
         ttk.Radiobutton(
             comp_frame, text="Black-oil (3-phase)", variable=compressibility_var, value="black_oil"
+        ).pack(side="left", padx=(12, 0))
+        ttk.Radiobutton(
+            comp_frame, text="Compositional (EOS)", variable=compressibility_var, value="compositional"
         ).pack(side="left", padx=(12, 0))
 
         ttk.Separator(frame, orient="horizontal").grid(
@@ -2001,7 +2097,7 @@ class NetSimGui:
         note_ni.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 8))
 
         def _sync_energy_state(*_args: object) -> None:
-            state = "disabled" if compressibility_var.get() in ("compressible", "black_oil") else "normal"
+            state = "disabled" if compressibility_var.get() in ("compressible", "black_oil", "compositional") else "normal"
             rb_isothermal.configure(state=state)
             rb_non_isothermal.configure(state=state)
 
@@ -2032,6 +2128,8 @@ class NetSimGui:
             mode = "compressible"
         elif compressibility == "black_oil":
             mode = "black_oil"
+        elif compressibility == "compositional":
+            mode = "compositional"
         elif energy == "non_isothermal":
             mode = "non_isothermal"
         else:
@@ -2057,6 +2155,7 @@ class NetSimGui:
             "non_isothermal": "Non-isothermal",
             "compressible": "Compressible",
             "black_oil": "Black-oil (3-phase)",
+            "compositional": "Compositional (EOS)",
         }
         self.status_var.set(f"Case type set to: {_LABELS.get(mode, mode)}.")
         dialog.destroy()
@@ -2167,6 +2266,12 @@ class NetSimGui:
             api = self.scene.material.get("api_gravity", "—")
             gg = self.scene.material.get("gas_gravity", "—")
             return f"{api}°API  γg={gg}"
+        elif self.scene.physics_mode == "compositional":
+            comp_names = self.scene.material.get("component_names", "—")
+            default_zs = self.scene.material.get("default_zs", "")
+            lines = [comp_names]
+            if default_zs:
+                lines.append(f"zs={default_zs}")
         else:
             density = self.scene.material.get("density_kg_per_m3", "").strip()
             viscosity = self.scene.material.get("viscosity_pa_s", "").strip()
@@ -2869,7 +2974,7 @@ class NetSimGui:
                 ),
             )
 
-            if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil"):
+            if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil", "compositional"):
                 ttk.Separator(container, orient="horizontal").grid(
                     row=3, column=0, columnspan=2, sticky="ew", pady=(6, 2)
                 )
@@ -2952,6 +3057,26 @@ class NetSimGui:
                         row=10 + bo_i, column=1, sticky="ew", pady=3
                     )
                     entries[bo_key] = bo_var
+
+            if self.scene.physics_mode == "compositional" and node.node_type == "source":
+                ttk.Separator(container, orient="horizontal").grid(
+                    row=8, column=0, columnspan=2, sticky="ew", pady=(8, 2)
+                )
+                ttk.Label(
+                    container, text="— Inlet composition —", foreground="gray"
+                ).grid(row=9, column=0, columnspan=2, pady=(0, 4))
+                comp_names = self.scene.material.get("component_names", "")
+                ttk.Label(container, text=f"Components: {comp_names or '(not set)'}", foreground="gray").grid(
+                    row=10, column=0, columnspan=2, sticky="w", pady=(0, 4)
+                )
+                ttk.Label(container, text="Mole fracs (CSV)").grid(
+                    row=11, column=0, sticky="w", pady=4
+                )
+                zs_var = tk.StringVar(value=node.properties.get("zs", ""))
+                ttk.Entry(container, textvariable=zs_var, width=20).grid(
+                    row=11, column=1, sticky="ew", pady=4
+                )
+                entries["zs"] = zs_var
 
         else:
             ttk.Label(container, text="Label").grid(row=0, column=0, sticky="w", pady=4)
@@ -3040,7 +3165,7 @@ class NetSimGui:
             ),
             width=12,
         ).pack(anchor="w", pady=4)
-        if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil"):
+        if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil", "compositional"):
             ttk.Button(
                 palette,
                 text="Heat Source",
@@ -3612,7 +3737,7 @@ class NetSimGui:
             entries[key] = var
             row += 1
 
-        if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil"):
+        if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil", "compositional"):
             ttk.Separator(properties_frame, orient="horizontal").grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=(4, 2)
             )
@@ -3936,7 +4061,7 @@ class NetSimGui:
         mode_var.trace_add("write", _sync_mode)
         _sync_mode()
 
-        if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil"):
+        if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil", "compositional"):
             ttk.Separator(properties_frame, orient="horizontal").grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=(4, 2)
             )
