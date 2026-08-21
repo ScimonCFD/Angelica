@@ -106,6 +106,17 @@ class CompositionalFluid(FluidModel):
         if abs(s - 1.0) > 1e-6:
             raise ValueError(f"default_zs must sum to 1.0 (got {s:.6f})")
 
+    # ── component molecular weights ───────────────────────────────────────────
+
+    @property
+    def component_mws(self) -> tuple[float, ...]:
+        """Molecular weights (g/mol) for each component, in the same order as component_names."""
+        if not hasattr(self, "_mws_cache"):
+            from thermo import Mixture
+            m = Mixture(list(self.component_names), zs=list(self.default_zs), T=300.0, P=101325.0)
+            self._mws_cache: tuple[float, ...] = tuple(m.MWs)
+        return self._mws_cache
+
     # ── helpers ───────────────────────────────────────────────────────────────
 
     def _get_zs(self, link_state) -> tuple[float, ...]:

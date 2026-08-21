@@ -83,6 +83,7 @@ class SolveResult:
     mass_balance_history: list[float] = field(default_factory=list)
     energy_balance_history: list[float] = field(default_factory=list)
     component_names: tuple[str, ...] = ()
+    component_mws: tuple[float, ...] = ()
     node_compositions: dict[int, tuple[float, ...]] = field(default_factory=dict)
 
     @property

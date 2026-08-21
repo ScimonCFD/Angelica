@@ -352,5 +352,6 @@ class SteadyCompositionalSolver(BaseSolver):
             mass_balance_history=mass_balance_history,
             energy_balance_history=energy_balance_history,
             component_names=fluid.component_names,
+            component_mws=fluid.component_mws,
             node_compositions=node_compositions,
         )

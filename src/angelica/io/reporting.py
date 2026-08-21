@@ -36,28 +36,40 @@ def export_solve_result_csv(result, output_path: str) -> None:
                 pressure_pa = result.node_pressures_pa[node_id]
                 writer.writerow([node_id, round(pressure_pa, 2), round(pressure_pa / 1000.0, 4)])
         writer.writerow([])
+        has_mw = bool(getattr(result, "component_mws", ()))
         if has_component_temps:
-            writer.writerow(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)", "T_in (°C)", "T_out (°C)"])
+            header = ["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)", "T_in (°C)", "T_out (°C)"]
+            if has_mw:
+                header.append("MW_mix (g/mol)")
+            writer.writerow(header)
             for component in result.component_flows:
-                writer.writerow([
+                row = [
                     component.label,
                     round(component.mass_flow_kg_per_s, 4),
                     round(component.volumetric_flow_m3_per_h, 4),
                     round(component.temperature_in_c, 4) if component.temperature_in_c is not None else "",
                     round(component.temperature_out_c, 4) if component.temperature_out_c is not None else "",
-                ])
+                ]
+                if has_mw:
+                    row.append(_mw_mix(getattr(component, "zs", ()), result.component_mws))
+                writer.writerow(row)
         else:
-            writer.writerow(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"])
+            header = ["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"]
+            if has_mw:
+                header.append("MW_mix (g/mol)")
+            writer.writerow(header)
             for component in result.component_flows:
-                writer.writerow(
-                    [
-                        component.label,
-                        round(component.mass_flow_kg_per_s, 4),
-                        round(component.volumetric_flow_m3_per_h, 4),
-                    ]
-                )
+                row = [
+                    component.label,
+                    round(component.mass_flow_kg_per_s, 4),
+                    round(component.volumetric_flow_m3_per_h, 4),
+                ]
+                if has_mw:
+                    row.append(_mw_mix(getattr(component, "zs", ()), result.component_mws))
+                writer.writerow(row)
         _write_balance_rows_csv(writer, result)
         _write_compositions_csv(writer, result)
+        _write_component_mass_flows_csv(writer, result)
 
 
 def export_solve_result_workbook(result, output_path: str) -> None:
@@ -98,31 +110,95 @@ def export_solve_result_workbook(result, output_path: str) -> None:
             pressure_pa = result.node_pressures_pa[node_id]
             pressures_sheet.append([node_id, round(pressure_pa, 2), round(pressure_pa / 1000.0, 4)])
 
+    has_mw = bool(getattr(result, "component_mws", ()))
     flows_sheet = workbook.create_sheet("Flows")
     if has_component_temps:
-        flows_sheet.append(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)", "T_in (°C)", "T_out (°C)"])
+        header = ["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)", "T_in (°C)", "T_out (°C)"]
+        if has_mw:
+            header.append("MW_mix (g/mol)")
+        flows_sheet.append(header)
         for component in result.component_flows:
-            flows_sheet.append([
+            row = [
                 component.label,
                 round(component.mass_flow_kg_per_s, 4),
                 round(component.volumetric_flow_m3_per_h, 4),
                 round(component.temperature_in_c, 4) if component.temperature_in_c is not None else None,
                 round(component.temperature_out_c, 4) if component.temperature_out_c is not None else None,
-            ])
+            ]
+            if has_mw:
+                row.append(_mw_mix(getattr(component, "zs", ()), result.component_mws))
+            flows_sheet.append(row)
     else:
-        flows_sheet.append(["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"])
+        header = ["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"]
+        if has_mw:
+            header.append("MW_mix (g/mol)")
+        flows_sheet.append(header)
         for component in result.component_flows:
-            flows_sheet.append(
-                [
-                    component.label,
-                    round(component.mass_flow_kg_per_s, 4),
-                    round(component.volumetric_flow_m3_per_h, 4),
-                ]
-            )
+            row = [
+                component.label,
+                round(component.mass_flow_kg_per_s, 4),
+                round(component.volumetric_flow_m3_per_h, 4),
+            ]
+            if has_mw:
+                row.append(_mw_mix(getattr(component, "zs", ()), result.component_mws))
+            flows_sheet.append(row)
 
     _write_balance_sheet(workbook, result)
     _write_compositions_sheet(workbook, result)
+    _write_component_mass_flows_sheet(workbook, result)
     workbook.save(output)
+
+
+def _mw_mix(zs: tuple, mws: tuple) -> "float | str":
+    """Mixture molecular weight (g/mol) from mole fractions and component MWs."""
+    if not zs or not mws:
+        return ""
+    return round(sum(z * mw_i for z, mw_i in zip(zs, mws)), 4)
+
+
+def _species_mass_flows(mdot: float, zs: tuple, mws: tuple) -> list:
+    """Per-species mass flow rates (kg/s): ṁᵢ = ṁ_total × zᵢ × MWᵢ / MW_mix."""
+    mw_mix = sum(z * mw_i for z, mw_i in zip(zs, mws))
+    if mw_mix <= 0.0:
+        return [0.0] * len(zs)
+    return [round(mdot * z * mw_i / mw_mix, 6) for z, mw_i in zip(zs, mws)]
+
+
+def _write_component_mass_flows_csv(writer, result) -> None:
+    names = getattr(result, "component_names", ())
+    mws   = getattr(result, "component_mws", ())
+    if not names or not mws:
+        return
+    has_pipe = any(getattr(cf, "zs", ()) for cf in result.component_flows)
+    if not has_pipe:
+        return
+    writer.writerow([])
+    writer.writerow(["Component mass flows (kg/s)"])
+    writer.writerow(["Pipe", *names])
+    for cf in result.component_flows:
+        zs = getattr(cf, "zs", ())
+        if not zs:
+            writer.writerow([cf.label, *[""] * len(names)])
+            continue
+        writer.writerow([cf.label, *_species_mass_flows(cf.mass_flow_kg_per_s, zs, mws)])
+
+
+def _write_component_mass_flows_sheet(workbook, result) -> None:
+    names = getattr(result, "component_names", ())
+    mws   = getattr(result, "component_mws", ())
+    if not names or not mws:
+        return
+    has_pipe = any(getattr(cf, "zs", ()) for cf in result.component_flows)
+    if not has_pipe:
+        return
+    ws = workbook.create_sheet("Component Mass Flows")
+    ws.append(["Pipe", *names])
+    for cf in result.component_flows:
+        zs = getattr(cf, "zs", ())
+        if not zs:
+            ws.append([cf.label, *[None] * len(names)])
+            continue
+        ws.append([cf.label, *_species_mass_flows(cf.mass_flow_kg_per_s, zs, mws)])
 
 
 def _write_compositions_csv(writer, result) -> None:

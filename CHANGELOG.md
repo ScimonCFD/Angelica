@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.6.55] — 2026-08-22
+
+### Feature: component mass flows and mixture MW in compositional results report
+
+For compositional simulations, the exported CSV and Excel report now includes:
+
+* **MW_mix (g/mol)** — mixture molecular weight column added to the Flows table,
+  computed as Σ(zᵢ × MWᵢ) using the link's mole fractions.
+
+* **Component mass flows (kg/s)** — new section/sheet ("Component Mass Flows")
+  with one column per chemical species, reporting the per-species mass flow rate
+  for each pipe: ṁᵢ = ṁ_total × zᵢ × MWᵢ / MW_mix.
+
+These columns only appear for compositional runs; all other physics modes are
+unaffected.
+
+Internally, `SolveResult` gains a `component_mws: tuple[float, ...]` field and
+`CompositionalFluid` exposes a `component_mws` property (lazily fetched from
+`thermo.Mixture.MWs`).
+
 ## [1.6.54] — 2026-08-22
 
 ### Fix: compositional solver settings (density_rel_tolerance, etc.) now respected from scene JSON
