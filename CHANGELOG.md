@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.46] — 2026-08-21
+
+### Fix: thermal convergence lines clipped to plot area
+
+The secondary-axis series (temperature Δ, density Δ) in the convergence
+window was building its point list with unclamped x coordinates.  The line
+was drawn through those raw values, which could fall outside [left, right].
+Markers were already clamped but the connecting line was not.
+
+Fix: compute `frac = x_position / x_den` and clamp to [0.0, 1.0] before
+converting to canvas pixels, so both the line and the markers stay inside
+the plot rectangle.
+
 ## [1.6.45] — 2026-08-21
 
 ### Fix: remove default mole fractions from side panel

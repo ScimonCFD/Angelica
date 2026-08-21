@@ -4737,9 +4737,10 @@ class NetSimGui:
                     for i, value in pos_pts:
                         vlog = math.log10(value)
                         if x_positions and i < len(x_positions):
-                            x = left + (right - left) * (x_positions[i] / x_den)
+                            frac = x_positions[i] / x_den
                         else:
-                            x = right if n == 1 else left + (right - left) * (i / (n - 1))
+                            frac = 1.0 if n == 1 else i / (n - 1)
+                        x = left + (right - left) * max(0.0, min(1.0, frac))
                         y_raw = top + (sec_max_log - vlog) * (bottom - top) / (sec_max_log - sec_min_log)
                         y = max(top, min(bottom, y_raw))
                         pts.extend((x, y))
