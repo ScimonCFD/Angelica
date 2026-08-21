@@ -358,21 +358,29 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         raise TypeError(f"Unsupported state type: {type(link_state).__name__}")
 
     def _apply_pressure_correction(self, network_state, correction) -> tuple[float, float, float]:
-        scaled_correction = []
-        relative_corrections = []
+        _P_MIN = 1.0  # Pa — absolute pressure is always positive
+        node_ids = sorted(network_state.nodes)
+        old_pressures = [float(network_state.nodes[nid].pressure_pa) for nid in node_ids]
+        raw_corrections = [float(correction[i]) for i in range(len(node_ids))]
+
+        # Adaptive relaxation: halve alpha until all new pressures are physical.
         alpha = float(self.settings.pressure_relaxation)
-        for idx, node_id in enumerate(sorted(network_state.nodes)):
-            correction_value = float(correction[idx])
-            delta_p = alpha * correction_value
-            old_pressure = float(network_state.nodes[node_id].pressure_pa)
-            new_pressure = max(old_pressure + delta_p, 1.0)
-            network_state.nodes[node_id].pressure_pa = new_pressure
-            scaled_correction.append(delta_p)
-            denominator = max(abs(new_pressure), 1.0)
-            relative_corrections.append(abs(delta_p) / denominator)
-        abs_corrections = [abs(value) for value in scaled_correction]
-        mean_abs_correction = sum(abs_corrections) / len(abs_corrections)
-        return max_abs_value(scaled_correction), mean_abs_correction, max(relative_corrections)
+        alpha_floor = alpha * (0.5 ** 20)  # ~20 halvings before giving up
+        while alpha > alpha_floor:
+            if all(p + alpha * dp >= _P_MIN for p, dp in zip(old_pressures, raw_corrections)):
+                break
+            alpha *= 0.5
+
+        new_pressures = [max(p + alpha * dp, _P_MIN)
+                         for p, dp in zip(old_pressures, raw_corrections)]
+        for nid, new_p in zip(node_ids, new_pressures):
+            network_state.nodes[nid].pressure_pa = new_p
+
+        deltas = [new_p - old_p for new_p, old_p in zip(new_pressures, old_pressures)]
+        abs_deltas = [abs(d) for d in deltas]
+        relative_corrections = [abs(d) / max(abs(new_p), 1.0)
+                                 for d, new_p in zip(deltas, new_pressures)]
+        return max_abs_value(deltas), sum(abs_deltas) / len(abs_deltas), max(relative_corrections)
 
     def _compute_max_nodal_mass_imbalance(self, network_state) -> float:
         """Return max relative mass imbalance across junction nodes: |in-out|/(in+out)."""

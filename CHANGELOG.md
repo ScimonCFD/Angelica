@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.50] — 2026-08-21
+
+### Improvement: adaptive pressure relaxation to prevent unphysical pressures
+
+`_apply_pressure_correction` now uses adaptive relaxation instead of a hard
+clamp.  Before applying the correction, it checks whether the full step would
+drive any node below 1 Pa (the physical floor for absolute pressure).  If so,
+it halves α and checks again, repeating up to ~20 times.  The smallest α that
+keeps all pressures physical is then used for that iteration.
+
+This lets the solver self-stabilise when a large correction would otherwise
+produce unphysical values, without silently corrupting the pressure field or
+crashing on the next EOS call.
+
 ## [1.6.49] — 2026-08-21
 
 ### Fix: clamp nodal pressures to physical minimum (≥ 1 Pa)
