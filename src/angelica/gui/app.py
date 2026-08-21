@@ -2419,13 +2419,13 @@ class NetSimGui:
         self._simulation_running = True
         self._stop_event.clear()
         self._run_button.configure(state="disabled")
-        if self._stop_button is not None and self._stop_button.winfo_exists():
-            self._stop_button.configure(state="normal")
         self.status_var.set("Running simulation…")
 
         solver = build_solver_from_scene(self.scene)
         self.convergence_history = {"laminar": [], "turbulent": []}
         self._prepare_convergence_window()
+        if self._stop_button is not None and self._stop_button.winfo_exists():
+            self._stop_button.configure(state="normal")
 
         _result_holder: list = [None, None]  # [result, exception]
 

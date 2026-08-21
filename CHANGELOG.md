@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.47] — 2026-08-21
+
+### Fix: Stop button disabled during first simulation run
+
+The Stop button was being enabled before `_prepare_convergence_window()`
+was called.  On the first run (convergence window not yet open), the button
+didn't exist yet, so the enable was a no-op, and the button was then created
+with `state="disabled"` and never changed.
+
+Fix: move the enable call to after `_prepare_convergence_window()` so the
+button always exists when its state is set to "normal".
+
 ## [1.6.46] — 2026-08-21
 
 ### Fix: thermal convergence lines clipped to plot area
