@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.35] — 2026-08-21
+
+### Docs: README files for the three compositional tutorials
+
+Added `README.md` to each compositional tutorial folder:
+
+- `tutorials/steady_compositional/01_single_pipe/README.md`
+- `tutorials/steady_compositional/02_gas_mixing_junction/README.md`
+- `tutorials/steady_compositional/03_looped_network/README.md`
+
+Each README documents the network topology, fluid definition, expected
+output, and the key physics to observe.  The GUI does not yet support the
+compositional physics mode — these tutorials are run as Python scripts.
+
 ## [1.6.34] — 2026-08-21
 
 ### Tutorial: compositional looped gas network
