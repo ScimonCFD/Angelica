@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.45] — 2026-08-21
+
+### Fix: remove default mole fractions from side panel
+
+The material summary in the side panel no longer shows the `zs=…` line
+for compositional simulations.  Component names are still shown; compositions
+belong in the results report, not in the UI sidebar.
+
 ## [1.6.44] — 2026-08-21
 
 ### Fix: Windows installer — "No module named pandas"

@@ -2274,10 +2274,7 @@ class NetSimGui:
             return f"{api}°API  γg={gg}"
         elif self.scene.physics_mode == "compositional":
             comp_names = self.scene.material.get("component_names", "—")
-            default_zs = self.scene.material.get("default_zs", "")
             lines = [comp_names]
-            if default_zs:
-                lines.append(f"zs={default_zs}")
         else:
             density = self.scene.material.get("density_kg_per_m3", "").strip()
             viscosity = self.scene.material.get("viscosity_pa_s", "").strip()
