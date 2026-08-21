@@ -1,15 +1,24 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_all
 
 # sv_ttk ships TCL theme files and PNG sprites that must travel with the exe
 sv_ttk_datas = collect_data_files("sv_ttk")
 
+# thermo + its dependencies (chemicals, fluids) use lazy imports and data files
+# that PyInstaller cannot discover through static analysis alone.
+thermo_datas,    thermo_bins,    thermo_imports    = collect_all("thermo")
+chemicals_datas, chemicals_bins, chemicals_imports = collect_all("chemicals")
+fluids_datas,    fluids_bins,    fluids_imports    = collect_all("fluids")
+
 a = Analysis(
     ["launcher.py"],
     pathex=["src"],
-    binaries=[],
+    binaries=[*thermo_bins, *chemicals_bins, *fluids_bins],
     datas=[
         *sv_ttk_datas,
+        *thermo_datas,
+        *chemicals_datas,
+        *fluids_datas,
         ("installer/angelica_32.png", "."),
     ],
     hiddenimports=[
@@ -22,6 +31,9 @@ a = Analysis(
         "scipy.sparse._csr",
         "scipy.sparse.linalg._dsolve",
         "scipy.sparse.linalg._dsolve.linsolve",
+        *thermo_imports,
+        *chemicals_imports,
+        *fluids_imports,
     ],
     hookspath=[],
     hooksconfig={},

@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.38] — 2026-08-21
+
+### Fix: Windows installer now bundles `thermo`, `chemicals`, and `fluids`
+
+`angelica.spec` updated to use `collect_all("thermo")`, `collect_all("chemicals")`,
+and `collect_all("fluids")`.  These packages use lazy imports and ship data
+files (property databases) that PyInstaller cannot discover through static
+analysis alone.  Without this fix the Windows `.exe` would raise
+`ModuleNotFoundError: No module named 'thermo'` when opening a compositional case.
+
+`build-windows.yml` already installs `thermo` automatically (it became a core
+dependency in v1.6.37), so no workflow change is needed — only the spec changes.
+
 ## [1.6.37] — 2026-08-21
 
 ### Change: `thermo` is now a required dependency
