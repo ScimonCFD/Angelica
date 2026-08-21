@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.37] — 2026-08-21
+
+### Change: `thermo` is now a required dependency
+
+`thermo>=0.5` moved from `[compositional]` optional extra to the core
+`dependencies` list in `pyproject.toml`.  A plain `pip install angelica`
+now installs `thermo` automatically — no extra flag needed.
+
+The `[compositional]` extra is removed.  Users who had
+`pip install "angelica[compositional]"` in their workflows can drop the
+extra; `pip install angelica` is sufficient.
+
+CI updated to install `.[dev]` (thermo comes in via core deps).
+Skip markers removed from compositional tests — they run unconditionally.
+
 ## [1.6.36] — 2026-08-21
 
 ### Feature: GUI support for compositional physics mode
