@@ -11,6 +11,7 @@ class ComponentFlowResult:
     volumetric_flow_m3_per_h: float
     temperature_in_c: float | None = None
     temperature_out_c: float | None = None
+    zs: tuple[float, ...] = ()   # mole fractions — non-empty for compositional runs
 
 
 @dataclass(frozen=True)

@@ -310,6 +310,7 @@ class SteadyCompositionalSolver(BaseSolver):
                     ),
                     temperature_in_c=t_in,
                     temperature_out_c=t_out,
+                    zs=tuple(link.zs) if getattr(link, "zs", ()) else (),
                 )
             )
 

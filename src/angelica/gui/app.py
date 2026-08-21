@@ -4214,6 +4214,15 @@ class NetSimGui:
             return "Hazen-Williams C (−)"
         return field_name.replace("_", " ").capitalize()
 
+    def _fmt_composition(self, zs: tuple[float, ...]) -> str:
+        names_raw = self.scene.material.get("component_names", "").strip()
+        names = [n.strip() for n in names_raw.split(",") if n.strip()] if names_raw else []
+        parts = []
+        for i, z in enumerate(zs):
+            name = names[i] if i < len(names) else f"C{i+1}"
+            parts.append(f"{name}={z*100:.1f}%")
+        return "  ".join(parts)
+
     def _node_summary_text(self, node: CanvasNode) -> str:
         lines: list[str] = []
         if node.node_type in {"source", "sink"}:
@@ -4243,6 +4252,16 @@ class NetSimGui:
                     lines.append(f"P={self._fmt(result_data['pressure_pa'] * p_factor)} {p_unit}")
                 if "temperature_c" in result_data:
                     lines.append(f"T={result_data['temperature_c']:.1f} °C")
+                if "zs" in result_data:
+                    lines.append(self._fmt_composition(result_data["zs"]))
+            elif self.scene.physics_mode == "compositional" and node.node_type == "source":
+                zs_text = node.properties.get("zs", "").strip()
+                if zs_text:
+                    try:
+                        zs = tuple(float(z) for z in zs_text.split(",") if z.strip())
+                        lines.append(self._fmt_composition(zs))
+                    except ValueError:
+                        pass
             return "\n".join(lines)
 
         result_data = self.latest_boundary_results.get(node.node_id)
@@ -4254,6 +4273,8 @@ class NetSimGui:
                 summary_lines.append(f"P={self._fmt(result_data['pressure_pa'] * p_factor)} {p_unit}")
             if "temperature_c" in result_data:
                 summary_lines.append(f"T={result_data['temperature_c']:.1f} °C")
+            if "zs" in result_data:
+                summary_lines.append(self._fmt_composition(result_data["zs"]))
             return "\n".join(summary_lines)
         return ""
 
@@ -4273,6 +4294,24 @@ class NetSimGui:
             end_entry = boundary_results.setdefault(component.end_node, {"pressure_pa": result.node_pressures_pa.get(component.end_node, 0.0)})
             start_entry["flow_kg_per_s"] = start_entry.get("flow_kg_per_s", 0.0) - component_result.mass_flow_kg_per_s
             end_entry["flow_kg_per_s"] = end_entry.get("flow_kg_per_s", 0.0) + component_result.mass_flow_kg_per_s
+
+        # Derive per-node outlet compositions from per-pipe zs.
+        # Each pipe's zs flows toward the receiving node (positive flow → end_node,
+        # negative → start_node). At junctions with multiple inlets, mix by mass flow.
+        incoming: dict[int, list[tuple[float, tuple[float, ...]]]] = {}
+        for component, cf in zip(case.components, result.component_flows):
+            if not cf.zs:
+                continue
+            mdot = cf.mass_flow_kg_per_s
+            arriving_node = component.end_node if mdot >= 0.0 else component.start_node
+            incoming.setdefault(arriving_node, []).append((abs(mdot), cf.zs))
+        for node_id, arrivals in incoming.items():
+            total = sum(m for m, _ in arrivals)
+            if total <= 0.0:
+                continue
+            n = len(arrivals[0][1])
+            mixed = tuple(sum(m * zs[i] for m, zs in arrivals) / total for i in range(n))
+            boundary_results.setdefault(node_id, {})["zs"] = mixed
 
         return boundary_results
 

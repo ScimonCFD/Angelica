@@ -172,6 +172,8 @@ def _component_flow_to_dict(cf: ComponentFlowResult) -> dict:
         d["temperature_in_c"] = cf.temperature_in_c
     if cf.temperature_out_c is not None:
         d["temperature_out_c"] = cf.temperature_out_c
+    if cf.zs:
+        d["zs"] = list(cf.zs)
     return d
 
 
@@ -182,6 +184,7 @@ def _component_flow_from_dict(d: dict) -> ComponentFlowResult:
         volumetric_flow_m3_per_h=float(d["volumetric_flow_m3_per_h"]),
         temperature_in_c=float(d["temperature_in_c"]) if "temperature_in_c" in d else None,
         temperature_out_c=float(d["temperature_out_c"]) if "temperature_out_c" in d else None,
+        zs=tuple(float(z) for z in d["zs"]) if "zs" in d else (),
     )
 
 

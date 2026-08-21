@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.6.41] — 2026-08-21
+
+### Feature: outlet compositions shown on the canvas after a compositional solve
+
+After running the compositional solver, each node in the network now shows
+the local mole fractions alongside pressure, temperature, and flow rate:
+
+- **Source nodes** — displays the inlet composition defined by the user
+  (e.g. `CH₄=80.0%  C₂H₆=20.0%`) even before solving.
+- **Sink and junction nodes** — displays the arriving/mixed composition
+  computed by the solver (mass-flow-weighted average at junctions with
+  multiple inlets).
+
+**Implementation details:**
+
+- `ComponentFlowResult` gains a new `zs: tuple[float, ...]` field (empty for
+  non-compositional solvers, fully backward-compatible).
+- `SteadyCompositionalSolver` populates `zs` from the converged per-pipe
+  mole fractions.
+- `_build_boundary_results` derives per-node compositions from the
+  per-pipe `zs` values.
+- `_node_summary_text` calls the new `_fmt_composition` helper to render
+  compositions as `"CH₄=80.0%  C₂H₆=20.0%"`.
+- Serialisation (`gui/io.py`) preserves `zs` in saved `.gui.json` files.
+
 ## [1.6.40] — 2026-08-21
 
 ### Fix: convergence plot markers clipped on the X axis too
