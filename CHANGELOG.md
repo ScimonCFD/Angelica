@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.6.58] — 2026-08-22
+
+### Fix: compositional looped network diverges with global num_segments > 1
+
+Tutorial 03 (and any compositional looped scene with a mixing junction) would
+fail to converge when the global **Segments per pipe** setting was greater than
+1.  Root cause: with more segments, the max relative density residual grows
+because segments near the high-pressure end of a pipe respond more strongly
+(larger |ΔZ/Z|) to the composition oscillation at the mixing junction (J6 in
+tutorial 03).
+
+**Fix — composition under-relaxation**: a new `composition_relaxation` setting
+(default 1.0 = no relaxation) blends the freshly computed junction mole
+fractions with the value from the previous outer iteration:
+
+    z_eff = α × z_new + (1 − α) × z_prev
+
+Setting α = 0.5 damps the 2-cycle exponentially and allows convergence for any
+number of pipe segments.
+
+* `CompositionalSolverSettings` gains `composition_relaxation: float = 1.0`.
+* `_propagate_compositions` now accepts `node_zs_prev` and `relaxation` args
+  and returns the per-node composition dict so the outer loop can pass it back
+  each iteration.
+* Tutorial 03 scene JSON now includes `"composition_relaxation": 0.5`.
+* `build_solver_from_scene` in `io.py` wires the new key from `solver_settings`.
+
 ## [1.6.57] — 2026-08-22
 
 ### Feature: phase envelope visualization for compositional streams

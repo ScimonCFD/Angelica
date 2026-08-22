@@ -31,12 +31,17 @@ class CompositionalSolverSettings:
         temperature_tolerance_k: Max |ΔT| across all junction nodes (K).
         temperature_relaxation: Under-relaxation factor for temperature updates
             (1.0 = no relaxation).
+        composition_relaxation: Under-relaxation factor for junction composition
+            updates (1.0 = no relaxation).  Values below 1.0 damp composition
+            oscillations in looped networks with mixing junctions; 0.5 is a
+            safe starting point when a 2-cycle is observed.
     """
 
     max_outer_iterations: int = 50
     density_rel_tolerance: float = 1e-4
     temperature_tolerance_k: float = 0.01
     temperature_relaxation: float = 1.0
+    composition_relaxation: float = 1.0
 
 
 class SteadyCompositionalSolver(BaseSolver):
@@ -100,7 +105,9 @@ class SteadyCompositionalSolver(BaseSolver):
         network_state: NetworkState,
         case: NetworkCase,
         default_zs: tuple[float, ...],
-    ) -> None:
+        node_zs_prev: "Dict[int, tuple[float, ...]] | None" = None,
+        relaxation: float = 1.0,
+    ) -> "Dict[int, tuple[float, ...]]":
         """Propagate inlet mole fractions through the network and write to PipeState.zs.
 
         Seeded at inlet nodes from ``case.inlet_composition_bcs``, compositions
@@ -108,8 +115,15 @@ class SteadyCompositionalSolver(BaseSolver):
         each junction the incoming streams are mixed by molar-flow-weighted
         average.  Pipes unreachable from an inlet node retain ``default_zs``.
 
-        The algorithm is a fixed-point iteration that converges in at most
-        O(network diameter) passes — identical to the black-oil propagator.
+        When ``relaxation < 1.0`` and ``node_zs_prev`` is supplied, the newly
+        computed junction composition is blended with the value from the
+        previous outer iteration:
+            z_eff = relaxation * z_new + (1 - relaxation) * z_prev
+        This damps composition oscillations in looped networks with mixing
+        junctions (classic 2-cycle instability).
+
+        Returns the per-node composition dict so the caller can store it for
+        the next outer iteration.
         """
         # ── seed inlet node compositions ──────────────────────────────────────
         inlet_ids: set[int] = set()
@@ -152,6 +166,14 @@ class SteadyCompositionalSolver(BaseSolver):
                     sum(mdot * z[i] for mdot, z in contributions) / total_m
                     for i in range(n_comp)
                 )
+                # Inter-outer-iteration relaxation to damp mixing oscillations
+                if relaxation < 1.0 and node_zs_prev is not None:
+                    z_old = node_zs_prev.get(nid)
+                    if z_old is not None and len(z_old) == n_comp:
+                        z_mix = tuple(
+                            relaxation * z_mix[i] + (1.0 - relaxation) * z_old[i]
+                            for i in range(n_comp)
+                        )
                 prev = node_zs.get(nid)
                 node_zs[nid] = z_mix
                 if prev is None or max(abs(z_mix[i] - prev[i]) for i in range(n_comp)) > 1e-10:
@@ -165,6 +187,8 @@ class SteadyCompositionalSolver(BaseSolver):
             mdot = ps.mass_flow_kg_per_s
             up_id = ps.start_node.node_id if mdot >= 0.0 else ps.end_node.node_id
             ps.zs = node_zs.get(up_id, default_zs)
+
+        return node_zs
 
     # ── Main solve ────────────────────────────────────────────────────────────
 
@@ -231,12 +255,17 @@ class SteadyCompositionalSolver(BaseSolver):
         hydraulic_converged   = False
         density_converged     = False
         temperature_converged = False
+        node_zs_outer: Dict[int, tuple[float, ...]] = {}
 
         for _outer in range(settings.max_outer_iterations):
 
             # Propagate compositions from inlets → PipeState.zs
             if case.inlet_composition_bcs:
-                self._propagate_compositions(network_state, case, default_zs)
+                node_zs_outer = self._propagate_compositions(
+                    network_state, case, default_zs,
+                    node_zs_prev=node_zs_outer,
+                    relaxation=settings.composition_relaxation,
+                )
 
             old_densities = [fluid.density_for_link(link) for link in network_state.components]
 

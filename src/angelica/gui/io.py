@@ -714,7 +714,8 @@ def build_solver_from_scene(scene: CanvasScene):
     }
     _COMP_KEYS = {
         "max_outer_iterations", "max_density_iterations", "density_rel_tolerance",
-        "temperature_tolerance_k", "temperature_relaxation", "convection_scheme",
+        "temperature_tolerance_k", "temperature_relaxation", "composition_relaxation",
+        "convection_scheme",
     }
     _GEOM_KEYS = {"num_segments"}   # geometry keys — consumed by build_network_case, not the solver
     _OUTER_KEYS = _NI_KEYS | _COMP_KEYS | _GEOM_KEYS
@@ -739,6 +740,8 @@ def build_solver_from_scene(scene: CanvasScene):
             comp_kwargs["temperature_tolerance_k"] = float(comp_raw["temperature_tolerance_k"])
         if "temperature_relaxation" in comp_raw:
             comp_kwargs["temperature_relaxation"] = float(comp_raw["temperature_relaxation"])
+        if "composition_relaxation" in comp_raw:
+            comp_kwargs["composition_relaxation"] = float(comp_raw["composition_relaxation"])
         scheme_key = str(comp_raw.get("convection_scheme", "hybrid"))
         convection_scheme = _CONVECTION_SCHEMES.get(scheme_key, HybridScheme)()
         return SteadyCompositionalSolver(
