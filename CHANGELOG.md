@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.6.57] — 2026-08-22
+
+### Feature: phase envelope visualization for compositional streams
+
+A new **Phase Envelope** dialog draws the bubble-point and dew-point curves
+on a P-T diagram for any compositional stream:
+
+* **Right-click on a connection** (after running a compositional simulation)
+  → "Phase Envelope" opens the diagram for that stream's computed composition.
+* **Fluid Definition dialog** (compositional mode) → "Phase Envelope…" button
+  for pre-simulation inspection of the feed composition.
+* **Link properties dialog** shows a "Phase Envelope…" button alongside
+  Pressure Profile / Temperature Profile when compositional results are present.
+* If the simulation was non-isothermal, the stream's inlet/outlet operating
+  conditions (T, P) are overlaid on the envelope as orange markers.
+* Calculation runs in a background thread so the GUI stays responsive.
+  The pseudo-critical point (mole-fraction-weighted Tc, Pc) is marked.
+
+New module `angelica.properties.phase_envelope.compute_phase_envelope` performs
+binary-search bubble and dew point finding using `thermo.Mixture`.
+
 ## [1.6.56] — 2026-08-22
 
 ### Feature: global default segments per pipe in Numerics

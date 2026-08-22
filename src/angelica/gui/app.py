@@ -835,8 +835,42 @@ class NetSimGui:
             self.material_summary_var.set(self._material_summary_text())
             dialog.destroy()
 
+        def _preview_envelope() -> None:
+            names_text = names_var.get().strip()
+            zs_text = zs_var.get().strip()
+            if not names_text:
+                messagebox.showerror("Phase Envelope", "Enter component names first.", parent=dialog)
+                return
+            names_list = [c.strip() for c in names_text.split(",") if c.strip()]
+            try:
+                zs_list = [float(z.strip()) for z in zs_text.split(",") if z.strip()]
+            except ValueError:
+                messagebox.showerror("Phase Envelope", "Mole fractions must be numbers.", parent=dialog)
+                return
+            if len(names_list) != len(zs_list):
+                messagebox.showerror(
+                    "Phase Envelope",
+                    f"{len(names_list)} component(s) but {len(zs_list)} mole fraction(s).",
+                    parent=dialog,
+                )
+                return
+            total = sum(zs_list)
+            if abs(total - 1.0) > 0.01:
+                messagebox.showerror(
+                    "Phase Envelope",
+                    f"Mole fractions must sum to 1.0 (got {total:.4f}).",
+                    parent=dialog,
+                )
+                return
+            self._open_phase_envelope_dialog(
+                title=f"Phase Envelope — {', '.join(names_list)}",
+                component_names=tuple(names_list),
+                zs=tuple(zs_list),
+            )
+
         btn_row = ttk.Frame(frame)
-        btn_row.grid(row=5, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        btn_row.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        ttk.Button(btn_row, text="Phase Envelope…", command=_preview_envelope).pack(side="left")
         ttk.Button(btn_row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
         ttk.Button(btn_row, text="Save", command=_save).pack(side="right")
 
@@ -2743,6 +2777,11 @@ class NetSimGui:
                 label="Temperature Profile",
                 command=lambda: self._show_link_temperature_profile(link),
             )
+        if self._has_compositional_results() and self._get_link_zs(link) is not None:
+            menu.add_command(
+                label="Phase Envelope",
+                command=lambda: self._show_link_phase_envelope(link),
+            )
         menu.add_separator()
         menu.add_command(
             label=f"Delete Connection #{link.link_id}",
@@ -3340,7 +3379,13 @@ class NetSimGui:
         ttk.Button(list_actions, text="Delete", command=_delete_selected).pack(side="left")
 
         button_row = ttk.Frame(container)
-        button_row.grid(row=3, column=0, columnspan=3, sticky="e", pady=(12, 0))
+        button_row.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        if self._has_compositional_results() and self._get_link_zs(link) is not None:
+            ttk.Button(
+                button_row,
+                text="Phase Envelope…",
+                command=lambda: self._show_link_phase_envelope(link),
+            ).pack(side="left")
         ttk.Button(button_row, text="Close", command=dialog.destroy).pack(side="right", padx=(6, 0))
         ttk.Button(
             button_row,
@@ -3567,6 +3612,309 @@ class NetSimGui:
     def _has_temperature_results(self) -> bool:
         return any(
             "temperature_c" in v for v in self.latest_boundary_results.values()
+        )
+
+    def _has_compositional_results(self) -> bool:
+        return self.latest_result is not None and bool(self.latest_result.component_names)
+
+    def _get_link_zs(self, link: CanvasLink) -> "tuple[float, ...] | None":
+        if self.latest_result is None:
+            return None
+        prefix = f"link_{link.link_id}_"
+        for cf in self.latest_result.component_flows:
+            if prefix in cf.label and cf.zs:
+                return cf.zs
+        return None
+
+    def _get_link_op_conditions(self, link: CanvasLink) -> "list[tuple[float, float]]":
+        """Return (T_K, P_Pa) pairs for the link's boundary nodes when both T and P are available."""
+        if self.latest_result is None:
+            return []
+        node_ids = self._link_node_sequence(link)
+        if not node_ids:
+            return []
+        pts = []
+        for nid in [node_ids[0], node_ids[-1]]:
+            P = self.latest_result.node_pressures_pa.get(nid)
+            T_c = self.latest_result.node_temperatures_c.get(nid)
+            if P is not None and T_c is not None:
+                pts.append((T_c + 273.15, P))
+        return pts
+
+    def _show_link_phase_envelope(self, link: CanvasLink) -> None:
+        zs = self._get_link_zs(link)
+        if zs is None or self.latest_result is None:
+            messagebox.showinfo("Phase Envelope", "No composition data for this connection.", parent=self.root)
+            return
+        names = self.latest_result.component_names
+        op_pts = self._get_link_op_conditions(link)
+        self._open_phase_envelope_dialog(
+            title=f"Phase Envelope — Connection #{link.link_id}",
+            component_names=names,
+            zs=zs,
+            op_points=op_pts,
+        )
+
+    def _open_phase_envelope_dialog(
+        self,
+        title: str,
+        component_names: "tuple[str, ...]",
+        zs: "tuple[float, ...]",
+        op_points: "list[tuple[float, float]] | None" = None,
+    ) -> None:
+        win = tk.Toplevel(self.root)
+        win.title(title)
+        win.geometry("720x500")
+
+        frame = ttk.Frame(win, padding=10)
+        frame.pack(fill="both", expand=True)
+
+        plot_canvas = tk.Canvas(
+            frame,
+            background=self._t["plot_bg"],
+            highlightthickness=1,
+            highlightbackground=self._t["canvas_hl"],
+        )
+        plot_canvas.pack(fill="both", expand=True)
+
+        status_var = tk.StringVar(value="Computing phase envelope…")
+        status_lbl = ttk.Label(frame, textvariable=status_var, foreground="gray")
+        status_lbl.pack(anchor="w", pady=(4, 0))
+
+        btn_row = ttk.Frame(frame)
+        btn_row.pack(fill="x", pady=(4, 0))
+        ttk.Button(btn_row, text="Close", command=win.destroy).pack(side="right")
+
+        win.transient(self.root)
+        win.focus_set()
+        win.update_idletasks()
+
+        result_holder: dict = {}
+
+        def _compute() -> None:
+            from angelica.properties.phase_envelope import compute_phase_envelope
+            try:
+                bubble, dew, Tc, Pc = compute_phase_envelope(component_names, zs)
+                result_holder["bubble"] = bubble
+                result_holder["dew"] = dew
+                result_holder["Tc"] = Tc
+                result_holder["Pc"] = Pc
+            except Exception as exc:
+                result_holder["error"] = str(exc)
+            if win.winfo_exists():
+                win.after(0, _on_done)
+
+        def _on_done() -> None:
+            if not win.winfo_exists():
+                return
+            status_lbl.destroy()
+            if "error" in result_holder:
+                err_msg = result_holder["error"]
+                W = int(plot_canvas.winfo_width() or 700)
+                H = int(plot_canvas.winfo_height() or 440)
+                plot_canvas.create_text(
+                    W // 2, H // 2,
+                    text=f"Could not compute phase envelope:\n{err_msg}",
+                    fill=self._t["plot_muted"],
+                    font=("TkDefaultFont", 10),
+                    anchor="center",
+                    justify="center",
+                )
+                return
+            bubble = result_holder["bubble"]
+            dew = result_holder["dew"]
+            Tc = result_holder["Tc"]
+            Pc = result_holder["Pc"]
+            plot_canvas.bind(
+                "<Configure>",
+                lambda _e: self._draw_phase_envelope_plot(
+                    plot_canvas, bubble, dew, Tc, Pc, component_names, zs, op_points
+                ),
+            )
+            self._draw_phase_envelope_plot(
+                plot_canvas, bubble, dew, Tc, Pc, component_names, zs, op_points
+            )
+
+        import threading
+        threading.Thread(target=_compute, daemon=True).start()
+
+    def _draw_phase_envelope_plot(
+        self,
+        canvas: tk.Canvas,
+        bubble_pts: list,
+        dew_pts: list,
+        Tc_K: float,
+        Pc_Pa: float,
+        component_names: "tuple[str, ...]",
+        zs: "tuple[float, ...]",
+        op_points: "list[tuple[float, float]] | None" = None,
+    ) -> None:
+        canvas.delete("all")
+        W = int(canvas.winfo_width() or 700)
+        H = int(canvas.winfo_height() or 440)
+
+        ML, MR, MT, MB = 75, 24, 44, 55
+        plot_w = W - ML - MR
+        plot_h = H - MT - MB
+
+        if plot_w < 100 or plot_h < 80:
+            return
+
+        if not bubble_pts and not dew_pts:
+            canvas.create_text(
+                W // 2, H // 2,
+                text="No two-phase region found for this composition\nin the computed temperature range.",
+                fill=self._t["plot_muted"],
+                font=("TkDefaultFont", 11),
+                anchor="center",
+                justify="center",
+            )
+            return
+
+        def _to_C(T_K: float) -> float:
+            return T_K - 273.15
+
+        def _to_bar(P_Pa: float) -> float:
+            return P_Pa / 1.0e5
+
+        all_T = [_to_C(t) for t, _ in bubble_pts + dew_pts]
+        all_P = [_to_bar(p) for _, p in bubble_pts + dew_pts]
+
+        if op_points:
+            all_T += [_to_C(t) for t, _ in op_points]
+            all_P += [_to_bar(p) for _, p in op_points]
+
+        T_pad = max((max(all_T) - min(all_T)) * 0.07, 5.0)
+        P_pad = max(max(all_P) * 0.10, 1.0)
+        T_min_d = min(all_T) - T_pad
+        T_max_d = max(all_T) + T_pad
+        P_min_d = 0.0
+        P_max_d = max(all_P) + P_pad
+
+        T_span = T_max_d - T_min_d or 1.0
+        P_span = P_max_d - P_min_d or 1.0
+
+        def _cx(T_C: float) -> float:
+            return ML + (T_C - T_min_d) / T_span * plot_w
+
+        def _cy(P_b: float) -> float:
+            return MT + plot_h - (P_b - P_min_d) / P_span * plot_h
+
+        # Plot border
+        canvas.create_rectangle(
+            ML, MT, ML + plot_w, MT + plot_h,
+            outline=self._t["plot_axis"], width=1,
+        )
+
+        # Grid lines + tick labels
+        n_x, n_y = 5, 5
+        for i in range(n_x + 1):
+            T_val = T_min_d + i / n_x * T_span
+            x = _cx(T_val)
+            canvas.create_line(x, MT, x, MT + plot_h, fill=self._t["plot_grid"])
+            canvas.create_text(
+                x, MT + plot_h + 4, text=f"{T_val:.0f}", anchor="n",
+                font=("TkDefaultFont", 8), fill=self._t["plot_text"],
+            )
+        for i in range(n_y + 1):
+            P_val = P_min_d + i / n_y * P_span
+            y = _cy(P_val)
+            canvas.create_line(ML, y, ML + plot_w, y, fill=self._t["plot_grid"])
+            canvas.create_text(
+                ML - 6, y, text=f"{P_val:.1f}", anchor="e",
+                font=("TkDefaultFont", 8), fill=self._t["plot_text"],
+            )
+
+        # Axes
+        canvas.create_line(ML, MT, ML, MT + plot_h, fill=self._t["plot_axis"], width=1.5)
+        canvas.create_line(ML, MT + plot_h, ML + plot_w, MT + plot_h,
+                            fill=self._t["plot_axis"], width=1.5)
+
+        # Axis labels
+        canvas.create_text(
+            ML + plot_w // 2, MT + plot_h + 40,
+            text="Temperature (°C)", anchor="s",
+            font=("TkDefaultFont", 9), fill=self._t["plot_text"],
+        )
+        canvas.create_text(
+            13, MT + plot_h // 2,
+            text="Pressure (bar)", anchor="center",
+            font=("TkDefaultFont", 9), fill=self._t["plot_text"],
+            angle=90,
+        )
+
+        # Bubble curve (blue, solid)
+        bubble_color = "#4a90d9"
+        dew_color = "#e05050"
+        if len(bubble_pts) >= 2:
+            pts = [(_cx(_to_C(t)), _cy(_to_bar(p))) for t, p in bubble_pts]
+            for i in range(len(pts) - 1):
+                canvas.create_line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1],
+                                   fill=bubble_color, width=2)
+
+        # Dew curve (red, dashed)
+        if len(dew_pts) >= 2:
+            pts = [(_cx(_to_C(t)), _cy(_to_bar(p))) for t, p in dew_pts]
+            for i in range(len(pts) - 1):
+                canvas.create_line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1],
+                                   fill=dew_color, width=2, dash=(6, 3))
+
+        # Pseudo-critical point marker
+        Tc_C = _to_C(Tc_K)
+        Pc_b = _to_bar(Pc_Pa)
+        if T_min_d <= Tc_C <= T_max_d and 0 <= Pc_b <= P_max_d:
+            cx, cy = _cx(Tc_C), _cy(Pc_b)
+            r = 5
+            canvas.create_oval(cx - r, cy - r, cx + r, cy + r,
+                                fill="#9b59b6", outline=self._t["plot_axis"])
+            canvas.create_text(cx + 8, cy - 10, anchor="w",
+                                text=f"Tc≈{Tc_C:.0f}°C  Pc≈{Pc_b:.0f} bar",
+                                font=("TkDefaultFont", 8), fill="#9b59b6")
+
+        # Operating condition points
+        op_color = "#e69c00"
+        op_labels = ["inlet", "outlet"]
+        if op_points:
+            for idx, (T_K, P_Pa) in enumerate(op_points):
+                xp = _cx(_to_C(T_K))
+                yp = _cy(_to_bar(P_Pa))
+                r = 5
+                canvas.create_oval(xp - r, yp - r, xp + r, yp + r,
+                                   fill=op_color, outline=self._t["plot_axis"])
+                lbl = op_labels[idx] if idx < len(op_labels) else f"pt{idx+1}"
+                canvas.create_text(xp + 7, yp, anchor="w",
+                                   text=lbl, font=("TkDefaultFont", 8), fill=op_color)
+
+        # Legend
+        legend: list[tuple[str, str, tuple]] = []
+        if bubble_pts:
+            legend.append(("Bubble curve", bubble_color, ()))
+        if dew_pts:
+            legend.append(("Dew curve", dew_color, (6, 3)))
+        if op_points:
+            legend.append(("Operating point", op_color, None))  # type: ignore[arg-type]
+
+        lx, ly = ML + 10, MT + 10
+        for lbl_text, color, dash in legend:
+            if dash is None:
+                canvas.create_oval(lx, ly + 1, lx + 10, ly + 11,
+                                   fill=color, outline=self._t["plot_axis"])
+            else:
+                canvas.create_line(lx, ly + 6, lx + 22, ly + 6,
+                                   fill=color, width=2, dash=dash)
+            canvas.create_text(lx + 27, ly + 6, text=lbl_text, anchor="w",
+                                font=("TkDefaultFont", 9), fill=self._t["plot_text"])
+            ly += 20
+
+        # Composition subtitle (top of plot)
+        comp_parts = [f"{n} ({z:.2f})" for n, z in zip(component_names, zs)]
+        comp_str = ", ".join(comp_parts)
+        if len(comp_str) > 78:
+            comp_str = comp_str[:76] + "…"
+        canvas.create_text(
+            ML + plot_w // 2, MT - 8,
+            text=comp_str, anchor="s",
+            font=("TkDefaultFont", 8), fill=self._t["plot_muted"],
         )
 
     def _show_link_temperature_profile(self, link) -> None:
