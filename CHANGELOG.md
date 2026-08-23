@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.6.63] — 2026-08-23
+
+### Fix: eliminate near-vertical cliff in phase envelope bubble curve
+
+The bubble curve had a near-vertical drop (~29 bar in 0.1 K) just before the
+critical closing point.  This artifact was caused by the cold-start flash
+algorithm jumping from the physical bubble-curve solution (~63 bar) to the
+trivial K_i→1 convergence solution (~34 bar) at around 222.2 K.
+
+The closing strategy is rewritten to use **hot_start** for both branches in
+the fine scan (0.5 K step).  hot_start keeps the bubble branch on the
+physically correct retrograde solution, giving a smooth descent from the
+cricondenbar (~64 bar at −52 °C) down toward the critical point.  When both
+flash calculations eventually fail (at ~225.5 K), the envelope is
+force-closed at the temperature of minimum divergence between the two curves
+(~225.3 K / 51 bar).  A spike filter rejects any hot_start bubble result
+that rises more than 5 % above the previous accepted value, preventing the
+isolated numerical instabilities that occur near the critical region.
+
 ## [1.6.62] — 2026-08-23
 
 ### Fix: phase envelope bubble curve filled in near critical point

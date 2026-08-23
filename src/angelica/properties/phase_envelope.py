@@ -53,24 +53,18 @@ def compute_phase_envelope(
     if T_lo >= T_hi_scan:
         T_lo = T_hi_scan * 0.50
 
-    # ── Flash helpers ──────────────────────────────────────────────────────────
-    # FlashVL correctly raises / returns a degenerate state above the mixture
-    # critical temperature, so bubble and dew calculations naturally stop there.
-
     # ── Temperature scan with hot_start ───────────────────────────────────────
-    # Using hot_start passes the previous flash result as the initial K-factor
-    # guess for the next temperature.  This dramatically stabilises convergence
-    # near the critical point (the same technique used by thermo's plot_TP with
-    # hot=True) and avoids the spurious solutions that occur with cold starts.
     T_vals = np.linspace(T_lo, T_hi_scan, n_T + 10)
 
     bubble_pts: list[tuple[float, float]] = []
     dew_pts: list[tuple[float, float]] = []
     envelope_closed = False
-    last_both: tuple[float, float, float] | None = None  # (T, P_bub, P_dew)
+    last_both: tuple[float, float, float] | None = None  # (T, P_bub_Pa, P_dew_Pa)
 
     state_bub = None  # hot_start state for bubble branch
     state_dew = None  # hot_start state for dew branch
+    last_bub_state = None  # saved at the last T where both curves coexist
+    last_dew_state = None
 
     for T in T_vals:
         T = float(T)
@@ -108,6 +102,8 @@ def compute_phase_envelope(
             bubble_pts.append((T, P_b))
             dew_pts.append((T, P_d))
             last_both = (T, P_b, P_d)
+            last_bub_state = state_bub
+            last_dew_state = state_dew
         elif P_b is not None:
             bubble_pts.append((T, P_b))
         elif P_d is not None:
@@ -115,54 +111,90 @@ def compute_phase_envelope(
         elif bubble_pts or dew_pts:
             break  # both failed — past the two-phase region
 
-    # ── Fine-scan closing ─────────────────────────────────────────────────────
-    # After the coarse scan breaks, step forward at 0.5 K intervals to fill in
-    # the closing region.  Cold-start flashes are used here because near the
-    # critical point they reliably find the convergent (K_i → 1) solution that
-    # marks the closure, while hot-start can get trapped on a spurious branch.
+    # ── Fine-scan closing with hot_start ──────────────────────────────────────
+    # Step forward at 0.5 K from the last coarse-scan point using hot_start.
+    # hot_start keeps the bubble branch on the physical retrograde solution
+    # (smoothly descending from the cricondenbar toward the critical point)
+    # rather than jumping to the K_i→1 trivial solution that cold-start finds.
+    # A spike filter rejects any hot_start result that rises more than 5 %
+    # above the last accepted bubble pressure, which prevents the numerical
+    # instabilities that occasionally occur near the critical point.
     if not envelope_closed and last_both is not None:
         T_fc, _, _ = last_both
-        fine_step = 0.1
+        fine_step = 0.5
         T_fine = T_fc + fine_step
+
+        fine_bub_state = last_bub_state
+        fine_dew_state = last_dew_state
+
+        best_frac = float("inf")
+        best_close_T: float | None = None
+        best_close_P: float | None = None
 
         while T_fine <= T_hi_scan + fine_step:
             T_f = float(T_fine)
+
+            # ── bubble ─────────────────────────────────────────────────────
             P_b: float | None = None
+            prev_bub_state = fine_bub_state
+            try:
+                rb = flash_obj.flash(zs=fracs, T=T_f, VF=0, hot_start=fine_bub_state)
+                if rb.P is not None and rb.P > 0:
+                    P_b_cand = float(rb.P)
+                    # Spike filter: in the retrograde region bubble P must not
+                    # jump up; a >5 % rise above the last accepted value is a
+                    # numerical artefact — reject it and keep the previous state.
+                    if bubble_pts and P_b_cand > bubble_pts[-1][1] * 1.05:
+                        fine_bub_state = prev_bub_state  # do not advance state
+                    else:
+                        P_b = P_b_cand
+                        fine_bub_state = rb
+                else:
+                    fine_bub_state = None
+            except Exception:
+                fine_bub_state = None
+
+            # ── dew ────────────────────────────────────────────────────────
             P_d: float | None = None
             try:
-                rb = flash_obj.flash(zs=fracs, T=T_f, VF=0)
-                if rb.P is not None and rb.P > 0:
-                    P_b = float(rb.P)
-            except Exception:
-                pass
-            try:
-                rd = flash_obj.flash(zs=fracs, T=T_f, VF=1)
+                rd = flash_obj.flash(zs=fracs, T=T_f, VF=1, hot_start=fine_dew_state)
                 if rd.P is not None and rd.P > 0:
                     P_d = float(rd.P)
+                    fine_dew_state = rd
+                else:
+                    fine_dew_state = None
             except Exception:
-                pass
+                fine_dew_state = None
 
             if P_b is not None and P_d is not None:
                 frac_diff = abs(P_b - P_d) / max(P_b, P_d)
+                if frac_diff < best_frac:
+                    best_frac = frac_diff
+                    best_close_T = T_f
+                    best_close_P = (P_b + P_d) / 2.0
                 if frac_diff < 0.05:
-                    P_crit = (P_b + P_d) / 2.0
-                    bubble_pts.append((T_f, P_crit))
-                    dew_pts.append((T_f, P_crit))
+                    bubble_pts.append((T_f, (P_b + P_d) / 2.0))
+                    dew_pts.append((T_f, (P_b + P_d) / 2.0))
                     envelope_closed = True
                     break
                 bubble_pts.append((T_f, P_b))
                 dew_pts.append((T_f, P_d))
-                last_both = (T_f, P_b, P_d)
             elif P_b is not None:
                 bubble_pts.append((T_f, P_b))
             elif P_d is not None:
                 dew_pts.append((T_f, P_d))
             else:
-                break
+                break  # both failed
 
             T_fine += fine_step
 
-        if not envelope_closed and last_both is not None:
+        # Force-close at the temperature of minimum divergence.
+        if not envelope_closed and best_close_T is not None:
+            bubble_pts = [(t, p) for t, p in bubble_pts if t < best_close_T]
+            dew_pts    = [(t, p) for t, p in dew_pts    if t < best_close_T]
+            bubble_pts.append((best_close_T, best_close_P))
+            dew_pts.append((best_close_T, best_close_P))
+        elif not envelope_closed and last_both is not None:
             T_fc2, P_fb, P_fd = last_both
             P_avg = (P_fb + P_fd) / 2.0
             bubble_pts = [(t, p) for t, p in bubble_pts if t <= T_fc2]
