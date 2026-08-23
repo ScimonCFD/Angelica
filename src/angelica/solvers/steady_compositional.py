@@ -291,7 +291,7 @@ class SteadyCompositionalSolver(BaseSolver):
             max_delta_t = 0.0
             alpha = settings.temperature_relaxation
             for nid, T_new in new_node_temps.items():
-                T_old = network_state.nodes[nid].temperature_c or T_init
+                T_old = network_state.nodes[nid].temperature_c if network_state.nodes[nid].temperature_c is not None else T_init
                 delta = alpha * (T_new - T_old)
                 max_delta_t = max(max_delta_t, abs(delta))
                 if not network_state.nodes[nid].is_thermal_inlet:
@@ -322,7 +322,7 @@ class SteadyCompositionalSolver(BaseSolver):
             for nid in sorted(network_state.nodes)
         }
         node_temperatures = {
-            nid: float(network_state.nodes[nid].temperature_c or T_init)
+            nid: float(network_state.nodes[nid].temperature_c if network_state.nodes[nid].temperature_c is not None else T_init)
             for nid in sorted(network_state.nodes)
         }
         component_flows = []

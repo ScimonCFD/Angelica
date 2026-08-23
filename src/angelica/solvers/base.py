@@ -141,9 +141,11 @@ class BaseSolver(ABC):
                     if mdot < 1e-30:
                         continue
                     if link.mass_flow_kg_per_s >= 0:
-                        T_up = network_state.nodes[link.start_node.node_id].temperature_c or T_ref
+                        _t = network_state.nodes[link.start_node.node_id].temperature_c
+                        T_up = _t if _t is not None else T_ref
                     else:
-                        T_up = network_state.nodes[link.end_node.node_id].temperature_c or T_ref
+                        _t = network_state.nodes[link.end_node.node_id].temperature_c
+                        T_up = _t if _t is not None else T_ref
                     T_exit = link.temperature_c if link.temperature_c is not None else T_ref
                     dT1 = T_up - T_amb
                     dT2 = T_exit - T_amb

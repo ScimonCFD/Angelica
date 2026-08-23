@@ -180,7 +180,7 @@ class GuiModelTests(unittest.TestCase):
         self.assertEqual(properties["diameter_m"], "")
         self.assertEqual(properties["curve_points_q_head"], "")
 
-    def test_source_cannot_have_more_than_two_connections(self) -> None:
+    def test_source_cannot_have_more_than_one_connection(self) -> None:
         scene = CanvasScene()
         scene.set_active_tool("source")
         source = scene.add_node(10, 20)
@@ -189,16 +189,13 @@ class GuiModelTests(unittest.TestCase):
         j1 = scene.add_node(40, 20)
         scene.set_active_tool("junction")
         j2 = scene.add_node(70, 20)
-        scene.set_active_tool("junction")
-        j3 = scene.add_node(100, 20)
 
         scene.add_link(source.node_id, j1.node_id)
-        scene.add_link(source.node_id, j2.node_id)
 
         with self.assertRaises(ValueError):
-            scene.add_link(source.node_id, j3.node_id)
+            scene.add_link(source.node_id, j2.node_id)
 
-    def test_sink_cannot_have_more_than_two_connections(self) -> None:
+    def test_sink_cannot_have_more_than_one_connection(self) -> None:
         scene = CanvasScene()
         scene.set_active_tool("sink")
         sink = scene.add_node(10, 20)
@@ -207,14 +204,11 @@ class GuiModelTests(unittest.TestCase):
         j1 = scene.add_node(40, 20)
         scene.set_active_tool("junction")
         j2 = scene.add_node(70, 20)
-        scene.set_active_tool("junction")
-        j3 = scene.add_node(100, 20)
 
         scene.add_link(sink.node_id, j1.node_id)
-        scene.add_link(sink.node_id, j2.node_id)
 
         with self.assertRaises(ValueError):
-            scene.add_link(j3.node_id, sink.node_id)
+            scene.add_link(j2.node_id, sink.node_id)
 
     def test_junction_can_have_more_than_two_connections(self) -> None:
         scene = CanvasScene()

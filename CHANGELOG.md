@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.6.59] — 2026-08-23
+
+### Fix: three correctness bugs found in full codebase audit
+
+**Bug 1 — `temperature_c or T_init` treats 0 °C as falsy (all thermal solvers)**
+In `steady_non_isothermal_incompressible`, `steady_compressible`, `steady_black_oil`,
+`steady_compositional`, and `base.py`, the pattern `node.temperature_c or T_init`
+evaluates `0.0 or T_init = T_init` whenever a node's temperature reaches exactly 0 °C.
+The solver would then apply relaxation relative to the wrong baseline and never declare
+convergence.  Fixed by replacing every occurrence with an explicit `is not None` guard.
+
+**Bug 2 — GUI model allowed a second link on source/sink nodes**
+`CanvasScene._validate_link_capacity` raised only when a source/sink already had ≥ 2
+connections, meaning the second link could be added without error.  The hydraulic solver
+requires exactly one link per source/sink.  Fixed: the guard now raises when ≥ 1
+connection exists, consistent with the solver-side validation added in v1.6.53.
+Tests updated accordingly.
+
+**Bug 3 — `MinorLossModel` divided by zero for K = ∞ presets**
+The `swing_check_backward_flow` fitting preset uses K = `float("inf")`.
+`calculate_velocity` would call `math.sqrt(ΔP / (∞ × ρ)) = 0` silently, but
+`calculate_coupling` returned `−2A / (∞ × |v|) = NaN` if |v| was also 0.
+Fixed: explicit `math.isinf(K)` guards in both methods return 0.0 velocity and
+a near-zero (but finite) coupling coefficient (`−A / K_MAX`).
+
 ## [1.6.58] — 2026-08-22
 
 ### Fix: compositional looped network diverges with global num_segments > 1

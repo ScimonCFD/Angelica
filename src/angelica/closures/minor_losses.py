@@ -5,6 +5,9 @@ import math
 from .pressure_drop import PressureDropCorrelation
 
 
+_K_MAX = 1.0e9  # sentinel for K=∞ presets (e.g. closed check valve)
+
+
 class MinorLossModel(PressureDropCorrelation):
     def calculate_velocity(
         self,
@@ -14,14 +17,18 @@ class MinorLossModel(PressureDropCorrelation):
         viscosity: float,
         tolerance: float | None = None,
     ) -> float:
-        loss_coefficient = link_state.component.loss_coefficient
+        K = link_state.component.loss_coefficient
+        if math.isinf(K):
+            return 0.0
         if delta_p > 0.0:
-            return math.sqrt(2.0 * delta_p / (loss_coefficient * density))
-        return -math.sqrt(-2.0 * delta_p / (loss_coefficient * density))
+            return math.sqrt(2.0 * delta_p / (K * density))
+        return -math.sqrt(-2.0 * delta_p / (K * density))
 
     def calculate_coupling(self, link_state, density: float, viscosity: float) -> float:
+        K = link_state.component.loss_coefficient
+        if math.isinf(K):
+            return -link_state.area_m2 / _K_MAX  # near-zero coupling — effectively blocked
         return -2.0 * link_state.area_m2 / (
-            link_state.component.loss_coefficient
-            * max(abs(link_state.velocity_m_per_s), 1e-12)
+            K * max(abs(link_state.velocity_m_per_s), 1e-12)
         )
 

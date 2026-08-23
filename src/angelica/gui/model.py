@@ -329,7 +329,9 @@ class CanvasScene:
     def _validate_link_capacity(self, node: CanvasNode) -> None:
         if node.node_type not in {"source", "sink"}:
             return
-        if self.connection_count(node.node_id) >= 2:
+        if self.connection_count(node.node_id) >= 1:
             raise ValueError(
-                f"{node.node_type.capitalize()} #{node.node_id} cannot have more than two connections."
+                f"{node.node_type.capitalize()} #{node.node_id} already has a connection. "
+                "Sources and sinks must connect to exactly one link — "
+                "use a junction node to split or merge flows."
             )

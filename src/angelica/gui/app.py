@@ -3753,7 +3753,8 @@ class NetSimGui:
         W = int(canvas.winfo_width() or 700)
         H = int(canvas.winfo_height() or 440)
 
-        ML, MR, MT, MB = 75, 24, 44, 55
+        # Extra bottom margin for out-of-bounds operating condition annotations
+        ML, MR, MT, MB = 75, 24, 44, 70
         plot_w = W - ML - MR
         plot_h = H - MT - MB
 
@@ -3777,19 +3778,16 @@ class NetSimGui:
         def _to_bar(P_Pa: float) -> float:
             return P_Pa / 1.0e5
 
-        all_T = [_to_C(t) for t, _ in bubble_pts + dew_pts]
-        all_P = [_to_bar(p) for _, p in bubble_pts + dew_pts]
+        # ── axis bounds: derived from the ENVELOPE only, not operating points ──
+        env_T = [_to_C(t) for t, _ in bubble_pts + dew_pts]
+        env_P = [_to_bar(p) for _, p in bubble_pts + dew_pts]
 
-        if op_points:
-            all_T += [_to_C(t) for t, _ in op_points]
-            all_P += [_to_bar(p) for _, p in op_points]
-
-        T_pad = max((max(all_T) - min(all_T)) * 0.07, 5.0)
-        P_pad = max(max(all_P) * 0.10, 1.0)
-        T_min_d = min(all_T) - T_pad
-        T_max_d = max(all_T) + T_pad
+        T_pad = max((max(env_T) - min(env_T)) * 0.08, 5.0)
+        P_pad = max(max(env_P) * 0.12, 1.0)
+        T_min_d = min(env_T) - T_pad
+        T_max_d = max(env_T) + T_pad
         P_min_d = 0.0
-        P_max_d = max(all_P) + P_pad
+        P_max_d = max(env_P) + P_pad
 
         T_span = T_max_d - T_min_d or 1.0
         P_span = P_max_d - P_min_d or 1.0
@@ -3799,6 +3797,9 @@ class NetSimGui:
 
         def _cy(P_b: float) -> float:
             return MT + plot_h - (P_b - P_min_d) / P_span * plot_h
+
+        def _in_bounds(T_C: float, P_b: float) -> bool:
+            return T_min_d <= T_C <= T_max_d and P_min_d <= P_b <= P_max_d
 
         # Plot border
         canvas.create_rectangle(
@@ -3832,8 +3833,8 @@ class NetSimGui:
 
         # Axis labels
         canvas.create_text(
-            ML + plot_w // 2, MT + plot_h + 40,
-            text="Temperature (°C)", anchor="s",
+            ML + plot_w // 2, MT + plot_h + 22,
+            text="Temperature (°C)", anchor="n",
             font=("TkDefaultFont", 9), fill=self._t["plot_text"],
         )
         canvas.create_text(
@@ -3862,7 +3863,7 @@ class NetSimGui:
         # Pseudo-critical point marker
         Tc_C = _to_C(Tc_K)
         Pc_b = _to_bar(Pc_Pa)
-        if T_min_d <= Tc_C <= T_max_d and 0 <= Pc_b <= P_max_d:
+        if _in_bounds(Tc_C, Pc_b):
             cx, cy = _cx(Tc_C), _cy(Pc_b)
             r = 5
             canvas.create_oval(cx - r, cy - r, cx + r, cy + r,
@@ -3871,28 +3872,45 @@ class NetSimGui:
                                 text=f"Tc≈{Tc_C:.0f}°C  Pc≈{Pc_b:.0f} bar",
                                 font=("TkDefaultFont", 8), fill="#9b59b6")
 
-        # Operating condition points
+        # Operating condition points — split into in-bounds (dots) and out-of-bounds (text)
         op_color = "#e69c00"
-        op_labels = ["inlet", "outlet"]
+        op_labels = ["Inlet", "Outlet"]
+        out_of_bounds_notes: list[str] = []
+        has_inbounds_op = False
+
         if op_points:
             for idx, (T_K, P_Pa) in enumerate(op_points):
-                xp = _cx(_to_C(T_K))
-                yp = _cy(_to_bar(P_Pa))
-                r = 5
-                canvas.create_oval(xp - r, yp - r, xp + r, yp + r,
-                                   fill=op_color, outline=self._t["plot_axis"])
-                lbl = op_labels[idx] if idx < len(op_labels) else f"pt{idx+1}"
-                canvas.create_text(xp + 7, yp, anchor="w",
-                                   text=lbl, font=("TkDefaultFont", 8), fill=op_color)
+                T_op = _to_C(T_K)
+                P_op = _to_bar(P_Pa)
+                lbl = op_labels[idx] if idx < len(op_labels) else f"Pt{idx + 1}"
+                if _in_bounds(T_op, P_op):
+                    has_inbounds_op = True
+                    xp, yp = _cx(T_op), _cy(P_op)
+                    r = 5
+                    canvas.create_oval(xp - r, yp - r, xp + r, yp + r,
+                                       fill=op_color, outline=self._t["plot_axis"])
+                    canvas.create_text(xp + 7, yp, anchor="w",
+                                       text=lbl.lower(), font=("TkDefaultFont", 8), fill=op_color)
+                else:
+                    # Determine region for annotation
+                    if T_op > T_max_d and P_op > Pc_b:
+                        region = "supercritical"
+                    elif T_op > T_max_d:
+                        region = "above Tc (vapor)"
+                    elif P_op > P_max_d:
+                        region = "high-P region"
+                    else:
+                        region = "outside envelope"
+                    out_of_bounds_notes.append(f"{lbl}: {T_op:.1f} °C, {P_op:.1f} bar — {region}")
 
         # Legend
-        legend: list[tuple[str, str, tuple]] = []
+        legend: list[tuple[str, str, "tuple | None"]] = []
         if bubble_pts:
             legend.append(("Bubble curve", bubble_color, ()))
         if dew_pts:
             legend.append(("Dew curve", dew_color, (6, 3)))
-        if op_points:
-            legend.append(("Operating point", op_color, None))  # type: ignore[arg-type]
+        if has_inbounds_op:
+            legend.append(("Operating point", op_color, None))
 
         lx, ly = ML + 10, MT + 10
         for lbl_text, color, dash in legend:
@@ -3905,6 +3923,17 @@ class NetSimGui:
             canvas.create_text(lx + 27, ly + 6, text=lbl_text, anchor="w",
                                 font=("TkDefaultFont", 9), fill=self._t["plot_text"])
             ly += 20
+
+        # Out-of-bounds operating conditions — listed below the x-axis label
+        if out_of_bounds_notes:
+            note_y = MT + plot_h + 38
+            for note in out_of_bounds_notes:
+                canvas.create_text(
+                    ML + plot_w // 2, note_y,
+                    text=note, anchor="n",
+                    font=("TkDefaultFont", 8), fill=op_color,
+                )
+                note_y += 14
 
         # Composition subtitle (top of plot)
         comp_parts = [f"{n} ({z:.2f})" for n, z in zip(component_names, zs)]
