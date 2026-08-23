@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.65] — 2026-08-23
+
+### Feature: X markers and critical-point indicator on phase envelope plot
+
+The phase envelope dialog now shows:
+- **X markers** at every computed data point on both the bubble curve (blue)
+  and the dew curve (red), making it visible how densely the flash calculations
+  sampled the envelope and where interpolated fill points were inserted near
+  the critical region.
+- **Large yellow circle** at the critical closing point where the bubble and
+  dew curves meet, clearly identifying the mixture critical point.
+- The critical point is also listed in the plot legend.
+
 ## [1.6.64] — 2026-08-23
 
 ### Fix: phase envelope closing cliff for heavier gas compositions

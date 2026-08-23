@@ -3860,6 +3860,34 @@ class NetSimGui:
                 canvas.create_line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1],
                                    fill=dew_color, width=2, dash=(6, 3))
 
+        # X markers at every computed data point
+        r_x = 4
+        for t, p in bubble_pts:
+            mx, my = _cx(_to_C(t)), _cy(_to_bar(p))
+            canvas.create_line(mx - r_x, my - r_x, mx + r_x, my + r_x,
+                                fill=bubble_color, width=1.5)
+            canvas.create_line(mx - r_x, my + r_x, mx + r_x, my - r_x,
+                                fill=bubble_color, width=1.5)
+        for t, p in dew_pts:
+            mx, my = _cx(_to_C(t)), _cy(_to_bar(p))
+            canvas.create_line(mx - r_x, my - r_x, mx + r_x, my + r_x,
+                                fill=dew_color, width=1.5)
+            canvas.create_line(mx - r_x, my + r_x, mx + r_x, my - r_x,
+                                fill=dew_color, width=1.5)
+
+        # Large yellow critical-point marker at the closing point
+        crit_color = "#f0c000"
+        envelope_has_critical = (
+            bool(bubble_pts) and bool(dew_pts)
+            and bubble_pts[-1] == dew_pts[-1]
+        )
+        if envelope_has_critical:
+            T_cp, P_cp = bubble_pts[-1]
+            cp_x, cp_y = _cx(_to_C(T_cp)), _cy(_to_bar(P_cp))
+            r_cp = 8
+            canvas.create_oval(cp_x - r_cp, cp_y - r_cp, cp_x + r_cp, cp_y + r_cp,
+                                fill=crit_color, outline="#b08800", width=2)
+
         # Pseudo-critical point marker
         Tc_C = _to_C(Tc_K)
         Pc_b = _to_bar(Pc_Pa)
@@ -3909,6 +3937,8 @@ class NetSimGui:
             legend.append(("Bubble curve", bubble_color, ()))
         if dew_pts:
             legend.append(("Dew curve", dew_color, (6, 3)))
+        if envelope_has_critical:
+            legend.append(("Critical point", crit_color, None))
         if has_inbounds_op:
             legend.append(("Operating point", op_color, None))
 
