@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.6.60] — 2026-08-23
+
+### Fix: phase envelope not closed + switch to direct bubble/dew flash
+
+**Root cause — envelope open at the critical point**
+The previous algorithm stopped at `T_hi = Tc × 0.97` (97 % of the
+mole-fraction-weighted pseudo-critical temperature).  For multicomponent
+mixtures the true mixture critical temperature differs from the pseudo-critical
+value, and at 97 % Tc the bubble-point and dew-point curves had not yet
+converged, leaving the right side of the P-T envelope open.
+
+**Fix 1 — direct TVF flash instead of binary search**
+`_bubble(T)` now calls `Mixture(names, zs=zs, T=T, VF=0)` and `_dew(T)`
+calls `Mixture(names, zs=zs, T=T, VF=1)`.  thermo resolves these with the
+same Newton/Michelsen-style iteration used by commercial simulators (HYSYS,
+UniSim).  The old VF-threshold binary search is kept as a silent fallback for
+older thermo builds.
+
+**Fix 2 — closing bisection to find the critical point**
+The temperature scan now extends to `Tc × 1.03`.  During the scan, if
+`|P_bub − P_dew| / max(P_bub, P_dew) < 3 %` the loop closes immediately
+with a shared point.  If the scan ends without convergence, a 16-step
+bisection above the last scan temperature refines the critical point to the
+same 3 % tolerance.  The result is a fully closed P-T envelope regardless
+of mixture composition.
+
 ## [1.6.59] — 2026-08-23
 
 ### Fix: three correctness bugs found in full codebase audit
