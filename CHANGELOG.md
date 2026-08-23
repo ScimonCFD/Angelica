@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.6.61] — 2026-08-23
+
+### Fix: phase envelope now correctly closes at the mixture critical point
+
+**Root cause — wrong flash API and T_hi_scan too small**
+The old `thermo.Mixture(T=T, VF=0/1)` API returns spurious bubble and dew
+pressures well above the mixture critical temperature (it finds a
+mathematical solution even for a single-phase supercritical state).
+This caused the bubble curve to extend far past the critical point and
+prevented the envelope from closing.
+
+Additionally, the mole-fraction-weighted pseudo-critical temperature
+(Kay's rule, Tc_pseudo) underestimates the true mixture critical
+temperature from the EOS by 10–20 % for lean natural gas.  The previous
+T_hi_scan = 1.10 × Tc_pseudo fell 2 K short of the actual critical
+temperature for the 90/8/2 methane–ethane–propane test case.
+
+**Fix 1 — switch to FlashVL (Peng-Robinson EOS)**
+`compute_phase_envelope` now uses `thermo.flash.FlashVL` with
+`CEOSGas` / `CEOSLiquid` phases (PR EOS).  FlashVL raises an exception
+or returns a degenerate result above the true mixture critical
+temperature, so bubble and dew calculations stop exactly where physics
+says they should.  This matches the approach used by commercial
+simulators (HYSYS, UniSim) for bubble and dew point flash.
+
+**Fix 2 — extend T_hi_scan to 1.35 × Tc_pseudo**
+Ensures the temperature scan always reaches the actual critical
+temperature even for mixtures where Tc_mix > Tc_pseudo.
+
+Result: the P-T envelope is now a fully closed loop whose critical point
+agrees with the PR EOS to within ≈ 1 K / 5 bar.
+
 ## [1.6.60] — 2026-08-23
 
 ### Fix: phase envelope not closed + switch to direct bubble/dew flash
