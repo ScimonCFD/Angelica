@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.6.64] — 2026-08-23
+
+### Fix: phase envelope closing cliff for heavier gas compositions
+
+For mixtures with higher C2+/C3+ content (e.g. 70/20/10 CH4/C2H6/C3H8), the
+bubble curve had a ~40 bar cliff at the last half-kelvin before the critical
+point.  The hot_start flash algorithm snapped from the physical retrograde
+solution (~80 bar) directly to the trivial K_i→1 solution (~39 bar) in a
+single 0.5 K step, causing a near-vertical line at the nose of the envelope.
+
+The fix introduces **square-root interpolation** at every closure point (both
+clean-close and force-close) when the last accepted bubble pressure exceeds the
+closing pressure by more than 30 %.  The interpolation uses the scaling:
+
+    P(T) = P_close + (P_last − P_close) × [(T_close − T) / (T_close − T_last)]^0.5
+
+This matches the mean-field critical exponent (β = 0.5) of cubic EOS near the
+critical point, giving a physically shaped closing nose instead of a cliff.
+Eight interpolated points are inserted between the last accepted bubble value
+and the closing point.
+
+The fix applies to all compositions; for lighter mixtures (e.g. 90/8/2) where
+the last step is already small, the threshold is not met and no interpolation
+is added.
+
 ## [1.6.63] — 2026-08-23
 
 ### Fix: eliminate near-vertical cliff in phase envelope bubble curve

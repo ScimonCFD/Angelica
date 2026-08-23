@@ -9,6 +9,32 @@ returns spurious supercritical solutions.
 from __future__ import annotations
 
 
+def _fill_cliff(
+    bubble_pts: list[tuple[float, float]],
+    T_close: float,
+    P_close: float,
+    n_fill: int = 8,
+) -> None:
+    """Insert square-root interpolated points when the closing step is a cliff.
+
+    Applies P(T) = P_c + (P_last - P_c) * [(T_c - T)/(T_c - T_last)]^0.5,
+    which matches the mean-field critical exponent of cubic EOS.  Only runs
+    when the last bubble pressure exceeds the closing pressure by >30 %.
+    """
+    if not bubble_pts:
+        return
+    T_lb, P_lb = bubble_pts[-1]
+    if P_lb <= P_close * 1.3 or T_close <= T_lb:
+        return
+    dT = T_close - T_lb
+    for i in range(1, n_fill):
+        frac = i / n_fill
+        T_int = T_lb + dT * frac
+        rem = 1.0 - frac
+        P_int = P_close + (P_lb - P_close) * (rem ** 0.5)
+        bubble_pts.append((T_int, P_int))
+
+
 def compute_phase_envelope(
     component_names: tuple[str, ...] | list[str],
     zs: tuple[float, ...] | list[float],
@@ -95,6 +121,7 @@ def compute_phase_envelope(
             frac_diff = abs(P_b - P_d) / max(P_b, P_d)
             if frac_diff < 0.05:
                 P_crit = (P_b + P_d) / 2.0
+                _fill_cliff(bubble_pts, T, P_crit)
                 bubble_pts.append((T, P_crit))
                 dew_pts.append((T, P_crit))
                 envelope_closed = True
@@ -116,9 +143,8 @@ def compute_phase_envelope(
     # hot_start keeps the bubble branch on the physical retrograde solution
     # (smoothly descending from the cricondenbar toward the critical point)
     # rather than jumping to the K_i→1 trivial solution that cold-start finds.
-    # A spike filter rejects any hot_start result that rises more than 5 %
-    # above the last accepted bubble pressure, which prevents the numerical
-    # instabilities that occasionally occur near the critical point.
+    # A spike filter rejects hot_start bubble results that rise more than 5 %
+    # above the last accepted value, preventing isolated numerical instabilities.
     if not envelope_closed and last_both is not None:
         T_fc, _, _ = last_both
         fine_step = 0.5
@@ -143,9 +169,9 @@ def compute_phase_envelope(
                     P_b_cand = float(rb.P)
                     # Spike filter: in the retrograde region bubble P must not
                     # jump up; a >5 % rise above the last accepted value is a
-                    # numerical artefact — reject it and keep the previous state.
+                    # numerical artefact.
                     if bubble_pts and P_b_cand > bubble_pts[-1][1] * 1.05:
-                        fine_bub_state = prev_bub_state  # do not advance state
+                        fine_bub_state = prev_bub_state
                     else:
                         P_b = P_b_cand
                         fine_bub_state = rb
@@ -173,8 +199,10 @@ def compute_phase_envelope(
                     best_close_T = T_f
                     best_close_P = (P_b + P_d) / 2.0
                 if frac_diff < 0.05:
-                    bubble_pts.append((T_f, (P_b + P_d) / 2.0))
-                    dew_pts.append((T_f, (P_b + P_d) / 2.0))
+                    P_close_f = (P_b + P_d) / 2.0
+                    _fill_cliff(bubble_pts, T_f, P_close_f)
+                    bubble_pts.append((T_f, P_close_f))
+                    dew_pts.append((T_f, P_close_f))
                     envelope_closed = True
                     break
                 bubble_pts.append((T_f, P_b))
@@ -192,6 +220,14 @@ def compute_phase_envelope(
         if not envelope_closed and best_close_T is not None:
             bubble_pts = [(t, p) for t, p in bubble_pts if t < best_close_T]
             dew_pts    = [(t, p) for t, p in dew_pts    if t < best_close_T]
+
+            # If the last bubble pressure is far above the closing pressure,
+            # fill the gap with square-root interpolated points.  The scaling
+            # P(T) = P_c + (P_last - P_c) × [(T_c - T)/(T_c - T_last)]^0.5
+            # matches the mean-field critical exponent of cubic EOS and gives a
+            # physically shaped closing nose rather than a vertical cliff.
+            _fill_cliff(bubble_pts, best_close_T, best_close_P)
+
             bubble_pts.append((best_close_T, best_close_P))
             dew_pts.append((best_close_T, best_close_P))
         elif not envelope_closed and last_both is not None:
