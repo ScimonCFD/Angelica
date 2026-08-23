@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.6.62] — 2026-08-23
+
+### Fix: phase envelope bubble curve filled in near critical point
+
+The bubble curve had a visible straight-line segment from the cricondenbar
+region (~220 K, ~64 bar) to the closing point (~224 K, ~41 bar) because the
+coarse temperature scan (step ≈ 6.7 K) jumped over the 2 K critical closure
+region entirely.
+
+The closing strategy has been rewritten from a 3-iteration bisection (which
+evaluated only at widely spaced temperatures and could not fill in
+intermediate points) to a **0.1 K fine scan** that steps forward from the
+last coarse-scan temperature.  This adds ~14 physically correct intermediate
+points on the bubble curve (all at ~63–64 bar, the cricondenbar region)
+before the envelope closes at the numerical critical temperature.  The dew
+curve is also filled in identically, giving a smooth closed loop with no
+visible straight-line artifacts.
+
 ## [1.6.61] — 2026-08-23
 
 ### Fix: phase envelope now correctly closes at the mixture critical point

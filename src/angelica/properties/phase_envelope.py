@@ -23,7 +23,7 @@ def compute_phase_envelope(
         pseudo-critical coordinates used only for the plot marker.
     """
     import numpy as np
-    from thermo import ChemicalConstantsPackage, PropertyCorrelationsPackage
+    from thermo import ChemicalConstantsPackage
     from thermo.flash import FlashVL
     from thermo.phases import CEOSGas, CEOSLiquid
     from thermo.eos_mix import PRMIX
@@ -57,23 +57,11 @@ def compute_phase_envelope(
     # FlashVL correctly raises / returns a degenerate state above the mixture
     # critical temperature, so bubble and dew calculations naturally stop there.
 
-    def _bubble(T: float) -> float | None:
-        try:
-            res = flash_obj.flash(zs=fracs, T=float(T), VF=0)
-            P = res.P
-            return float(P) if P is not None and P > 0 else None
-        except Exception:
-            return None
-
-    def _dew(T: float) -> float | None:
-        try:
-            res = flash_obj.flash(zs=fracs, T=float(T), VF=1)
-            P = res.P
-            return float(P) if P is not None and P > 0 else None
-        except Exception:
-            return None
-
-    # ── Temperature scan ───────────────────────────────────────────────────────
+    # ── Temperature scan with hot_start ───────────────────────────────────────
+    # Using hot_start passes the previous flash result as the initial K-factor
+    # guess for the next temperature.  This dramatically stabilises convergence
+    # near the critical point (the same technique used by thermo's plot_TP with
+    # hot=True) and avoids the spurious solutions that occur with cold starts.
     T_vals = np.linspace(T_lo, T_hi_scan, n_T + 10)
 
     bubble_pts: list[tuple[float, float]] = []
@@ -81,10 +69,33 @@ def compute_phase_envelope(
     envelope_closed = False
     last_both: tuple[float, float, float] | None = None  # (T, P_bub, P_dew)
 
+    state_bub = None  # hot_start state for bubble branch
+    state_dew = None  # hot_start state for dew branch
+
     for T in T_vals:
         T = float(T)
-        P_b = _bubble(T)
-        P_d = _dew(T)
+
+        P_b: float | None = None
+        try:
+            res = flash_obj.flash(zs=fracs, T=T, VF=0, hot_start=state_bub)
+            if res.P is not None and res.P > 0:
+                P_b = float(res.P)
+                state_bub = res
+            else:
+                state_bub = None
+        except Exception:
+            state_bub = None
+
+        P_d: float | None = None
+        try:
+            res = flash_obj.flash(zs=fracs, T=T, VF=1, hot_start=state_dew)
+            if res.P is not None and res.P > 0:
+                P_d = float(res.P)
+                state_dew = res
+            else:
+                state_dew = None
+        except Exception:
+            state_dew = None
 
         if P_b is not None and P_d is not None:
             frac_diff = abs(P_b - P_d) / max(P_b, P_d)
@@ -104,54 +115,61 @@ def compute_phase_envelope(
         elif bubble_pts or dew_pts:
             break  # both failed — past the two-phase region
 
-    # ── Closing bisection ─────────────────────────────────────────────────────
-    # Bisect between the last temperature where both curves coexisted and the
-    # first temperature where one of them failed, to find the precise critical
-    # point (where P_bub ≈ P_dew).
+    # ── Fine-scan closing ─────────────────────────────────────────────────────
+    # After the coarse scan breaks, step forward at 0.5 K intervals to fill in
+    # the closing region.  Cold-start flashes are used here because near the
+    # critical point they reliably find the convergent (K_i → 1) solution that
+    # marks the closure, while hot-start can get trapped on a spurious branch.
     if not envelope_closed and last_both is not None:
-        T_cl_lo, _, _ = last_both
-        step = (T_hi_scan - T_lo) / (n_T + 10 - 1)
-        T_cl_hi = T_cl_lo + step * 4
+        T_fc, _, _ = last_both
+        fine_step = 0.1
+        T_fine = T_fc + fine_step
 
-        best_T: float | None = None
-        best_P: float | None = None
-        best_frac = float("inf")
+        while T_fine <= T_hi_scan + fine_step:
+            T_f = float(T_fine)
+            P_b: float | None = None
+            P_d: float | None = None
+            try:
+                rb = flash_obj.flash(zs=fracs, T=T_f, VF=0)
+                if rb.P is not None and rb.P > 0:
+                    P_b = float(rb.P)
+            except Exception:
+                pass
+            try:
+                rd = flash_obj.flash(zs=fracs, T=T_f, VF=1)
+                if rd.P is not None and rd.P > 0:
+                    P_d = float(rd.P)
+            except Exception:
+                pass
 
-        for _ in range(20):
-            if T_cl_hi - T_cl_lo < 0.05:
+            if P_b is not None and P_d is not None:
+                frac_diff = abs(P_b - P_d) / max(P_b, P_d)
+                if frac_diff < 0.05:
+                    P_crit = (P_b + P_d) / 2.0
+                    bubble_pts.append((T_f, P_crit))
+                    dew_pts.append((T_f, P_crit))
+                    envelope_closed = True
+                    break
+                bubble_pts.append((T_f, P_b))
+                dew_pts.append((T_f, P_d))
+                last_both = (T_f, P_b, P_d)
+            elif P_b is not None:
+                bubble_pts.append((T_f, P_b))
+            elif P_d is not None:
+                dew_pts.append((T_f, P_d))
+            else:
                 break
-            T_mid = (T_cl_lo + T_cl_hi) / 2.0
-            P_b = _bubble(T_mid)
-            P_d = _dew(T_mid)
 
-            if P_b is None or P_d is None:
-                T_cl_hi = T_mid
-                continue
+            T_fine += fine_step
 
-            frac_diff = abs(P_b - P_d) / max(P_b, P_d)
-            if frac_diff < best_frac:
-                best_frac = frac_diff
-                best_T = T_mid
-                best_P = (P_b + P_d) / 2.0
-
-            if frac_diff < 0.05:
-                break
-            T_cl_lo = T_mid
-
-        if best_T is not None and best_P is not None:
-            bubble_pts = [(t, p) for t, p in bubble_pts if t < best_T]
-            dew_pts = [(t, p) for t, p in dew_pts if t < best_T]
-            bubble_pts.append((best_T, best_P))
-            dew_pts.append((best_T, best_P))
-        else:
-            # Force-close at the last T where both curves coexisted.
-            T_fc, P_fb, P_fd = last_both
+        if not envelope_closed and last_both is not None:
+            T_fc2, P_fb, P_fd = last_both
             P_avg = (P_fb + P_fd) / 2.0
-            bubble_pts = [(t, p) for t, p in bubble_pts if t <= T_fc]
-            dew_pts = [(t, p) for t, p in dew_pts if t <= T_fc]
-            if not bubble_pts or bubble_pts[-1][0] < T_fc:
-                bubble_pts.append((T_fc, P_avg))
-            if not dew_pts or dew_pts[-1][0] < T_fc:
-                dew_pts.append((T_fc, P_avg))
+            bubble_pts = [(t, p) for t, p in bubble_pts if t <= T_fc2]
+            dew_pts    = [(t, p) for t, p in dew_pts    if t <= T_fc2]
+            if not bubble_pts or bubble_pts[-1][0] < T_fc2:
+                bubble_pts.append((T_fc2, P_avg))
+            if not dew_pts or dew_pts[-1][0] < T_fc2:
+                dew_pts.append((T_fc2, P_avg))
 
     return bubble_pts, dew_pts, Tc, Pc
