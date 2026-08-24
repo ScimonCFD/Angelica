@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.6.68] — 2026-08-24
+
+### Fix: phase envelope fine scan bubble regression for lean gas mixtures (90/8/2)
+
+v1.6.67 changed the fine scan to use cold-start first for **both** bubble and
+dew.  For lean compositions (e.g. 90/8/2 CH4/C2H6/C3H8) this caused the cold-
+start dew flash to return a lower pressure than the physical hot-start value,
+which pushed the apparent closure point from −48 °C / 51 bar down to
+−48 °C / 45 bar and made the retrograde nose steeper than it should be.
+
+**Root cause**: cold-start (Wilson-correlation initial guess) for the dew flash
+near the critical converges to a different branch than hot-start in lean
+mixtures where the EOS has a shallow energy landscape.  The physical ascending
+dew branch is found reliably only by hot-starting from the previous dew state.
+
+**Fix**: the fine scan now applies hot-start snap-detection **only to the bubble
+flash**.  At each step, both a hot-start and a cold-start bubble flash are
+attempted; cold-start is accepted only when its result exceeds the hot-start
+result by more than 30 % (ratio > 1.3), which is the signature of a trivial
+K_i → 1 snap.  The dew flash reverts to hot-start only, which tracks the
+physical ascending branch in all tested compositions.
+
+This preserves the 70/20/10 fix from v1.6.67 (trivial snap is still detected
+by the 30 % ratio threshold) while restoring the lean-gas critical point.
+Both 90/8/2 (−48 °C / 51 bar) and 70/20/10 (−2 °C / 64 bar) are now correct.
+
 ## [1.6.67] — 2026-08-24
 
 ### Fix: phase envelope fine scan now finds the true critical point for rich gas mixtures

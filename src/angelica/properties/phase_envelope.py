@@ -164,56 +164,65 @@ def compute_phase_envelope(
         while T_fine <= T_hi_scan + fine_step:
             T_f = float(T_fine)
 
-            # ── bubble: cold-start first, hot-start fallback ────────────────
+            # ── bubble: hot-start + cold-start snap-detection ───────────────
+            # Try hot-start first (normal behavior).  If the result is much
+            # lower than a simultaneous cold-start (ratio cold/hot > 1.3), the
+            # hot-start snapped to a trivial K_i→1 solution; in that case use
+            # the cold-start result instead and continue on the physical branch.
             P_b: float | None = None
             prev_bub_state = fine_bub_state
+            P_b_hot: float | None = None
+            rb_h_saved = None
+            try:
+                rb_h = flash_obj.flash(zs=fracs, T=T_f, VF=0, hot_start=prev_bub_state)
+                if rb_h.P is not None and rb_h.P > 0:
+                    P_b_hot = float(rb_h.P)
+                    rb_h_saved = rb_h
+            except Exception:
+                pass
+
+            P_b_cold: float | None = None
+            rb_c_saved = None
             try:
                 rb_c = flash_obj.flash(zs=fracs, T=T_f, VF=0)
                 if rb_c.P is not None and rb_c.P > 0:
-                    P_b_cand = float(rb_c.P)
-                    last_bP = bubble_pts[-1][1] if bubble_pts else None
-                    no_spike = last_bP is None or P_b_cand <= last_bP * 1.05
-                    no_crash = last_bP is None or P_b_cand >= last_bP * 0.70
-                    if no_spike and no_crash:
-                        P_b = P_b_cand
-                        fine_bub_state = rb_c
+                    P_b_cold = float(rb_c.P)
+                    rb_c_saved = rb_c
             except Exception:
                 pass
-            if P_b is None:
-                try:
-                    rb_h = flash_obj.flash(zs=fracs, T=T_f, VF=0, hot_start=prev_bub_state)
-                    if rb_h.P is not None and rb_h.P > 0:
-                        P_b_cand = float(rb_h.P)
-                        if bubble_pts and P_b_cand > bubble_pts[-1][1] * 1.05:
-                            fine_bub_state = prev_bub_state
-                        else:
-                            P_b = P_b_cand
-                            fine_bub_state = rb_h
-                    else:
-                        fine_bub_state = None
-                except Exception:
-                    fine_bub_state = None
 
-            # ── dew: cold-start first, hot-start fallback ───────────────────
+            # Prefer cold-start when it finds a much higher P (snap detected)
+            if P_b_cold is not None and (
+                P_b_hot is None or P_b_cold > P_b_hot * 1.3
+            ):
+                P_b_cand = P_b_cold
+                rb_chosen = rb_c_saved
+            elif P_b_hot is not None:
+                P_b_cand = P_b_hot
+                rb_chosen = rb_h_saved
+            else:
+                P_b_cand = None
+                rb_chosen = None
+
+            if P_b_cand is not None and rb_chosen is not None:
+                last_bP = bubble_pts[-1][1] if bubble_pts else None
+                if last_bP is None or P_b_cand <= last_bP * 1.05:
+                    P_b = P_b_cand
+                    fine_bub_state = rb_chosen
+                else:
+                    fine_bub_state = prev_bub_state  # spike: keep previous state
+
+            # ── dew: hot-start (ascending branch is stable, no trivial snap) ───
             P_d: float | None = None
-            prev_dew_state = fine_dew_state
             try:
-                rd_c = flash_obj.flash(zs=fracs, T=T_f, VF=1)
-                if rd_c.P is not None and rd_c.P > 0:
-                    P_d = float(rd_c.P)
-                    fine_dew_state = rd_c
-            except Exception:
-                pass
-            if P_d is None:
-                try:
-                    rd_h = flash_obj.flash(zs=fracs, T=T_f, VF=1, hot_start=prev_dew_state)
-                    if rd_h.P is not None and rd_h.P > 0:
-                        P_d = float(rd_h.P)
-                        fine_dew_state = rd_h
-                    else:
-                        fine_dew_state = None
-                except Exception:
+                rd = flash_obj.flash(zs=fracs, T=T_f, VF=1, hot_start=fine_dew_state)
+                if rd.P is not None and rd.P > 0:
+                    P_d = float(rd.P)
+                    fine_dew_state = rd
+                else:
                     fine_dew_state = None
+            except Exception:
+                fine_dew_state = None
 
             if P_b is not None and P_d is not None:
                 frac_diff = abs(P_b - P_d) / max(P_b, P_d)
