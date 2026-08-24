@@ -3860,9 +3860,18 @@ class NetSimGui:
                 canvas.create_line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1],
                                    fill=dew_color, width=2, dash=(6, 3))
 
-        # X markers at every computed data point
+        # X markers on flash-computed data points only.
+        # The retrograde bubble branch (after the cricondenbar) is a synthetic
+        # square-root extrapolation, not real flash points — skip its markers so
+        # the clustered X's don't create a visual spike at the nose.
         r_x = 4
-        for t, p in bubble_pts:
+        peak_b = (
+            max(range(len(bubble_pts) - 1), key=lambda i: bubble_pts[i][1])
+            if len(bubble_pts) > 1 else 0
+        )
+        for j, (t, p) in enumerate(bubble_pts):
+            if j > peak_b:
+                break  # retrograde section: no X markers
             mx, my = _cx(_to_C(t)), _cy(_to_bar(p))
             canvas.create_line(mx - r_x, my - r_x, mx + r_x, my + r_x,
                                 fill=bubble_color, width=1.5)

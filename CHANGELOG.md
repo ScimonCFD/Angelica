@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.6.67] — 2026-08-24
+
+### Fix: phase envelope fine scan now finds the true critical point for rich gas mixtures
+
+The fine scan that closes the phase envelope previously used `hot_start` from
+the last main-scan state.  For richer compositions (e.g. 70/20/10
+CH4/C2H6/C3H8), the K-values at the last main-scan point sit in a basin of
+attraction for the trivial K_i→1 solution: a single 0.5 K `hot_start` step
+snapped the flash to ~39 bar instead of the physical ~80 bar, forcing premature
+closure at −8 °C / 39 bar rather than the true critical at −2 °C / 64 bar.
+
+**Root cause**: at the temperatures covered by the fine scan (just past the last
+main-scan point), `hot_start` from the adjacent main-scan state crosses into
+the attraction basin of the trivial solution.  An independent `cold_start`
+(Wilson-correlation initial guess) at the same temperature finds the physical
+branch (~80 bar) without difficulty.
+
+**Fix**: the fine scan now attempts a `cold_start` flash first for both bubble
+and dew at every step, falling back to `hot_start` only when cold_start fails.
+A spike filter (>5 % upward jump rejected) and a crash filter (>30 % downward
+jump from cold_start rejected in favour of hot_start fallback) prevent spurious
+solutions.  The 70/20/10 critical point is now correctly found at −2 °C / 64 bar
+with a smooth retrograde spanning ~4.5 K from the cricondenbar.
+
+Also: the main scan was changed to cold_start in v1.6.66; this release extends
+the same strategy to the fine scan, completing the fix.
+
 ## [1.6.66] — 2026-08-24
 
 ### Fix: metastable bubble-curve artifact on heavier gas compositions
