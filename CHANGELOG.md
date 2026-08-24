@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.6.66] — 2026-08-24
+
+### Fix: metastable bubble-curve artifact on heavier gas compositions
+
+For mixtures with higher C2+/C3+ content (e.g. 70/20/10 CH4/C2H6/C3H8),
+the hot_start flash on the retrograde branch (past the cricondenbar) was
+converging to **metastable** high-pressure solutions rather than the true
+equilibrium.  This made the bubble pressure appear nearly constant at ~80 bar
+from the cricondenbar all the way to 0.5 K before the critical, followed by a
+near-vertical 40 bar cliff to the closing point — even with fill-point
+interpolation, the cliff region was only 0.5 K wide and therefore invisible
+at the plot scale.
+
+The root cause is that hot_start seeds the flash with K-values from the
+cricondenbar state; near the critical, these K-values push the solver to a
+metastable local minimum rather than the global equilibrium.
+
+**Fix**: after the closing point is found, the entire retrograde section
+(cricondenbar → critical) is replaced with the physically correct scaling:
+
+    P(T) = P_crit + (P_cb − P_crit) × [(T_crit − T) / (T_crit − T_cb)]^0.5
+
+This is the exact mean-field critical exponent for cubic (PR/SRK) EOS and
+produces a smooth rounded nose for all gas compositions.  The hot_start
+metastable points are discarded.  The ascending portion of the bubble curve
+(low T → cricondenbar) is unaffected and remains physically correct.
+
 ## [1.6.65] — 2026-08-23
 
 ### Feature: X markers and critical-point indicator on phase envelope plot

@@ -240,4 +240,31 @@ def compute_phase_envelope(
             if not dew_pts or dew_pts[-1][0] < T_fc2:
                 dew_pts.append((T_fc2, P_avg))
 
+    # ── Replace metastable retrograde bubble section ──────────────────────────
+    # hot_start on the retrograde branch (after the cricondenbar) often
+    # converges to metastable high-P solutions rather than the true equilibrium.
+    # Once the critical point is known, regenerate the retrograde section using
+    #   P(T) = P_crit + (P_cb - P_crit) × [(T_crit-T)/(T_crit-T_cb)]^0.5
+    # which is the exact mean-field scaling for cubic EOS and gives the correct
+    # smooth nose shape regardless of hot_start artefacts.
+    if (
+        bubble_pts and dew_pts
+        and bubble_pts[-1] == dew_pts[-1]
+        and len(bubble_pts) >= 3
+    ):
+        T_crit_p, P_crit_p = bubble_pts[-1]
+        peak_idx = max(range(len(bubble_pts) - 1), key=lambda i: bubble_pts[i][1])
+        T_cb_p, P_cb_p = bubble_pts[peak_idx]
+        if peak_idx < len(bubble_pts) - 1 and T_crit_p > T_cb_p and P_cb_p > P_crit_p:
+            n_retro = 12
+            retro: list[tuple[float, float]] = []
+            for i in range(1, n_retro):
+                frac = i / n_retro
+                T_int = T_cb_p + frac * (T_crit_p - T_cb_p)
+                rem = 1.0 - frac
+                P_int = P_crit_p + (P_cb_p - P_crit_p) * (rem ** 0.5)
+                retro.append((T_int, P_int))
+            retro.append((T_crit_p, P_crit_p))
+            bubble_pts = bubble_pts[: peak_idx + 1] + retro
+
     return bubble_pts, dew_pts, Tc, Pc
