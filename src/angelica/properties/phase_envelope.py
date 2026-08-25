@@ -148,7 +148,9 @@ def compute_phase_envelope(
     # follow the true physical retrograde from the cricondenbar to the real
     # critical point (~7–10 K away from the last main-scan point for rich
     # mixtures).  A spike filter rejects any bubble result that rises more
-    # than 5 % above the last accepted value.
+    # than 15 % above the last accepted value; this passes the ±10 % EOS
+    # oscillation near the cricondenbar of lean mixtures while still blocking
+    # >100 % trivial-snap recoveries.
     if not envelope_closed and last_both is not None:
         T_fc, _, _ = last_both
         fine_step = 0.5
@@ -206,7 +208,7 @@ def compute_phase_envelope(
 
             if P_b_cand is not None and rb_chosen is not None:
                 last_bP = bubble_pts[-1][1] if bubble_pts else None
-                if last_bP is None or P_b_cand <= last_bP * 1.05:
+                if last_bP is None or P_b_cand <= last_bP * 1.15:
                     P_b = P_b_cand
                     fine_bub_state = rb_chosen
                 else:

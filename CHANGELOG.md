@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.6.69] — 2026-08-25
+
+### Fix: spike filter threshold widened to restore cricondenbar position for lean gas
+
+The 5 % spike filter introduced in v1.6.68 was too tight for lean compositions
+(e.g. 90/8/2 CH4/C2H6/C3H8).  Near the cricondenbar, the hot-start flash
+exhibits a ±10 % oscillation between adjacent 0.5 K steps (a known feature of
+PR EOS near the stability limit, not a trivial K_i → 1 snap).  The 5 % filter
+rejected the upward half of these oscillations, causing the peak bubble pressure
+to be read from the last main-scan point (~64 bar at −52 °C) rather than the
+true cricondenbar (~68 bar at −49 °C).  This widened the visible retrograde
+shoulder from ~1.5 K to ~4.5 K, giving the bubble curve an unphysical elbow.
+
+**Fix**: the spike filter threshold is raised from 5 % to 15 %.  This passes
+the ±10 % EOS oscillation near the cricondenbar while still blocking >100 %
+trivial-snap recoveries (which are handled by the cold-start snap-detection
+logic anyway).  The 70/20/10 fix (trivial snap detected via cold/hot ratio
+> 1.3) is unaffected because the cold-start bubble values decrease
+monotonically in the retrograde region and never trigger the spike filter.
+
+Result for 90/8/2: cricondenbar −49.3 °C / 67.9 bar, critical −47.8 °C /
+51.4 bar (1.5 K retrograde span — nearly invisible, matching pre-v1.6.67
+appearance).
+
 ## [1.6.68] — 2026-08-24
 
 ### Fix: phase envelope fine scan bubble regression for lean gas mixtures (90/8/2)
