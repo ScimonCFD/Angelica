@@ -417,3 +417,54 @@ def compute_phase_envelope(
             dew_pts[-1] = (T_crit, P_crit)
 
     return bubble_pts, dew_pts, Tc, Pc
+
+
+def compute_quality_line(
+    component_names: "tuple[str, ...] | list[str]",
+    zs: "tuple[float, ...] | list[float]",
+    vf: float,
+) -> "list[tuple[float, float]]":
+    """Compute a constant-vapor-fraction (quality) line inside the phase envelope.
+
+    Returns [(T_K, P_Pa)] ordered from low to high temperature, covering the
+    two-phase region at the given vapor fraction (0 < vf < 1).
+    """
+    import warnings
+
+    warnings.filterwarnings("ignore")
+
+    from thermo import ChemicalConstantsPackage
+    from thermo.flash import FlashVL
+    from thermo.phases import CEOSGas, CEOSLiquid
+    from thermo.eos_mix import PRMIX
+
+    names = list(component_names)
+    fracs = list(zs)
+
+    constants, props = ChemicalConstantsPackage.from_IDs(names)
+    eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas)
+    gas_phase = CEOSGas(PRMIX, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+    liq_phase = CEOSLiquid(PRMIX, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+    flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
+
+    Tbs: list[float] = list(constants.Tbs)
+    Tcs_list: list[float] = list(constants.Tcs)
+    T_lo = max(min(Tbs) * 0.55, 75.0)
+    T_hi = sum(zi * tc for zi, tc in zip(fracs, Tcs_list)) * 1.5
+
+    pts: list[tuple[float, float]] = []
+    prev = None
+
+    for T in np.arange(T_lo, T_hi, 1.0):
+        try:
+            hs = {"hot_start": prev} if prev is not None else {}
+            res = flash_obj.flash(zs=fracs, T=float(T), VF=vf, **hs)
+            if res.phase_count == 2 and res.P and res.P > 1e3:
+                pts.append((float(T), float(res.P)))
+                prev = res
+            elif pts:
+                break
+        except Exception:
+            pass
+
+    return pts

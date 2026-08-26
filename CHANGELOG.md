@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.71] — 2026-08-26
+
+### Feature: constant vapor-fraction lines on phase envelope
+
+Added `compute_quality_line(component_names, zs, vf)` to `phase_envelope.py`
+and a UI control in the phase envelope window.  The user types a vapor fraction
+value (e.g. 0.9) and clicks "Add line" — the line is computed in a background
+thread and drawn on the existing envelope in dashed green.  Multiple lines can
+be added successively; "Clear lines" removes them all.  Pressing Enter in the
+field is equivalent to clicking "Add line".
+
 ## [1.6.70] — 2026-08-26
 
 ### Feature: Michelsen (1980) arc-length phase envelope algorithm

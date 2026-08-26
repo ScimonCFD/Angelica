@@ -3685,11 +3685,68 @@ class NetSimGui:
         btn_row.pack(fill="x", pady=(4, 0))
         ttk.Button(btn_row, text="Close", command=win.destroy).pack(side="right")
 
+        # ── Vapor fraction quality-line controls ──────────────────────────────
+        vf_frame = ttk.Frame(frame)
+        vf_frame.pack(fill="x", pady=(2, 0))
+        ttk.Label(vf_frame, text="Vapor fraction:").pack(side="left")
+        vf_entry = ttk.Entry(vf_frame, width=6)
+        vf_entry.pack(side="left", padx=(4, 4))
+        add_btn = ttk.Button(vf_frame, text="Add line", state="disabled")
+        add_btn.pack(side="left")
+        clear_btn = ttk.Button(vf_frame, text="Clear lines", state="disabled")
+        clear_btn.pack(side="left", padx=(4, 0))
+
         win.transient(self.root)
         win.focus_set()
         win.update_idletasks()
 
         result_holder: dict = {}
+        quality_lines: list = []  # list of (vf, [(T_K, P_Pa), ...])
+
+        def _redraw() -> None:
+            if not win.winfo_exists():
+                return
+            bubble = result_holder.get("bubble", [])
+            dew = result_holder.get("dew", [])
+            Tc = result_holder.get("Tc", 0.0)
+            Pc = result_holder.get("Pc", 0.0)
+            self._draw_phase_envelope_plot(
+                plot_canvas, bubble, dew, Tc, Pc,
+                component_names, zs, op_points, quality_lines,
+            )
+
+        def _add_quality_line() -> None:
+            try:
+                vf = float(vf_entry.get())
+            except ValueError:
+                return
+            if not (0.0 < vf < 1.0):
+                return
+            add_btn.config(state="disabled")
+
+            def _compute_line() -> None:
+                from angelica.properties.phase_envelope import compute_quality_line
+                pts = compute_quality_line(component_names, zs, vf)
+                if pts:
+                    quality_lines.append((vf, pts))
+                if win.winfo_exists():
+                    win.after(0, lambda: [
+                        add_btn.config(state="normal"),
+                        clear_btn.config(state="normal"),
+                        _redraw(),
+                    ])
+
+            import threading
+            threading.Thread(target=_compute_line, daemon=True).start()
+
+        def _clear_quality_lines() -> None:
+            quality_lines.clear()
+            clear_btn.config(state="disabled")
+            _redraw()
+
+        add_btn.config(command=_add_quality_line)
+        clear_btn.config(command=_clear_quality_lines)
+        vf_entry.bind("<Return>", lambda _e: _add_quality_line())
 
         def _compute() -> None:
             from angelica.properties.phase_envelope import compute_phase_envelope
@@ -3721,19 +3778,9 @@ class NetSimGui:
                     justify="center",
                 )
                 return
-            bubble = result_holder["bubble"]
-            dew = result_holder["dew"]
-            Tc = result_holder["Tc"]
-            Pc = result_holder["Pc"]
-            plot_canvas.bind(
-                "<Configure>",
-                lambda _e: self._draw_phase_envelope_plot(
-                    plot_canvas, bubble, dew, Tc, Pc, component_names, zs, op_points
-                ),
-            )
-            self._draw_phase_envelope_plot(
-                plot_canvas, bubble, dew, Tc, Pc, component_names, zs, op_points
-            )
+            add_btn.config(state="normal")
+            plot_canvas.bind("<Configure>", lambda _e: _redraw())
+            _redraw()
 
         import threading
         threading.Thread(target=_compute, daemon=True).start()
@@ -3748,6 +3795,7 @@ class NetSimGui:
         component_names: "tuple[str, ...]",
         zs: "tuple[float, ...]",
         op_points: "list[tuple[float, float]] | None" = None,
+        quality_lines: "list | None" = None,
     ) -> None:
         canvas.delete("all")
         W = int(canvas.winfo_width() or 700)
@@ -3939,6 +3987,29 @@ class NetSimGui:
                     else:
                         region = "outside envelope"
                     out_of_bounds_notes.append(f"{lbl}: {T_op:.1f} °C, {P_op:.1f} bar — {region}")
+
+        # Quality lines (constant vapor fraction)
+        ql_color = "#5aaa6a"
+        if quality_lines:
+            for vf, ql_pts in quality_lines:
+                if len(ql_pts) < 2:
+                    continue
+                coords = [(_cx(_to_C(t)), _cy(_to_bar(p))) for t, p in ql_pts]
+                for i in range(len(coords) - 1):
+                    canvas.create_line(
+                        coords[i][0], coords[i][1],
+                        coords[i + 1][0], coords[i + 1][1],
+                        fill=ql_color, width=1.5, dash=(4, 4),
+                    )
+                lx_ql = coords[len(coords) // 2][0]
+                ly_ql = coords[len(coords) // 2][1]
+                canvas.create_text(
+                    lx_ql + 4, ly_ql - 8,
+                    text=f"VF={vf:.2f}",
+                    anchor="w",
+                    font=("TkDefaultFont", 7),
+                    fill=ql_color,
+                )
 
         # Legend
         legend: list[tuple[str, str, "tuple | None"]] = []
