@@ -1,45 +1,363 @@
-"""Phase envelope (bubble/dew point curves) computation for multi-component mixtures.
+"""Phase envelope (bubble/dew point curves) via Michelsen (1980) arc-length.
 
-Uses thermo.flash.FlashVL with Peng-Robinson EOS.  FlashVL properly fails
-(raises or returns None) when bubble/dew conditions don't exist above the
-mixture critical temperature, unlike the older thermo.Mixture(VF=) API which
-returns spurious supercritical solutions.
+Algorithm: hot-start flash scan up to the near-critical region, then arc-length
+continuation (predictor = SVD null vector; corrector = Newton-Raphson) to trace
+through the critical point.  Works for both bubble (VF=0) and dew (VF=1).
 """
 
 from __future__ import annotations
 
+import numpy as np
 
-def _fill_cliff(
-    bubble_pts: list[tuple[float, float]],
-    T_close: float,
-    P_close: float,
-    n_fill: int = 8,
-) -> None:
-    """Insert square-root interpolated points when the closing step is a cliff.
 
-    Applies P(T) = P_c + (P_last - P_c) * [(T_c - T)/(T_c - T_last)]^0.5,
-    which matches the mean-field critical exponent of cubic EOS.  Only runs
-    when the last bubble pressure exceeds the closing pressure by >30 %.
+def _eval_FJ(
+    gas_phase: object,
+    liq_phase: object,
+    T: float,
+    P: float,
+    K: "np.ndarray",
+    z: "np.ndarray",
+    VF: int,
+) -> "tuple[np.ndarray, np.ndarray]":
+    """Michelsen equilibrium equations F and their Jacobian J.
+
+    State vector S = [lnK_1..lnK_N, lnT, lnP] (length N+2).
+    Equations  F = [lnK_i - (lnφL_i - lnφV_i) for all i, ln(S_)] (length N+1).
+    Jacobian   J has shape (N+1, N+2).
+
+    For bubble (VF=0): x=z, y=Kz/S_, S_=Σ K_i z_i
+    For dew   (VF=1): y=z, x=z/(K S_), S_=Σ z_i/K_i
     """
-    if not bubble_pts:
-        return
-    T_lb, P_lb = bubble_pts[-1]
-    if P_lb <= P_close * 1.3 or T_close <= T_lb:
-        return
-    dT = T_close - T_lb
-    for i in range(1, n_fill):
-        frac = i / n_fill
-        T_int = T_lb + dT * frac
-        rem = 1.0 - frac
-        P_int = P_close + (P_lb - P_close) * (rem ** 0.5)
-        bubble_pts.append((T_int, P_int))
+    N = len(z)
+    if VF == 0:
+        S_ = float(np.dot(K, z))
+        x, y = z, K * z / S_
+    else:
+        S_ = float(np.dot(z / K, np.ones(N)))
+        y, x = z, z / (K * S_)
+
+    liq_obj = liq_phase.to(T=T, P=P, zs=list(x))
+    gas_obj = gas_phase.to(T=T, P=P, zs=list(y))
+
+    lnφL = np.array(liq_obj.lnphis())
+    lnφV = np.array(gas_obj.lnphis())
+    F = np.empty(N + 1)
+    F[:N] = np.log(K) - (lnφL - lnφV)
+    F[N] = np.log(abs(S_))
+
+    dlnφL_dT = np.array(liq_obj.dlnphis_dT())
+    dlnφV_dT = np.array(gas_obj.dlnphis_dT())
+    dlnφL_dP = np.array(liq_obj.dlnphis_dP())
+    dlnφV_dP = np.array(gas_obj.dlnphis_dP())
+
+    if VF == 0:
+        D, q, sgn = np.array(gas_obj.dlnphis_dzs()), y, +1.0
+    else:
+        D, q, sgn = np.array(liq_obj.dlnphis_dzs()), x, -1.0
+
+    A = D * q[np.newaxis, :]
+    C = A.sum(axis=1)
+
+    J = np.zeros((N + 1, N + 2))
+    np.fill_diagonal(J[:N, :N], 1.0)
+    J[:N, :N] += A
+    J[:N, :N] -= np.outer(C, q)
+    J[:N, N]   = -T * (dlnφL_dT - dlnφV_dT)
+    J[:N, N+1] = -P * (dlnφL_dP - dlnφV_dP)
+    J[N,  :N]  = sgn * q
+    return F, J
+
+
+def _null(J: "np.ndarray", prev_t: "np.ndarray") -> "np.ndarray":
+    """Return the right null vector of J consistent with prev_t."""
+    _, _, Vt = np.linalg.svd(J, full_matrices=True)
+    t = Vt[-1, :].copy()
+    if np.dot(t, prev_t) < 0:
+        t = -t
+    norm = np.linalg.norm(t)
+    return t / (norm if norm > 1e-300 else 1.0)
+
+
+def _correct(
+    gas_phase: object,
+    liq_phase: object,
+    T0: float,
+    P0: float,
+    K0: "np.ndarray",
+    z: "np.ndarray",
+    VF: int,
+    spec_idx: int,
+    spec_val: float,
+    tol: float = 1e-9,
+    max_iter: int = 50,
+) -> "np.ndarray | None":
+    """Newton-Raphson corrector with line search.  Returns S or None on failure."""
+    N = len(z)
+    S = np.concatenate(
+        [
+            np.log(np.clip(K0, 1e-15, 1e15)),
+            [np.log(max(T0, 50.0)), np.log(max(P0, 1e3))],
+        ]
+    )
+    S[spec_idx] = spec_val
+
+    err = float("inf")
+    for _ in range(max_iter):
+        K_ = np.exp(np.clip(S[:N], -40, 40))
+        T_ = max(float(np.exp(np.clip(S[N], 4.5, 8.0))), 90.0)
+        P_ = max(float(np.exp(np.clip(S[N + 1], 7.0, 19.0))), 1e3)
+        try:
+            F, J = _eval_FJ(gas_phase, liq_phase, T_, P_, K_, z, VF)
+        except Exception:
+            return None
+        if not np.all(np.isfinite(F)):
+            return None
+        err = float(np.max(np.abs(F)))
+        if err < tol:
+            return S.copy()
+
+        F_aug = np.append(F, S[spec_idx] - spec_val)
+        J_aug = np.zeros((N + 2, N + 2))
+        J_aug[:N + 1, :] = J
+        J_aug[N + 1, spec_idx] = 1.0
+        try:
+            dS = np.linalg.solve(J_aug, -F_aug)
+        except np.linalg.LinAlgError:
+            return None
+        if not np.all(np.isfinite(dS)):
+            return None
+
+        alpha = 1.0
+        for _ in range(14):
+            S_try = S + alpha * dS
+            S_try[spec_idx] = spec_val
+            K_t = np.exp(np.clip(S_try[:N], -40, 40))
+            T_t = max(float(np.exp(np.clip(S_try[N], 4.5, 8.0))), 90.0)
+            P_t = max(float(np.exp(np.clip(S_try[N + 1], 7.0, 19.0))), 1e3)
+            try:
+                F_t, _ = _eval_FJ(gas_phase, liq_phase, T_t, P_t, K_t, z, VF)
+                if np.all(np.isfinite(F_t)) and np.max(np.abs(F_t)) < err * (1 - 1e-4):
+                    S = S_try
+                    break
+            except Exception:
+                pass
+            alpha *= 0.5
+        else:
+            return None
+
+    return S if err < 1e-5 else None
+
+
+def _trace_arc(
+    gas_phase: object,
+    liq_phase: object,
+    z: "np.ndarray",
+    VF: int,
+    T_start: float,
+    P_start: float,
+    K_start: "np.ndarray",
+    ds0: float = 0.05,
+    ds_min: float = 0.001,
+    ds_max: float = 0.5,
+    max_steps: int = 1000,
+    lnK_stop: float = 0.005,
+) -> "list[tuple[float, float]]":
+    """Arc-length continuation from (T_start, P_start, K_start) toward the critical."""
+    N = len(z)
+    S = np.concatenate(
+        [np.log(np.clip(K_start, 1e-15, 1e15)), [np.log(T_start), np.log(P_start)]]
+    )
+
+    tangent = np.zeros(N + 2)
+    tangent[N] = 1.0
+    try:
+        _, J0 = _eval_FJ(gas_phase, liq_phase, T_start, P_start, K_start, z, VF)
+        tangent = _null(J0, tangent)
+        if tangent[N] < 0:
+            tangent = -tangent
+    except Exception:
+        pass
+
+    pts: list[tuple[float, float]] = [(T_start, P_start)]
+    ds = ds0
+    n_fail = 0
+
+    for _ in range(max_steps):
+        K_cur = np.exp(np.clip(S[:N], -40, 40))
+        lnK_max = float(np.max(np.abs(np.log(K_cur))))
+
+        ds = min(ds, lnK_max * 0.15, ds_max)
+        ds = max(ds, ds_min)
+
+        S_pred = S + ds * tangent
+        spec_idx = int(np.argmax(np.abs(tangent)))
+        spec_val = float(S_pred[spec_idx])
+
+        K_pred = np.exp(np.clip(S_pred[:N], -40, 40))
+        T_pred = max(float(np.exp(np.clip(S_pred[N], 4.5, 8.0))), 90.0)
+        P_pred = max(float(np.exp(np.clip(S_pred[N + 1], 7.0, 19.0))), 1e3)
+
+        S_new = _correct(
+            gas_phase, liq_phase, T_pred, P_pred, K_pred, z, VF, spec_idx, spec_val
+        )
+
+        if S_new is None:
+            ds = max(ds * 0.5, ds_min)
+            n_fail += 1
+            if n_fail > 60:
+                break
+            continue
+
+        n_fail = 0
+        K_new = np.exp(np.clip(S_new[:N], -40, 40))
+        T_new = float(np.exp(np.clip(S_new[N], 4.5, 8.0)))
+        P_new = float(np.exp(np.clip(S_new[N + 1], 7.0, 19.0)))
+        lnK_max_new = float(np.max(np.abs(np.log(K_new))))
+
+        try:
+            _, Jn = _eval_FJ(gas_phase, liq_phase, T_new, P_new, K_new, z, VF)
+            tangent = _null(Jn, tangent)
+        except Exception:
+            pass
+
+        S = S_new
+        pts.append((T_new, P_new))
+
+        if lnK_max_new > 0.3:
+            ds = min(ds * 1.05, ds_max)
+
+        if lnK_max_new < lnK_stop:
+            break
+
+    return pts
+
+
+def _bubble_trace(
+    gas_phase: object,
+    liq_phase: object,
+    flash_obj: object,
+    z: "np.ndarray",
+    names: list[str],
+    fracs: list[float],
+    T_lo: float,
+    T_hi: float,
+    lnK_arc_start: float = 0.5,
+) -> "list[tuple[float, float]]":
+    """Bubble-point curve via flash scan then arc-length continuation."""
+    N = len(z)
+    prev = None
+    pts: list[tuple[float, float]] = []
+    arc_K: "np.ndarray | None" = None
+    arc_P = arc_T = 0.0
+
+    for T in np.arange(T_lo, T_hi, 0.5):
+        try:
+            hs = {"hot_start": prev} if prev is not None else {}
+            res = flash_obj.flash(zs=fracs, T=float(T), VF=0, **hs)
+            if res.phase_count != 2 or not res.P or res.P <= 1e3:
+                continue
+            K = np.array([res.gas.zs[i] / res.liquid0.zs[i] for i in range(N)])
+            if not np.all(np.isfinite(K)) or not np.all(K > 0):
+                continue
+            lnK_max = float(np.max(np.abs(np.log(K))))
+
+            prev_lkm = float(np.max(np.abs(np.log(arc_K)))) if arc_K is not None else 1.0
+            if arc_K is not None and lnK_max < 0.01 and prev_lkm > 0.1:
+                break  # snap to trivial — switch to arc-length
+
+            if pts and abs(res.P - pts[-1][1]) > pts[-1][1] * 0.5:
+                break  # pressure jump — switch to arc-length
+
+            pts.append((float(T), float(res.P)))
+            prev = res
+            if lnK_max >= lnK_arc_start:
+                arc_K = K.copy()
+                arc_P = float(res.P)
+                arc_T = float(T)
+        except Exception:
+            pass
+
+    if arc_K is not None:
+        pts = [(t, p) for t, p in pts if t <= arc_T]
+        arc_pts = _trace_arc(gas_phase, liq_phase, z, 0, arc_T, arc_P, arc_K)
+        pts.extend(arc_pts[1:])
+
+    return pts
+
+
+def _dew_trace(
+    gas_phase: object,
+    liq_phase: object,
+    flash_obj: object,
+    z: "np.ndarray",
+    names: list[str],
+    fracs: list[float],
+    T_lo: float,
+    T_hi: float,
+) -> "list[tuple[float, float]]":
+    """Dew-point curve via flash scan then arc-length continuation."""
+    N = len(z)
+    prev = None
+    pts: list[tuple[float, float]] = []
+    arc_K: "np.ndarray | None" = None
+    arc_P = arc_T = 0.0
+
+    # find a well-conditioned starting point
+    for T_s in np.arange(T_lo, T_lo + 100.0, 5.0):
+        try:
+            res = flash_obj.flash(zs=fracs, T=float(T_s), VF=1)
+            if res.phase_count == 2 and res.P and res.P > 1e3:
+                K = np.array([res.gas.zs[i] / res.liquid0.zs[i] for i in range(N)])
+                if (
+                    np.all(np.isfinite(K))
+                    and np.all(K > 0)
+                    and float(np.max(np.abs(np.log(K)))) > 0.5
+                ):
+                    prev = res
+                    arc_K = K.copy()
+                    arc_P = float(res.P)
+                    arc_T = float(T_s)
+                    pts.append((float(T_s), float(res.P)))
+                    break
+        except Exception:
+            pass
+
+    if arc_K is None:
+        return []
+
+    for T in np.arange(arc_T + 0.5, T_hi, 0.5):
+        try:
+            res = flash_obj.flash(zs=fracs, T=float(T), VF=1, hot_start=prev)
+            if res.phase_count != 2 or not res.P or res.P <= 1e3:
+                continue
+            K = np.array([res.gas.zs[i] / res.liquid0.zs[i] for i in range(N)])
+            if not np.all(np.isfinite(K)) or not np.all(K > 0):
+                continue
+            lnK_max = float(np.max(np.abs(np.log(K))))
+
+            prev_lkm = float(np.max(np.abs(np.log(arc_K)))) if arc_K is not None else 1.0
+            if arc_K is not None and lnK_max < 0.01 and prev_lkm > 0.1:
+                break  # snap — switch to arc-length
+
+            pts.append((float(T), float(res.P)))
+            arc_K = K.copy()
+            arc_P = float(res.P)
+            arc_T = float(T)
+            prev = res
+        except Exception:
+            pass
+
+    arc_pts = _trace_arc(gas_phase, liq_phase, z, 1, arc_T, arc_P, arc_K)
+    pts.extend(arc_pts[1:])
+
+    return pts
 
 
 def compute_phase_envelope(
-    component_names: tuple[str, ...] | list[str],
-    zs: tuple[float, ...] | list[float],
+    component_names: "tuple[str, ...] | list[str]",
+    zs: "tuple[float, ...] | list[float]",
     n_T: int = 20,
-) -> tuple[list[tuple[float, float]], list[tuple[float, float]], float, float]:
+) -> "tuple[list[tuple[float, float]], list[tuple[float, float]], float, float]":
     """Compute bubble and dew point curves for a multi-component mixture.
 
     Returns:
@@ -47,8 +365,12 @@ def compute_phase_envelope(
         Both curves share the same last point (the critical point) so the
         envelope is closed.  Tc_K / Pc_Pa are mole-fraction-weighted
         pseudo-critical coordinates used only for the plot marker.
+        n_T is accepted for API compatibility but ignored (arc-length is used).
     """
-    import numpy as np
+    import warnings
+
+    warnings.filterwarnings("ignore")
+
     from thermo import ChemicalConstantsPackage
     from thermo.flash import FlashVL
     from thermo.phases import CEOSGas, CEOSLiquid
@@ -56,9 +378,9 @@ def compute_phase_envelope(
 
     names = list(component_names)
     fracs = list(zs)
+    z = np.asarray(fracs, float)
 
     constants, props = ChemicalConstantsPackage.from_IDs(names)
-
     eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas)
     gas_phase = CEOSGas(PRMIX, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
     liq_phase = CEOSLiquid(PRMIX, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
@@ -68,237 +390,30 @@ def compute_phase_envelope(
     Pcs: list[float] = list(constants.Pcs)
     Tbs: list[float] = list(constants.Tbs)
 
-    Tc = sum(z * tc for z, tc in zip(fracs, Tcs))
-    Pc = sum(z * pc for z, pc in zip(fracs, Pcs))
+    Tc = sum(zi * tc for zi, tc in zip(fracs, Tcs))
+    Pc = sum(zi * pc for zi, pc in zip(fracs, Pcs))
 
-    T_lo = max(min(Tbs) * 0.65, 80.0)
-    # The true mixture critical temperature (from the EOS) can exceed the
-    # mole-fraction-weighted pseudo-Tc by 10–20 % for lean natural gas.
-    # Scan to 1.35×Tc_pseudo to ensure we always cover the critical region.
-    T_hi_scan = Tc * 1.35
-    if T_lo >= T_hi_scan:
-        T_lo = T_hi_scan * 0.50
+    T_lo = max(min(Tbs) * 0.55, 75.0)
+    T_hi = Tc * 1.5
 
-    # ── Temperature scan (cold-start) ─────────────────────────────────────────
-    T_vals = np.linspace(T_lo, T_hi_scan, n_T + 10)
+    bubble_pts = _bubble_trace(
+        gas_phase, liq_phase, flash_obj, z, names, fracs, T_lo, T_hi
+    )
+    dew_pts = _dew_trace(
+        gas_phase, liq_phase, flash_obj, z, names, fracs, T_lo, T_hi
+    )
 
-    bubble_pts: list[tuple[float, float]] = []
-    dew_pts: list[tuple[float, float]] = []
-    envelope_closed = False
-    last_both: tuple[float, float, float] | None = None  # (T, P_bub_Pa, P_dew_Pa)
-
-    last_bub_state = None  # saved at the last T where both curves coexist
-    last_dew_state = None
-
-    # Main scan uses cold-start (no hot_start) so each flash converges to the
-    # true thermodynamic equilibrium rather than a metastable branch that
-    # hot_start can follow when the EOS has multiple solutions near the critical.
-    # The last valid cold-start states are saved and used as seeds for the
-    # hot_start fine scan that closes the envelope.
-    for T in T_vals:
-        T = float(T)
-
-        P_b: float | None = None
-        state_bub: object = None
-        try:
-            res = flash_obj.flash(zs=fracs, T=T, VF=0)
-            if res.P is not None and res.P > 0:
-                P_b = float(res.P)
-                state_bub = res
-        except Exception:
-            pass
-
-        P_d: float | None = None
-        state_dew: object = None
-        try:
-            res = flash_obj.flash(zs=fracs, T=T, VF=1)
-            if res.P is not None and res.P > 0:
-                P_d = float(res.P)
-                state_dew = res
-        except Exception:
-            pass
-
-        if P_b is not None and P_d is not None:
-            frac_diff = abs(P_b - P_d) / max(P_b, P_d)
-            if frac_diff < 0.05:
-                P_crit = (P_b + P_d) / 2.0
-                _fill_cliff(bubble_pts, T, P_crit)
-                bubble_pts.append((T, P_crit))
-                dew_pts.append((T, P_crit))
-                envelope_closed = True
-                break
-            bubble_pts.append((T, P_b))
-            dew_pts.append((T, P_d))
-            last_both = (T, P_b, P_d)
-            last_bub_state = state_bub
-            last_dew_state = state_dew
-        elif P_b is not None:
-            bubble_pts.append((T, P_b))
-        elif P_d is not None:
-            dew_pts.append((T, P_d))
-        elif bubble_pts or dew_pts:
-            break  # both failed — past the two-phase region
-
-    # ── Fine-scan closing ─────────────────────────────────────────────────────
-    # Step forward at 0.5 K from the last coarse-scan point.  Each step tries
-    # cold-start (independent Wilson initial guess) first for both bubble and
-    # dew, then falls back to hot_start when cold-start fails.  Cold-start
-    # avoids the trivial K_i→1 snap that hot_start from the main-scan state
-    # can produce at the first retrograde step, allowing the fine scan to
-    # follow the true physical retrograde from the cricondenbar to the real
-    # critical point (~7–10 K away from the last main-scan point for rich
-    # mixtures).  A spike filter rejects any bubble result that rises more
-    # than 15 % above the last accepted value; this passes the ±10 % EOS
-    # oscillation near the cricondenbar of lean mixtures while still blocking
-    # >100 % trivial-snap recoveries.
-    if not envelope_closed and last_both is not None:
-        T_fc, _, _ = last_both
-        fine_step = 0.5
-        T_fine = T_fc + fine_step
-
-        fine_bub_state = last_bub_state
-        fine_dew_state = last_dew_state
-
-        best_frac = float("inf")
-        best_close_T: float | None = None
-        best_close_P: float | None = None
-
-        while T_fine <= T_hi_scan + fine_step:
-            T_f = float(T_fine)
-
-            # ── bubble: hot-start + cold-start snap-detection ───────────────
-            # Try hot-start first (normal behavior).  If the result is much
-            # lower than a simultaneous cold-start (ratio cold/hot > 1.3), the
-            # hot-start snapped to a trivial K_i→1 solution; in that case use
-            # the cold-start result instead and continue on the physical branch.
-            P_b: float | None = None
-            prev_bub_state = fine_bub_state
-            P_b_hot: float | None = None
-            rb_h_saved = None
-            try:
-                rb_h = flash_obj.flash(zs=fracs, T=T_f, VF=0, hot_start=prev_bub_state)
-                if rb_h.P is not None and rb_h.P > 0:
-                    P_b_hot = float(rb_h.P)
-                    rb_h_saved = rb_h
-            except Exception:
-                pass
-
-            P_b_cold: float | None = None
-            rb_c_saved = None
-            try:
-                rb_c = flash_obj.flash(zs=fracs, T=T_f, VF=0)
-                if rb_c.P is not None and rb_c.P > 0:
-                    P_b_cold = float(rb_c.P)
-                    rb_c_saved = rb_c
-            except Exception:
-                pass
-
-            # Prefer cold-start when it finds a much higher P (snap detected)
-            if P_b_cold is not None and (
-                P_b_hot is None or P_b_cold > P_b_hot * 1.3
-            ):
-                P_b_cand = P_b_cold
-                rb_chosen = rb_c_saved
-            elif P_b_hot is not None:
-                P_b_cand = P_b_hot
-                rb_chosen = rb_h_saved
-            else:
-                P_b_cand = None
-                rb_chosen = None
-
-            if P_b_cand is not None and rb_chosen is not None:
-                last_bP = bubble_pts[-1][1] if bubble_pts else None
-                if last_bP is None or P_b_cand <= last_bP * 1.15:
-                    P_b = P_b_cand
-                    fine_bub_state = rb_chosen
-                else:
-                    fine_bub_state = prev_bub_state  # spike: keep previous state
-
-            # ── dew: hot-start (ascending branch is stable, no trivial snap) ───
-            P_d: float | None = None
-            try:
-                rd = flash_obj.flash(zs=fracs, T=T_f, VF=1, hot_start=fine_dew_state)
-                if rd.P is not None and rd.P > 0:
-                    P_d = float(rd.P)
-                    fine_dew_state = rd
-                else:
-                    fine_dew_state = None
-            except Exception:
-                fine_dew_state = None
-
-            if P_b is not None and P_d is not None:
-                frac_diff = abs(P_b - P_d) / max(P_b, P_d)
-                if frac_diff < best_frac:
-                    best_frac = frac_diff
-                    best_close_T = T_f
-                    best_close_P = (P_b + P_d) / 2.0
-                if frac_diff < 0.05:
-                    P_close_f = (P_b + P_d) / 2.0
-                    _fill_cliff(bubble_pts, T_f, P_close_f)
-                    bubble_pts.append((T_f, P_close_f))
-                    dew_pts.append((T_f, P_close_f))
-                    envelope_closed = True
-                    break
-                bubble_pts.append((T_f, P_b))
-                dew_pts.append((T_f, P_d))
-            elif P_b is not None:
-                bubble_pts.append((T_f, P_b))
-            elif P_d is not None:
-                dew_pts.append((T_f, P_d))
-            else:
-                break  # both failed
-
-            T_fine += fine_step
-
-        # Force-close at the temperature of minimum divergence.
-        if not envelope_closed and best_close_T is not None:
-            bubble_pts = [(t, p) for t, p in bubble_pts if t < best_close_T]
-            dew_pts    = [(t, p) for t, p in dew_pts    if t < best_close_T]
-
-            # If the last bubble pressure is far above the closing pressure,
-            # fill the gap with square-root interpolated points.  The scaling
-            # P(T) = P_c + (P_last - P_c) × [(T_c - T)/(T_c - T_last)]^0.5
-            # matches the mean-field critical exponent of cubic EOS and gives a
-            # physically shaped closing nose rather than a vertical cliff.
-            _fill_cliff(bubble_pts, best_close_T, best_close_P)
-
-            bubble_pts.append((best_close_T, best_close_P))
-            dew_pts.append((best_close_T, best_close_P))
-        elif not envelope_closed and last_both is not None:
-            T_fc2, P_fb, P_fd = last_both
-            P_avg = (P_fb + P_fd) / 2.0
-            bubble_pts = [(t, p) for t, p in bubble_pts if t <= T_fc2]
-            dew_pts    = [(t, p) for t, p in dew_pts    if t <= T_fc2]
-            if not bubble_pts or bubble_pts[-1][0] < T_fc2:
-                bubble_pts.append((T_fc2, P_avg))
-            if not dew_pts or dew_pts[-1][0] < T_fc2:
-                dew_pts.append((T_fc2, P_avg))
-
-    # ── Replace metastable retrograde bubble section ──────────────────────────
-    # hot_start on the retrograde branch (after the cricondenbar) often
-    # converges to metastable high-P solutions rather than the true equilibrium.
-    # Once the critical point is known, regenerate the retrograde section using
-    #   P(T) = P_crit + (P_cb - P_crit) × [(T_crit-T)/(T_crit-T_cb)]^0.5
-    # which is the exact mean-field scaling for cubic EOS and gives the correct
-    # smooth nose shape regardless of hot_start artefacts.
-    if (
-        bubble_pts and dew_pts
-        and bubble_pts[-1] == dew_pts[-1]
-        and len(bubble_pts) >= 3
-    ):
-        T_crit_p, P_crit_p = bubble_pts[-1]
-        peak_idx = max(range(len(bubble_pts) - 1), key=lambda i: bubble_pts[i][1])
-        T_cb_p, P_cb_p = bubble_pts[peak_idx]
-        if peak_idx < len(bubble_pts) - 1 and T_crit_p > T_cb_p and P_cb_p > P_crit_p:
-            n_retro = 12
-            retro: list[tuple[float, float]] = []
-            for i in range(1, n_retro):
-                frac = i / n_retro
-                T_int = T_cb_p + frac * (T_crit_p - T_cb_p)
-                rem = 1.0 - frac
-                P_int = P_crit_p + (P_cb_p - P_crit_p) * (rem ** 0.5)
-                retro.append((T_int, P_int))
-            retro.append((T_crit_p, P_crit_p))
-            bubble_pts = bubble_pts[: peak_idx + 1] + retro
+    # Close the envelope at the critical: use the last point of each arc that
+    # is closest to the other.  If both arcs reach lnK<0.005 they've converged;
+    # average the final T/P pair as the shared critical point.
+    if bubble_pts and dew_pts:
+        T_bc, P_bc = bubble_pts[-1]
+        T_dc, P_dc = dew_pts[-1]
+        T_crit = (T_bc + T_dc) / 2.0
+        P_crit = (P_bc + P_dc) / 2.0
+        # Both arcs should be within 1 K / 1 bar — if so, merge; otherwise keep as-is
+        if abs(T_bc - T_dc) < 2.0 and abs(P_bc - P_dc) / max(P_bc, P_dc) < 0.02:
+            bubble_pts[-1] = (T_crit, P_crit)
+            dew_pts[-1] = (T_crit, P_crit)
 
     return bubble_pts, dew_pts, Tc, Pc

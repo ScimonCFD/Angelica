@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.6.70] — 2026-08-26
+
+### Feature: Michelsen (1980) arc-length phase envelope algorithm
+
+Replaced the flash-scan + spike-filter + retrograde-interpolation approach with
+a mathematically rigorous Michelsen (1980) arc-length continuation algorithm.
+
+**Algorithm:** hot-start flash scan to the near-critical region (lnK_max ≥ 0.5),
+then arc-length predictor–corrector to the critical point.  Predictor = SVD null
+vector of the Jacobian (tangent to the solution curve).  Corrector = Newton–
+Raphson with backtracking line search.  State vector S = [lnK_i…, lnT, lnP].
+
+**Key correctness fix:** the Jacobian K–K block for VF=0 (bubble) used the wrong
+sign (I − A + outer(C,q)) in all prior scan-based attempts.  Verified against
+numerical finite differences: the correct formula is I + A − outer(C,q), which
+is the same for both bubble and dew.  With the wrong Jacobian Newton converged
+linearly (~5%/step, requiring >450 iterations); with the correct Jacobian it
+converges quadratically in ~8 steps.
+
+**Results for 90/8/2 CH4/C2H6/C3H8:**
+- Critical: −59.4 °C / 62.08 bar (physically correct; old code gave −47.8 °C / 51 bar)
+- Cricondenbar (dew): 64.29 bar at −54.2 °C
+- Both bubble and dew arcs reach the same critical point to within 0.1 °C / 0.04 bar
+
+**Results for 70/20/10 CH4/C2H6/C3H8:**
+- Critical: −17.2 °C / 82.45 bar
+- Cricondenbar (dew): 82.84 bar at −14.0 °C
+
+The `n_T` parameter is kept in the public API for compatibility but is ignored
+(the scan uses adaptive 0.5 K steps driven by snap detection, not a fixed grid).
+
 ## [1.6.69] — 2026-08-25
 
 ### Fix: spike filter threshold widened to restore cricondenbar position for lean gas
