@@ -3701,6 +3701,8 @@ class NetSimGui:
         ttk.Button(btn_row, text="Close", command=win.destroy).pack(side="right")
         save_btn = ttk.Button(btn_row, text="Save image…", state="disabled")
         save_btn.pack(side="left")
+        csv_btn = ttk.Button(btn_row, text="Save CSV…", state="disabled")
+        csv_btn.pack(side="left", padx=(6, 0))
 
         # ── Vapor fraction quality-line controls ──────────────────────────────
         vf_frame = ttk.Frame(frame)
@@ -3765,6 +3767,49 @@ class NetSimGui:
                 ImageGrab.grab(bbox=(x, y, x + w, y + h)).save(path)
 
         save_btn.config(command=_save_image)
+
+        def _save_csv() -> None:
+            from tkinter import filedialog
+            import csv as _csv
+
+            path = filedialog.asksaveasfilename(
+                parent=win,
+                title="Save phase envelope data",
+                defaultextension=".csv",
+                filetypes=[("CSV file", "*.csv")],
+            )
+            if not path:
+                return
+
+            bubble = result_holder.get("bubble", [])
+            dew    = result_holder.get("dew", [])
+            Tc_K   = result_holder.get("Tc", 0.0)
+            Pc_Pa  = result_holder.get("Pc", 0.0)
+
+            with open(path, "w", newline="", encoding="utf-8") as fh:
+                w = _csv.writer(fh)
+                w.writerow(["# Phase envelope — " + ", ".join(component_names)])
+                w.writerow(["# EOS: " + eos_name])
+                w.writerow(["# Composition: " + ", ".join(f"{z:.4g}" for z in zs)])
+                w.writerow(["# Critical point: "
+                             f"Tc = {Tc_K - 273.15:.2f} °C, "
+                             f"Pc = {Pc_Pa / 1e5:.4f} bar"])
+                w.writerow([])
+                w.writerow(["curve", "T_C", "P_bar"])
+                for T, P in bubble:
+                    w.writerow(["bubble", f"{T - 273.15:.4f}", f"{P / 1e5:.6f}"])
+                for T, P in dew:
+                    w.writerow(["dew", f"{T - 273.15:.4f}", f"{P / 1e5:.6f}"])
+                if Tc_K and Pc_Pa:
+                    w.writerow(["critical",
+                                f"{Tc_K - 273.15:.4f}",
+                                f"{Pc_Pa / 1e5:.6f}"])
+                for vf, pts in quality_lines:
+                    lbl = f"VF={vf:.4g}"
+                    for T, P in pts:
+                        w.writerow([lbl, f"{T - 273.15:.4f}", f"{P / 1e5:.6f}"])
+
+        csv_btn.config(command=_save_csv)
 
         def _add_quality_line() -> None:
             try:
@@ -3831,6 +3876,7 @@ class NetSimGui:
                 return
             add_btn.config(state="normal")
             save_btn.config(state="normal")
+            csv_btn.config(state="normal")
             plot_canvas.bind("<Configure>", lambda _e: _redraw())
             _redraw()
 

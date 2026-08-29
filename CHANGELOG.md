@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.74] — 2026-08-29
+
+### Feature: CSV export for phase envelope
+
+Added a "Save CSV…" button to the phase envelope window (enabled once the
+envelope is computed).  The exported file contains:
+
+- Header rows with component names, EOS, composition, and critical point.
+- One row per point for the bubble curve, dew curve, and critical point,
+  with columns `curve`, `T_C`, `P_bar`.
+- Additional rows for any quality lines the user has added, labelled
+  `VF=0.x`.
+
 ## [1.6.73] — 2026-08-29
 
 ### Feature: export phase envelope as image
