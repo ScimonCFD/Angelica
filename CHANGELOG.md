@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.77] — 2026-08-29
+
+### Feature: EOS row in the left-panel palette
+
+The equation of state is now shown as its own dedicated row in the left
+panel alongside Material, Pipe Model, and Numerics.  The row displays
+"PR" or "SRK" when the case type is Compositional, and "—" otherwise.
+It updates immediately when the physics mode or the compositional fluid
+definition is changed.
+
+Internally, two direct `material_summary_var.set()` calls (black-oil and
+compositional fluid dialog save closures) were replaced with
+`_refresh_global_summaries()` so all four palette summary rows stay in
+sync through a single call site.
+
 ## [1.6.76] — 2026-08-29
 
 ### Feature: binary interaction parameters from EPPR78

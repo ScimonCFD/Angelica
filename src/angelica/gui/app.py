@@ -281,6 +281,7 @@ class NetSimGui:
         self.status_var = tk.StringVar(value="Select a node type from the palette.")
         self.tool_var = tk.StringVar(value="No tool selected")
         self.material_summary_var = tk.StringVar(value=self._material_summary_text())
+        self.eos_summary_var = tk.StringVar(value=self._eos_summary_text())
         self.pressure_drop_summary_var = tk.StringVar(value=self._pressure_drop_summary_text())
         self.numerics_summary_var = tk.StringVar(value=self._numerics_summary_text())
 
@@ -425,6 +426,16 @@ class NetSimGui:
         ttk.Label(
             palette,
             textvariable=self.material_summary_var,
+            width=26,
+            relief="groove",
+            padding=6,
+            justify="left",
+        ).pack(anchor="w", pady=(4, 0), fill="x")
+
+        ttk.Label(palette, text="EOS").pack(anchor="w", pady=(10, 0))
+        ttk.Label(
+            palette,
+            textvariable=self.eos_summary_var,
             width=26,
             relief="groove",
             padding=6,
@@ -744,7 +755,7 @@ class NetSimGui:
                        "api_gravity": api_var.get().strip(),
                        "gas_gravity": gg_var.get().strip()}
             self.scene.update_material(new_mat)
-            self.material_summary_var.set(self._material_summary_text())
+            self._refresh_global_summaries()
             dialog.destroy()
 
         btn_row = ttk.Frame(frame)
@@ -843,7 +854,7 @@ class NetSimGui:
                 "name": " + ".join(names_list),
             }
             self.scene.update_material(new_mat)
-            self.material_summary_var.set(self._material_summary_text())
+            self._refresh_global_summaries()
             dialog.destroy()
 
         def _preview_envelope() -> None:
@@ -2247,6 +2258,7 @@ class NetSimGui:
             "compositional": "Compositional (EOS)",
         }
         self.status_var.set(f"Case type set to: {_LABELS.get(mode, mode)}.")
+        self._refresh_global_summaries()
         dialog.destroy()
 
     def _unit_quantities(self) -> dict:
@@ -2335,6 +2347,7 @@ class NetSimGui:
 
     def _refresh_global_summaries(self) -> None:
         self.material_summary_var.set(self._material_summary_text())
+        self.eos_summary_var.set(self._eos_summary_text())
         self.pressure_drop_summary_var.set(self._pressure_drop_summary_text())
         self.numerics_summary_var.set(self._numerics_summary_text())
 
@@ -2366,6 +2379,13 @@ class NetSimGui:
             if viscosity:
                 lines.append(f"mu={viscosity} Pa·s")
         return "\n".join(lines)
+
+    def _eos_summary_text(self) -> str:
+        if self.scene.physics_mode != "compositional":
+            return "—"
+        if not self.scene.material:
+            return "PR"
+        return self.scene.material.get("eos_name", "PR")
 
     def _pressure_drop_summary_text(self) -> str:
         model_name = self.scene.pressure_drop_model.get("name", "").strip()
