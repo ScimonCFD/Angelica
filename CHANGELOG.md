@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.73] — 2026-08-29
+
+### Feature: export phase envelope as image
+
+Added a "Save image…" button to the phase envelope window (enabled once the
+envelope is computed).  Clicking it opens a file-save dialog:
+
+- **PNG** — available when Pillow (PIL) is installed; screenshots the canvas
+  widget at its current resolution.
+- **EPS** — always available via tkinter's built-in `canvas.postscript()`
+  vector export.
+
 ## [1.6.72] — 2026-08-29
 
 ### Feature: SRK equation of state for compositional fluid model

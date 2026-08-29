@@ -3699,6 +3699,8 @@ class NetSimGui:
         btn_row = ttk.Frame(frame)
         btn_row.pack(fill="x", pady=(4, 0))
         ttk.Button(btn_row, text="Close", command=win.destroy).pack(side="right")
+        save_btn = ttk.Button(btn_row, text="Save image…", state="disabled")
+        save_btn.pack(side="left")
 
         # ── Vapor fraction quality-line controls ──────────────────────────────
         vf_frame = ttk.Frame(frame)
@@ -3729,6 +3731,40 @@ class NetSimGui:
                 plot_canvas, bubble, dew, Tc, Pc,
                 component_names, zs, op_points, quality_lines,
             )
+
+        def _save_image() -> None:
+            from tkinter import filedialog
+            try:
+                from PIL import ImageGrab
+                _has_pil = True
+            except ImportError:
+                _has_pil = False
+
+            ftypes = []
+            if _has_pil:
+                ftypes.append(("PNG image", "*.png"))
+            ftypes.append(("EPS vector", "*.eps"))
+
+            path = filedialog.asksaveasfilename(
+                parent=win,
+                title="Save phase envelope",
+                defaultextension=".png" if _has_pil else ".eps",
+                filetypes=ftypes,
+            )
+            if not path:
+                return
+
+            if path.lower().endswith(".eps"):
+                plot_canvas.postscript(file=path, colormode="color")
+            else:
+                win.update_idletasks()
+                x = plot_canvas.winfo_rootx()
+                y = plot_canvas.winfo_rooty()
+                w = plot_canvas.winfo_width()
+                h = plot_canvas.winfo_height()
+                ImageGrab.grab(bbox=(x, y, x + w, y + h)).save(path)
+
+        save_btn.config(command=_save_image)
 
         def _add_quality_line() -> None:
             try:
@@ -3794,6 +3830,7 @@ class NetSimGui:
                 )
                 return
             add_btn.config(state="normal")
+            save_btn.config(state="normal")
             plot_canvas.bind("<Configure>", lambda _e: _redraw())
             _redraw()
 
