@@ -13,19 +13,20 @@ def _get_flash_obj(component_names: tuple[str, ...], eos_name: str):
     key = (component_names, eos_name)
     if key not in _FLASH_OBJS:
         import warnings
-        warnings.filterwarnings("ignore")
         from thermo import ChemicalConstantsPackage
         from thermo.flash import FlashVL
         from thermo.phases import CEOSGas, CEOSLiquid
         from thermo.eos_mix import PRMIX, SRKMIX
         from .phase_envelope import _build_kij_matrix
         eos_cls = SRKMIX if eos_name == "SRK" else PRMIX
-        constants, props = ChemicalConstantsPackage.from_IDs(list(component_names))
-        kijs = _build_kij_matrix(constants)
-        eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas, kijs=kijs)
-        gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
-        liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
-        flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            constants, props = ChemicalConstantsPackage.from_IDs(list(component_names))
+            kijs = _build_kij_matrix(constants)
+            eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas, kijs=kijs)
+            gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+            liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+            flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
         _FLASH_OBJS[key] = flash_obj
     return _FLASH_OBJS[key]
 
@@ -134,8 +135,10 @@ class CompositionalFluid(FluidModel):
     @staticmethod
     def _get_pressure_pa(link_state) -> float:
         try:
-            P_s = link_state.start_node.pressure_pa or 101325.0
-            P_e = link_state.end_node.pressure_pa or 101325.0
+            P_s = link_state.start_node.pressure_pa
+            P_e = link_state.end_node.pressure_pa
+            P_s = P_s if P_s is not None else 101325.0
+            P_e = P_e if P_e is not None else 101325.0
             return max(0.5 * (P_s + P_e), 1.0)
         except AttributeError:
             return 101325.0
@@ -183,5 +186,11 @@ class CompositionalFluid(FluidModel):
         try:
             res = flash_obj.flash(T=T_K, P=P, zs=list(zs))
             return float(res.VF)
-        except Exception:
+        except Exception as exc:
+            import warnings
+            warnings.warn(
+                f"VF flash failed at T={T:.1f} °C, P={P/1e6:.3f} MPa: {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
             return float("nan")

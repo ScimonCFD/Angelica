@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.6.80] — 2026-08-29
+
+### Fix: three silent-failure bugs
+
+**`solvers/base.py`** — `_update_component_temperatures` used the `or` idiom to
+fall back to `default_temperature_c` when a node temperature was not set.  Python
+treats `0.0` as falsy, so any node at exactly 0 °C (ice point) would silently be
+replaced by 20 °C.  Changed both occurrences to explicit `is not None` guards.
+
+**`properties/compositional_fluid.py`** — `_get_flash_obj` called
+`warnings.filterwarnings("ignore")` outside any context manager, permanently
+suppressing all Python warnings for the lifetime of the process.  Wrapped the
+thermo construction calls in `with warnings.catch_warnings(): warnings.filterwarnings("ignore")`
+so suppression is scoped to that block only.  The same file had the same `or`
+idiom for pressure in `_get_pressure_pa`; fixed to `is not None`.
+
+**`properties/compositional_fluid.py`** — `vapor_fraction_for_link` returned
+`float("nan")` silently on EOS flash failure.  The GUI correctly skipped NaN links
+(no amber colouring), but the user had no indication of the underlying failure.
+Now emits a `RuntimeWarning` with the failed T/P conditions before returning NaN.
+
 ## [1.6.79] — 2026-08-29
 
 ### Fix: phase envelope critical point uses arc endpoints, not Kay's rule

@@ -188,13 +188,9 @@ class BaseSolver(ABC):
                 if pipe_mean_temps is not None and pipe_idx in pipe_mean_temps:
                     component_state.temperature_c = pipe_mean_temps[pipe_idx]
                 else:
-                    start_temp = (
-                        network_state.nodes[component_state.start_node.node_id].temperature_c
-                        or default_temperature_c
-                    )
-                    end_temp = (
-                        network_state.nodes[component_state.end_node.node_id].temperature_c
-                        or default_temperature_c
-                    )
+                    _ts = network_state.nodes[component_state.start_node.node_id].temperature_c
+                    _te = network_state.nodes[component_state.end_node.node_id].temperature_c
+                    start_temp = _ts if _ts is not None else default_temperature_c
+                    end_temp   = _te if _te is not None else default_temperature_c
                     component_state.temperature_c = 0.5 * (start_temp + end_temp)
                 pipe_idx += 1
