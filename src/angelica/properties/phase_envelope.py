@@ -407,18 +407,19 @@ def compute_phase_envelope(
         gas_phase, liq_phase, flash_obj, z, names, fracs, T_lo, T_hi
     )
 
-    # Close the envelope at the critical: use the last point of each arc that
-    # is closest to the other.  If both arcs reach lnK<0.005 they've converged;
-    # average the final T/P pair as the shared critical point.
+    # Close the envelope: average the final T/P pair of both arcs as the
+    # shared critical point, and use it as the returned Tc/Pc marker.
+    # This is the thermodynamic critical point from the arc-length algorithm,
+    # which is far more accurate than the Kay's-rule pseudo-critical above.
     if bubble_pts and dew_pts:
         T_bc, P_bc = bubble_pts[-1]
         T_dc, P_dc = dew_pts[-1]
         T_crit = (T_bc + T_dc) / 2.0
         P_crit = (P_bc + P_dc) / 2.0
-        # Both arcs should be within 1 K / 1 bar — if so, merge; otherwise keep as-is
         if abs(T_bc - T_dc) < 2.0 and abs(P_bc - P_dc) / max(P_bc, P_dc) < 0.02:
             bubble_pts[-1] = (T_crit, P_crit)
             dew_pts[-1] = (T_crit, P_crit)
+            Tc, Pc = T_crit, P_crit
 
     return bubble_pts, dew_pts, Tc, Pc
 

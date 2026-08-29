@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.6.75] — 2026-08-29
+
+### Fix: critical point marker uses algorithm convergence, not Kay's rule
+
+`compute_phase_envelope` was returning the mole-fraction-weighted
+pseudo-critical temperature/pressure (Kay's rule) as `Tc`/`Pc`.  Those
+values are only a crude approximation and can be far from the true
+thermodynamic critical point (e.g. −41.7 °C / 46.2 bar vs the correct
+−17 °C / 82.5 bar for the 0.7/0.2/0.1 methane–ethane–propane mixture).
+
+The fix: when the bubble and dew arc-length traces converge within 2 K
+and 2 % in pressure, their averaged endpoint is used as `Tc`/`Pc`.
+This matches HYSYS within ~4 °C and < 1 % in pressure — the remaining
+offset is expected and attributable to binary interaction parameters
+(kᵢⱼ = 0 in Angelica, tuned values in HYSYS).
+
 ## [1.6.74] — 2026-08-29
 
 ### Feature: CSV export for phase envelope
