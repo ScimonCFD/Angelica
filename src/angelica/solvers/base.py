@@ -114,7 +114,7 @@ class BaseSolver(ABC):
                 continue
             try:
                 cp = fluid_model.specific_heat_for_link(_TempProxy(T_node))
-            except (NotImplementedError, AttributeError):
+            except NotImplementedError:
                 continue
             rate = abs(net) * cp * T_node  # W  (0 °C reference)
             if net < 0:           # fluid injected into network
@@ -153,7 +153,7 @@ class BaseSolver(ABC):
                         # Near-ambient or sign flip: fall back to enthalpy change
                         try:
                             cp = fluid_model.specific_heat_for_link(_TempProxy(T_up))
-                        except (NotImplementedError, AttributeError):
+                        except NotImplementedError:
                             continue
                         q_wall_w += mdot * cp * (T_up - T_exit)
                     else:

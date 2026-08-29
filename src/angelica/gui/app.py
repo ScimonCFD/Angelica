@@ -2976,6 +2976,17 @@ class NetSimGui:
                 tags=(node_tag, "node"),
             )
 
+    def _get_link_vf(self, link: CanvasLink) -> "float | None":
+        """Return the vapor fraction for this link from the latest result, or None."""
+        if self.latest_result is None:
+            return None
+        prefix = f"link_{link.link_id}_"
+        for cf in self.latest_result.component_flows:
+            if prefix in cf.label and cf.vapor_fraction is not None:
+                import math
+                return None if math.isnan(cf.vapor_fraction) else cf.vapor_fraction
+        return None
+
     def _draw_link(self, link: CanvasLink) -> None:
         start = self.scene.get_node(link.start_node_id)
         end = self.scene.get_node(link.end_node_id)
@@ -2990,7 +3001,14 @@ class NetSimGui:
         elif "pump" in types:
             link_color = self._t["plot_turbulent"]
         else:
-            link_color = self._t["link"]
+            vf = self._get_link_vf(link)
+            if vf is not None and 0.005 < vf < 0.995:
+                link_color = "#e07b00"   # two-phase: amber
+            else:
+                link_color = self._t["link"]
+
+        mid_x = (start_x + end_x) / 2
+        mid_y = (start_y + end_y) / 2
 
         self.canvas.create_line(
             start_x,
@@ -3002,6 +3020,19 @@ class NetSimGui:
             tags=("link", f"link_{link.link_id}"),
         )
         self.canvas.tag_lower("link")
+
+        # VF label — show only when there is a result and physics is compositional
+        vf = self._get_link_vf(link)
+        if vf is not None:
+            label = f"VF={vf:.2f}"
+            self.canvas.create_text(
+                mid_x,
+                mid_y - 10,
+                text=label,
+                font=("TkDefaultFont", 8),
+                fill=self._t["node_summary"],
+                tags=("link", f"link_{link.link_id}"),
+            )
 
     def _redraw_scene(self) -> None:
         self.canvas.delete("all")

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-import numpy as np
-
 _R = 8.314  # J/(mol·K)
 
 
@@ -65,28 +63,21 @@ class PengRobinsonEOS(EquationOfState):
         self.critical_pressure_pa = critical_pressure_pa
         self.acentric_factor = acentric_factor
 
-        kappa = 0.37464 + 1.54226 * acentric_factor - 0.26992 * acentric_factor ** 2
-        self._kappa = kappa
-        self._b = 0.07780 * _R * critical_temperature_k / critical_pressure_pa
-        self._a_c = 0.45724 * _R ** 2 * critical_temperature_k ** 2 / critical_pressure_pa
-
-    def _a(self, temperature_k: float) -> float:
-        alpha = (1.0 + self._kappa * (1.0 - (temperature_k / self.critical_temperature_k) ** 0.5)) ** 2
-        return self._a_c * alpha
-
     def density(self, pressure_pa: float, temperature_c: float) -> float:
+        from thermo.eos import PR as _PR
         T = temperature_c + 273.15
-        a = self._a(T)
-        b = self._b
-        A = a * pressure_pa / (_R * T) ** 2
-        B = b * pressure_pa / (_R * T)
-        # Z³ - (1-B)Z² + (A - 3B² - 2B)Z - (AB - B² - B³) = 0
-        coeffs = [1.0, -(1.0 - B), A - 3.0 * B ** 2 - 2.0 * B, -(A * B - B ** 2 - B ** 3)]
-        roots = np.roots(coeffs)
-        # Vapour root: largest real root greater than B (the co-volume lower bound)
-        real_roots = [
-            r.real for r in roots
-            if abs(r.imag) / max(abs(r.real), 1.0) < 1e-8 and r.real > B
-        ]
-        Z = max(real_roots) if real_roots else max(r.real for r in roots)
+        pr = _PR(
+            Tc=self.critical_temperature_k,
+            Pc=self.critical_pressure_pa,
+            omega=self.acentric_factor,
+            T=T,
+            P=pressure_pa,
+        )
+        # Prefer the gas root; fall back to liquid root when only one root exists.
+        Z = getattr(pr, "Z_g", None) or getattr(pr, "Z_l", None)
+        if Z is None:
+            raise RuntimeError(
+                f"PR EOS: no valid Z root at T={temperature_c:.1f} °C, "
+                f"P={pressure_pa / 1e6:.3f} MPa"
+            )
         return pressure_pa * self.molecular_weight_kg_per_mol / (Z * _R * T)

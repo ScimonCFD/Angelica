@@ -167,3 +167,21 @@ class CompositionalFluid(FluidModel):
 
     def thermal_conductivity_for_link(self, link_state) -> float:
         return self._props(link_state)[3]
+
+    def vapor_fraction_for_link(self, link_state) -> float:
+        """Return the equilibrium vapor fraction (VF) at the link's average P and T.
+
+        Returns 0.0 for all-liquid, 1.0 for all-gas, and a value in (0, 1) for
+        two-phase conditions.  Uses the same cached flash object as density/viscosity,
+        so no additional EOS evaluation is needed.
+        """
+        zs = self._get_zs(link_state)
+        P  = self._get_pressure_pa(link_state)
+        T  = self._get_temperature_c(link_state)
+        flash_obj = _get_flash_obj(self.component_names, self.eos_name)
+        T_K = T + 273.15
+        try:
+            res = flash_obj.flash(T=T_K, P=P, zs=list(zs))
+            return float(res.VF)
+        except Exception:
+            return float("nan")

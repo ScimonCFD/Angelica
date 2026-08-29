@@ -330,6 +330,7 @@ class SteadyCompositionalSolver(BaseSolver):
             density = fluid.density_for_link(link)
             t_in  = node_temperatures.get(link.start_node.node_id)
             t_out = node_temperatures.get(link.end_node.node_id)
+            vf = fluid.vapor_fraction_for_link(link)
             component_flows.append(
                 ComponentFlowResult(
                     label=self._hydraulic_solver._component_label(link),
@@ -340,6 +341,7 @@ class SteadyCompositionalSolver(BaseSolver):
                     temperature_in_c=t_in,
                     temperature_out_c=t_out,
                     zs=tuple(link.zs) if getattr(link, "zs", ()) else (),
+                    vapor_fraction=vf,
                 )
             )
 

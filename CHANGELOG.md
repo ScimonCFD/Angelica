@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.6.78] — 2026-08-29
+
+### Fix: multiple audit-identified issues
+
+**base.py** — narrowed broad `except (NotImplementedError, AttributeError)` to
+`except NotImplementedError` in `_compute_global_energy_balance`, so real
+`AttributeError`s (e.g. missing fields on a new result type) propagate instead
+of being silently swallowed.
+
+**eos.py** — replaced the hand-rolled cubic solver in `PengRobinsonEOS.density()`
+with `thermo.eos.PR` internally.  Same public API and interface; eliminates a
+duplicate PR implementation.  Root selection uses `getattr(pr, "Z_g", None) or
+getattr(pr, "Z_l", None)` to handle pure gas and pure liquid conditions where
+only one root exists.
+
+**results.py** — added `vapor_fraction: float | None = None` field to
+`ComponentFlowResult` (0=liquid, 1=gas, (0,1)=two-phase, None for non-EOS modes).
+
+**compositional_fluid.py** — added `vapor_fraction_for_link()` method that performs
+a thermo `FlashVL.flash()` at the link's local P/T/z and returns `VF`.  Also wired
+EPPR78 kᵢⱼ into the compositional flash (same `_build_kij_matrix` already used by
+the phase envelope).
+
+**steady_compositional.py** — result-building loop now calls
+`fluid.vapor_fraction_for_link(link)` and stores the result in `ComponentFlowResult`.
+
+**steady_black_oil.py** — added `composition_relaxation: float = 1.0` to
+`BlackOilSolverSettings`.  `_propagate_compositions` now accepts and applies
+inter-iteration relaxation blending and returns `(pipe_comp, node_comp)` so the
+outer loop can carry forward junction compositions.
+
+**app.py** — two-phase links (0.005 < VF < 0.995) are colored amber (`#e07b00`);
+a "VF=X.XX" label is drawn at each link's midpoint.  Helper `_get_link_vf()` looks
+up the vapor fraction from `latest_result.component_flows`.
+
+**tests/test_phase_envelope.py** — new test file with 21 tests covering
+`_build_kij_matrix`, `compute_phase_envelope`, and `compute_quality_line`.
+
+**tests/test_velocity_loops.py** — new test file with 11 tests covering
+`ColebrookPipeCorrelation.calculate_velocity()` with fixed_point and secant
+velocity-loop methods, physics monotonicity, Darcy-Weisbach residual verification,
+zero-ΔP edge case, laminar regime, and rough vs smooth pipe.
+
 ## [1.6.77] — 2026-08-29
 
 ### Feature: EOS row in the left-panel palette

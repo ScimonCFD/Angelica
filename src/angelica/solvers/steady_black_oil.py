@@ -39,6 +39,7 @@ class BlackOilSolverSettings:
     density_rel_tolerance: float = 1e-4
     temperature_tolerance_k: float = 0.01
     temperature_relaxation: float = 1.0
+    composition_relaxation: float = 1.0
 
 
 class SteadyBlackOilSolver(BaseSolver):
@@ -97,7 +98,9 @@ class SteadyBlackOilSolver(BaseSolver):
         network_state: NetworkState,
         case: NetworkCase,
         default_comp: BlackOilComposition,
-    ) -> Dict[int, BlackOilComposition]:
+        node_comp_prev: "Dict[int, BlackOilComposition] | None" = None,
+        relaxation: float = 1.0,
+    ) -> "tuple[Dict[int, BlackOilComposition], Dict[int, BlackOilComposition]]":
         """Return a per-pipe-index composition map after one propagation pass.
 
         Compositions are seeded at inlet nodes and propagated downstream
@@ -162,6 +165,17 @@ class SteadyBlackOilSolver(BaseSolver):
                 for m_i, c_i in contributions[1:]:
                     mixed = mixed.mix(c_i, w_acc, m_i)
                     w_acc += m_i
+                # Apply inter-iteration relaxation toward the previous outer result
+                if node_comp_prev is not None and relaxation < 1.0 and nid in node_comp_prev:
+                    old = node_comp_prev[nid]
+                    a = relaxation
+                    mixed = BlackOilComposition(
+                        api_gravity      = a * mixed.api_gravity      + (1 - a) * old.api_gravity,
+                        gas_gravity      = a * mixed.gas_gravity      + (1 - a) * old.gas_gravity,
+                        gor_sc_m3_per_m3 = a * mixed.gor_sc_m3_per_m3 + (1 - a) * old.gor_sc_m3_per_m3,
+                        wor_sc_m3_per_m3 = a * mixed.wor_sc_m3_per_m3 + (1 - a) * old.wor_sc_m3_per_m3,
+                    )
+
                 prev = node_comp.get(nid)
                 node_comp[nid] = mixed
                 if prev is None or (
@@ -190,7 +204,7 @@ class SteadyBlackOilSolver(BaseSolver):
             if idx not in pipe_comp:
                 pipe_comp[idx] = default_comp
 
-        return pipe_comp
+        return pipe_comp, node_comp
 
     @staticmethod
     def _pipe_density(ps: PipeState, comp: BlackOilComposition) -> float:
@@ -346,13 +360,16 @@ class SteadyBlackOilSolver(BaseSolver):
 
         # pipe_comps: per-pipe composition (None → use global fluid_model)
         pipe_comps: Dict[int, BlackOilComposition] | None = None
+        node_comp_prev: Dict[int, BlackOilComposition] | None = None
 
         for _outer in range(settings.max_outer_iterations):
 
             # ── build effective fluid model for this iteration ────────────────
             if use_per_inlet:
-                pipe_comps = self._propagate_compositions(
-                    network_state, case, default_comp  # type: ignore[arg-type]
+                pipe_comps, node_comp_prev = self._propagate_compositions(
+                    network_state, case, default_comp,  # type: ignore[arg-type]
+                    node_comp_prev=node_comp_prev,
+                    relaxation=settings.composition_relaxation,
                 )
                 effective_fluid = self._build_mixed_fluid(
                     network_state, pipe_comps, default_comp, T_init  # type: ignore[arg-type]
