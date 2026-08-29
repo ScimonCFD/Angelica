@@ -18,9 +18,11 @@ def _get_flash_obj(component_names: tuple[str, ...], eos_name: str):
         from thermo.flash import FlashVL
         from thermo.phases import CEOSGas, CEOSLiquid
         from thermo.eos_mix import PRMIX, SRKMIX
+        from .phase_envelope import _build_kij_matrix
         eos_cls = SRKMIX if eos_name == "SRK" else PRMIX
         constants, props = ChemicalConstantsPackage.from_IDs(list(component_names))
-        eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas)
+        kijs = _build_kij_matrix(constants)
+        eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas, kijs=kijs)
         gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
         liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
         flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)

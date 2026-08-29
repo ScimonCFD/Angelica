@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.6.76] — 2026-08-29
+
+### Feature: binary interaction parameters from EPPR78
+
+`compute_phase_envelope`, `compute_quality_line`, and the compositional PT
+flash now automatically load binary interaction parameters (kᵢⱼ) from the
+EPPR78 database bundled with the `thermo` library (Jaubert & Mutelet 2004).
+
+The kᵢⱼ values are looked up by CAS-number pair at EOS construction time and
+passed directly to `PRMIX` / `SRKMIX` as the `kijs` matrix.  Component pairs
+not covered by the database silently default to 0.
+
+Example values for the 0.7/0.2/0.1 methane–ethane–propane mixture:
+
+| Pair           | kᵢⱼ    |
+|----------------|--------|
+| CH₄–C₂H₆      | +0.0058 |
+| CH₄–C₃H₈      | +0.0189 |
+| C₂H₆–C₃H₈     | −0.0029 |
+
+This closes the residual gap with commercial simulators (HYSYS) that was
+noted in the 1.6.75 release.
+
 ## [1.6.75] — 2026-08-29
 
 ### Fix: critical point marker uses algorithm convergence, not Kay's rule

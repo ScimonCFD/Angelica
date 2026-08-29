@@ -10,6 +10,40 @@ from __future__ import annotations
 import numpy as np
 
 
+def _build_kij_matrix(constants) -> list[list[float]]:
+    """Build kij matrix from EPPR78 database (Jaubert & Mutelet 2004).
+
+    Returns an N×N list of lists; off-diagonal values come from thermo's
+    bundled eppr78_common.json keyed by CAS-number pairs.  Missing pairs
+    default to 0.0.
+    """
+    import json
+    import os
+
+    try:
+        import thermo as _thermo_pkg
+        db_path = os.path.join(
+            os.path.dirname(_thermo_pkg.__file__),
+            "Interaction Parameters",
+            "eppr78_common.json",
+        )
+        with open(db_path, encoding="utf-8") as fh:
+            raw: dict = json.load(fh)["data"]
+    except Exception:
+        raw = {}
+
+    CASs = list(constants.CASs)
+    N = len(CASs)
+    kijs: list[list[float]] = [[0.0] * N for _ in range(N)]
+    for i in range(N):
+        for j in range(i + 1, N):
+            pair = raw.get(f"{CASs[i]} {CASs[j]}") or raw.get(f"{CASs[j]} {CASs[i]}")
+            kij = float(pair["kij"]) if pair else 0.0
+            kijs[i][j] = kij
+            kijs[j][i] = kij
+    return kijs
+
+
 def _eval_FJ(
     gas_phase: object,
     liq_phase: object,
@@ -385,7 +419,8 @@ def compute_phase_envelope(
     z = np.asarray(fracs, float)
 
     constants, props = ChemicalConstantsPackage.from_IDs(names)
-    eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas)
+    kijs = _build_kij_matrix(constants)
+    eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas, kijs=kijs)
     gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
     liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
     flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
@@ -451,7 +486,8 @@ def compute_quality_line(
     fracs = list(zs)
 
     constants, props = ChemicalConstantsPackage.from_IDs(names)
-    eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas)
+    kijs = _build_kij_matrix(constants)
+    eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas, kijs=kijs)
     gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
     liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
     flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
