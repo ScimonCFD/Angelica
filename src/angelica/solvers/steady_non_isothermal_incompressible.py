@@ -118,9 +118,9 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         turb_metrics = []
         hydraulic_converged = False
 
+        self._hydraulic_solver._initialise_pressure_field(network_state, case)
         for _outer in range(settings.max_temperature_iterations):
             # 1. Solve hydraulics with current T
-            self._hydraulic_solver._initialise_pressure_field(network_state, case)
             lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
                 network_state,
                 fluid_model,

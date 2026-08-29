@@ -67,8 +67,9 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
                 )
             )
 
+        _balance_source = turbulent_metrics if turbulent_metrics else laminar_metrics
         mass_balance_history = [
-            m.global_mass_imbalance_rel * 100.0 for m in turbulent_metrics
+            m.global_mass_imbalance_rel * 100.0 for m in _balance_source
         ]
 
         return SolveResult(

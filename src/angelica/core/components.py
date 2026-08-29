@@ -109,3 +109,7 @@ class HeatSource(PressureChanger):
     rated_mass_flow_kg_per_s: float = 1.0
     n_thermal_segments: int = 10
     length_m: float = 1.0
+
+    def __post_init__(self) -> None:
+        if self.length_m <= 0.0:
+            raise ValueError(f"HeatSource length_m must be positive (got {self.length_m})")

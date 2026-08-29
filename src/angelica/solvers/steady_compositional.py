@@ -136,7 +136,7 @@ class SteadyCompositionalSolver(BaseSolver):
         pipe_states = [
             (idx, ps)
             for idx, ps in enumerate(network_state.components)
-            if isinstance(ps, PipeState)
+            if isinstance(ps, (PipeState, HeatSourceState))
         ]
 
         # ── fixed-point iteration over junction mixing ────────────────────────

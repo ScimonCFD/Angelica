@@ -22,8 +22,20 @@ class SolverSettings:
 
     @property
     def friction_tolerance(self) -> float:
+        import warnings
+        warnings.warn(
+            "friction_tolerance is deprecated; use colebrook_residual_tolerance instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.colebrook_residual_tolerance
 
     @property
     def correction_tolerance(self) -> float:
+        import warnings
+        warnings.warn(
+            "correction_tolerance is deprecated; use pressure_correction_abs_tolerance_pa instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.pressure_correction_abs_tolerance_pa

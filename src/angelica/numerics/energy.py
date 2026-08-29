@@ -164,7 +164,6 @@ def solve_energy_system(
         Sp = -U * math.pi * D_pipe * dx   # negative → strengthens diagonal
 
         # Fixed power source (heater/cooler): Sc += Q/n_internal, Sp_extra = 0
-        n_internal = n_segs - 1
         if isinstance(ps, HeatSourceState) and n_internal > 0:
             Sc += ps.component.power_w / n_internal
 

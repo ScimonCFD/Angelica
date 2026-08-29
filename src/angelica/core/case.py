@@ -69,6 +69,12 @@ class FlowBoundary:
     node_id: int
     mass_flow_kg_per_s: float
 
+    def __post_init__(self) -> None:
+        if self.mass_flow_kg_per_s < 0.0:
+            raise ValueError(
+                f"FlowBoundary mass_flow_kg_per_s must be non-negative (got {self.mass_flow_kg_per_s})"
+            )
+
 
 @dataclass(frozen=True)
 class ThermalBoundary:

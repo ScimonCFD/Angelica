@@ -130,7 +130,7 @@ class SteadyBlackOilSolver(BaseSolver):
         pipe_states = [
             (idx, ps)
             for idx, ps in enumerate(network_state.components)
-            if isinstance(ps, PipeState)
+            if isinstance(ps, (PipeState, HeatSourceState))
         ]
 
         # ── first pass: propagate from seeded nodes into their downstream pipes
@@ -265,16 +265,22 @@ class SteadyBlackOilSolver(BaseSolver):
         )
 
         class _PerPipeFluid:
+            def __init__(self):
+                self._cache: dict = {}
+
             def _fluid_for(self, link_state) -> BlackOilFluid:
-                comp = id_to_comp.get(id(link_state), default_comp)
-                return BlackOilFluid(
-                    api_gravity             = comp.api_gravity,
-                    gas_gravity             = comp.gas_gravity,
-                    gor_sc_m3_per_m3        = comp.gor_sc_m3_per_m3,
-                    wor_sc_m3_per_m3        = comp.wor_sc_m3_per_m3,
-                    reference_pressure_pa   = ref_p,
-                    reference_temperature_c = ref_t,
-                )
+                key = id(link_state)
+                if key not in self._cache:
+                    comp = id_to_comp.get(key, default_comp)
+                    self._cache[key] = BlackOilFluid(
+                        api_gravity             = comp.api_gravity,
+                        gas_gravity             = comp.gas_gravity,
+                        gor_sc_m3_per_m3        = comp.gor_sc_m3_per_m3,
+                        wor_sc_m3_per_m3        = comp.wor_sc_m3_per_m3,
+                        reference_pressure_pa   = ref_p,
+                        reference_temperature_c = ref_t,
+                    )
+                return self._cache[key]
 
             def density_for_link(self, link_state) -> float:
                 return self._fluid_for(link_state).density_for_link(link_state)
@@ -362,6 +368,7 @@ class SteadyBlackOilSolver(BaseSolver):
         pipe_comps: Dict[int, BlackOilComposition] | None = None
         node_comp_prev: Dict[int, BlackOilComposition] | None = None
 
+        self._hydraulic_solver._initialise_pressure_field(network_state, case)
         for _outer in range(settings.max_outer_iterations):
 
             # ── build effective fluid model for this iteration ────────────────
@@ -382,7 +389,6 @@ class SteadyBlackOilSolver(BaseSolver):
                 for link in network_state.components
             ]
 
-            self._hydraulic_solver._initialise_pressure_field(network_state, case)
             lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
                 network_state, effective_fluid, progress_callback=progress_callback
             )

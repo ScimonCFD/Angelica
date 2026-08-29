@@ -127,10 +127,10 @@ class SteadyCompressibleSolver(BaseSolver):
         density_converged = False
         temperature_converged = False
 
+        self._hydraulic_solver._initialise_pressure_field(network_state, case)
         for _outer in range(settings.max_density_iterations):
             old_densities = [fluid_model.density_for_link(link) for link in network_state.components]
 
-            self._hydraulic_solver._initialise_pressure_field(network_state, case)
             lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
                 network_state, fluid_model, progress_callback=progress_callback
             )
@@ -176,6 +176,28 @@ class SteadyCompressibleSolver(BaseSolver):
             density_converged = max_rel_delta < settings.density_rel_tolerance
             if temperature_converged and density_converged:
                 break
+
+        self._hydraulic_solver._initialise_pressure_field(network_state, case)
+        lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
+            network_state, fluid_model, progress_callback=progress_callback
+        )
+        turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
+            network_state, fluid_model, progress_callback=progress_callback
+        )
+        all_lam_hist.extend(lam_hist)
+        all_lam_metrics.extend(lam_metrics)
+        all_turb_hist.extend(turb_hist)
+        all_turb_metrics.extend(turb_metrics)
+        outer_boundaries.append(len(all_turb_metrics))
+        if turb_metrics:
+            outer_turb_final.append(turb_metrics[-1])
+        final_node_temps, final_pipe_mean_temps = solve_energy_system(
+            network_state, fluid_model, self.convection_scheme, T_ref=T_init
+        )
+        for nid, T_new in final_node_temps.items():
+            if not network_state.nodes[nid].is_thermal_inlet:
+                network_state.nodes[nid].temperature_c = T_new
+        self._update_component_temperatures(network_state, T_init, final_pipe_mean_temps)
 
         node_pressures = {
             nid: float(network_state.nodes[nid].pressure_pa)

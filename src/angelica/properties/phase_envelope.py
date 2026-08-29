@@ -170,7 +170,7 @@ def _correct(
             P_t = max(float(np.exp(np.clip(S_try[N + 1], 7.0, 19.0))), 1e3)
             try:
                 F_t, _ = _eval_FJ(gas_phase, liq_phase, T_t, P_t, K_t, z, VF)
-                if np.all(np.isfinite(F_t)) and np.max(np.abs(F_t)) < err * (1 - 1e-4):
+                if np.all(np.isfinite(F_t)) and np.max(np.abs(F_t)) < err * (1 - 1e-6):
                     S = S_try
                     break
             except Exception:

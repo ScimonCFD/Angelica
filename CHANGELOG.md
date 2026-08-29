@@ -1,5 +1,67 @@
 # Changelog
 
+## [1.6.82] — 2026-08-29
+
+### Fix + refactor: second full audit (B1–B4, Q1–Q6, M1–M2, M4)
+
+**Bugs fixed:**
+
+**`solvers/steady_compressible.py`** (B1, Q6) — `_initialise_pressure_field`
+was called on every outer iteration, discarding all pressure convergence between
+density/temperature passes.  Moved to a single call before the loop.  Added a
+final synchronous pass (hydraulics + energy) after the outer loop so the
+reported P/T/ṁ field is self-consistent.
+
+**`core/components.py`** (B2) — `HeatSource` had no `__post_init__` and
+silently accepted `length_m ≤ 0`.  Added validation matching the existing check
+on `Pipe`.
+
+**`solvers/steady_isothermal_incompressible.py`** (B3) — `mass_balance_history`
+was built from `turbulent_metrics`, so it was always empty when
+`turbulent_iterations=0`.  Now falls back to `laminar_metrics`.
+
+**`solvers/steady_black_oil.py`** (B4) — `_PerPipeFluid._fluid_for` called
+`BlackOilFluid(...)` four times per link per iteration (once per property
+method).  Added an instance-level cache keyed by `id(link_state)` so the
+object is constructed once per link per outer iteration.
+
+**Quality improvements:**
+
+**`solvers/steady_black_oil.py` + `steady_compositional.py`** (Q1) —
+`_propagate_compositions` filtered only `PipeState`; `HeatSourceState` links
+inherited the default composition even when seated downstream of a compositional
+inlet.  Expanded the filter to `(PipeState, HeatSourceState)`.
+
+**`core/case.py`** (Q3) — `FlowBoundary` had no `__post_init__`; a negative
+`mass_flow_kg_per_s` was accepted silently.  Added validation.
+
+**`tests/test_phase_envelope.py`** (Q4) — six bare `warnings.filterwarnings("ignore")`
+calls (no context manager) permanently suppressed warnings across the whole test
+process.  All wrapped in `with warnings.catch_warnings():` blocks.
+
+**`pyproject.toml`** (Q5) — `requires-python` was `">=3.8"` but `thermo`
+requires 3.10+.  Corrected to `">=3.10"` and removed the 3.8/3.9 classifiers.
+
+**`solvers/steady_non_isothermal_incompressible.py`** (Q6) — same
+`_initialise_pressure_field`-inside-loop bug as compressible; moved to before
+the outer loop.  The final synchronous pass already had its own call, unchanged.
+
+**`solvers/steady_black_oil.py`** (Q6) — same fix as compressible/non-isothermal.
+
+**Minor:**
+
+**`numerics/energy.py`** (M1) — redundant `n_internal = n_segs - 1` assignment
+at line 167 (inside the same loop that already assigned it at line 117) removed.
+
+**`core/settings.py`** (M2) — deprecated aliases `friction_tolerance` and
+`correction_tolerance` now emit a `DeprecationWarning` with a stacklevel=2 so
+the call site is shown, not the property definition.
+
+**`properties/phase_envelope.py`** (M4) — Armijo acceptance threshold relaxed
+from `err * (1 - 1e-4)` to `err * (1 - 1e-6)` so the arc-length corrector
+accepts a wider range of step sizes near the critical point without returning
+`None`.
+
 ## [1.6.81] — 2026-08-29
 
 ### Refactor: four code-quality issues

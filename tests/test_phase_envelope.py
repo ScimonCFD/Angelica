@@ -27,9 +27,10 @@ from angelica.properties.phase_envelope import (
 class TestBuildKijMatrix(unittest.TestCase):
     def _constants(self, names):
         import warnings
-        warnings.filterwarnings("ignore")
-        from thermo import ChemicalConstantsPackage
-        constants, _ = ChemicalConstantsPackage.from_IDs(names)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            from thermo import ChemicalConstantsPackage
+            constants, _ = ChemicalConstantsPackage.from_IDs(names)
         return constants
 
     def test_known_pairs_from_eppr78(self):
@@ -72,8 +73,9 @@ class TestComputePhaseEnvelope(unittest.TestCase):
 
     def _envelope(self, eos="PR"):
         import warnings
-        warnings.filterwarnings("ignore")
-        return compute_phase_envelope(self.NAMES, self.ZS, eos_name=eos)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            return compute_phase_envelope(self.NAMES, self.ZS, eos_name=eos)
 
     # ── basic structural checks ──────────────────────────────────────────────
 
@@ -160,8 +162,9 @@ class TestComputePhaseEnvelope(unittest.TestCase):
     def test_pure_methane_critical_near_literature(self):
         """Pure CH4: Tc ≈ 190.6 K, Pc ≈ 4.60 MPa (NIST)."""
         import warnings
-        warnings.filterwarnings("ignore")
-        bubble, dew, Tc, Pc = compute_phase_envelope(["methane"], [1.0])
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            bubble, dew, Tc, Pc = compute_phase_envelope(["methane"], [1.0])
         # Critical coordinates within 5 K and 10%
         self.assertAlmostEqual(Tc, 190.6, delta=5.0,
                                msg=f"Pure CH4 Tc={Tc:.1f} K, expected ~190.6 K")
@@ -171,8 +174,9 @@ class TestComputePhaseEnvelope(unittest.TestCase):
     def test_pure_component_bubble_dew_nearly_coincide(self):
         """For a pure component, bubble = dew (vapour-pressure curve)."""
         import warnings
-        warnings.filterwarnings("ignore")
-        bubble, dew, _, _ = compute_phase_envelope(["methane"], [1.0])
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            bubble, dew, _, _ = compute_phase_envelope(["methane"], [1.0])
         # Sample a few interior points and check they lie within 0.5 K of each other
         n = min(len(bubble), len(dew))
         for i in range(0, n, max(1, n // 5)):
@@ -202,8 +206,9 @@ class TestComputeQualityLine(unittest.TestCase):
 
     def _quality(self, vf=0.5, eos="PR"):
         import warnings
-        warnings.filterwarnings("ignore")
-        return compute_quality_line(self.NAMES, self.ZS, vf=vf, eos_name=eos)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            return compute_quality_line(self.NAMES, self.ZS, vf=vf, eos_name=eos)
 
     def test_returns_non_empty_list(self):
         pts = self._quality(0.5)
@@ -229,8 +234,9 @@ class TestComputeQualityLine(unittest.TestCase):
     def test_vf05_P_between_bubble_and_dew(self):
         """At a given T, VF=0.5 pressure should lie between bubble and dew pressures."""
         import warnings
-        warnings.filterwarnings("ignore")
-        bubble, dew, _, _ = compute_phase_envelope(self.NAMES, self.ZS)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            bubble, dew, _, _ = compute_phase_envelope(self.NAMES, self.ZS)
         quality = self._quality(0.5)
 
         # Build a quick T→P lookup for bubble and dew
