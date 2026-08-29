@@ -405,8 +405,6 @@ def compute_phase_envelope(
     """
     import warnings
 
-    warnings.filterwarnings("ignore")
-
     from thermo import ChemicalConstantsPackage
     from thermo.flash import FlashVL
     from thermo.phases import CEOSGas, CEOSLiquid
@@ -418,12 +416,14 @@ def compute_phase_envelope(
     fracs = list(zs)
     z = np.asarray(fracs, float)
 
-    constants, props = ChemicalConstantsPackage.from_IDs(names)
-    kijs = _build_kij_matrix(constants)
-    eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas, kijs=kijs)
-    gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
-    liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
-    flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore")
+        constants, props = ChemicalConstantsPackage.from_IDs(names)
+        kijs = _build_kij_matrix(constants)
+        eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas, kijs=kijs)
+        gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+        liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+        flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
 
     Tcs: list[float] = list(constants.Tcs)
     Pcs: list[float] = list(constants.Pcs)
@@ -475,8 +475,6 @@ def compute_quality_line(
     """
     import warnings
 
-    warnings.filterwarnings("ignore")
-
     from thermo import ChemicalConstantsPackage
     from thermo.flash import FlashVL
     from thermo.phases import CEOSGas, CEOSLiquid
@@ -487,12 +485,14 @@ def compute_quality_line(
     names = list(component_names)
     fracs = list(zs)
 
-    constants, props = ChemicalConstantsPackage.from_IDs(names)
-    kijs = _build_kij_matrix(constants)
-    eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas, kijs=kijs)
-    gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
-    liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
-    flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore")
+        constants, props = ChemicalConstantsPackage.from_IDs(names)
+        kijs = _build_kij_matrix(constants)
+        eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas, kijs=kijs)
+        gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+        liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+        flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
 
     Tbs: list[float] = list(constants.Tbs)
     Tcs_list: list[float] = list(constants.Tcs)

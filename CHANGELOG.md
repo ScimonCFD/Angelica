@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.6.81] — 2026-08-29
+
+### Refactor: four code-quality issues
+
+**`closures/friction.py`** — `ColebrookFrictionFactorStrategy` now inherits
+`ABC` and marks `solve()` with `@abstractmethod`, so a missing implementation
+is caught at class-definition time instead of call time.  `DarcyWeisbachModel`
+(22-line convenience wrapper with no callers anywhere in the codebase) removed.
+
+**`closures/__init__.py`** — removed `DarcyWeisbachModel` from the import and
+`__all__`.
+
+**`solvers/steady_isothermal_incompressible.py`** — extracted `_run_iteration_loop`
+helper that contains the shared body of `_solve_laminar` and `_solve_turbulent`.
+Both methods are now single-call delegations; the ~46 lines that were duplicated
+between them live in one place.
+
+**`properties/phase_envelope.py`** — the two `warnings.filterwarnings("ignore")`
+calls in `compute_phase_envelope` and `compute_quality_line` were not inside any
+context manager, permanently suppressing warnings process-wide.  Both are now
+wrapped in `with warnings.catch_warnings(): warnings.filterwarnings("ignore")`
+blocks scoped to the thermo object-construction section only.
+
 ## [1.6.80] — 2026-08-29
 
 ### Fix: three silent-failure bugs

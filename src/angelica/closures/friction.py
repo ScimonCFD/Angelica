@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from abc import ABC, abstractmethod
 
 from angelica.numerics import NonlinearProblem, build_nonlinear_solver
 
@@ -8,7 +9,8 @@ from .gravity import GRAVITY_M_PER_S2, elevation_pressure_term
 from .pressure_drop import PressureDropCorrelation
 
 
-class ColebrookFrictionFactorStrategy:
+class ColebrookFrictionFactorStrategy(ABC):
+    @abstractmethod
     def solve(
         self,
         correlation: ColebrookPipeCorrelation,
@@ -17,8 +19,7 @@ class ColebrookFrictionFactorStrategy:
         tolerance: float,
         friction_factor_method: str,
         friction_factor_max_iterations: int,
-    ) -> float:
-        raise NotImplementedError
+    ) -> float: ...
 
 
 class DirectColebrookFrictionFactorSolver(ColebrookFrictionFactorStrategy):
@@ -434,25 +435,3 @@ class HazenWilliamsPipeCorrelation(PressureDropCorrelation):
         )
 
 
-class DarcyWeisbachModel:
-    def __init__(self) -> None:
-        self.laminar_correlation = LaminarPipeCorrelation()
-        self.turbulent_correlation = ColebrookPipeCorrelation()
-
-    def laminar_velocity(self, pipe_state, delta_p: float, density: float, viscosity: float) -> float:
-        return self.laminar_correlation.calculate_velocity(pipe_state, delta_p, density, viscosity)
-
-    def turbulent_velocity(self, pipe_state, delta_p: float, density: float, viscosity: float, tolerance: float) -> float:
-        return self.turbulent_correlation.calculate_velocity(
-            pipe_state,
-            delta_p,
-            density,
-            viscosity,
-            tolerance,
-        )
-
-    def laminar_coupling(self, pipe_state, density: float, viscosity: float) -> float:
-        return self.laminar_correlation.calculate_coupling(pipe_state, density, viscosity)
-
-    def turbulent_coupling(self, pipe_state) -> float:
-        return self.turbulent_correlation.calculate_coupling(pipe_state, 0.0, 0.0)

@@ -1,7 +1,6 @@
 from .convection_scheme import ConvectionScheme, HybridScheme, PowerLawScheme, UpwindScheme
 from .friction import (
     ColebrookPipeCorrelation,
-    DarcyWeisbachModel,
     HazenWilliamsPipeCorrelation,
     LaminarPipeCorrelation,
 )
@@ -14,7 +13,6 @@ from .pressure_drop import PressureDropCorrelation
 __all__ = [
     "ConvectionScheme",
     "ColebrookPipeCorrelation",
-    "DarcyWeisbachModel",
     "HazenWilliamsPipeCorrelation",
     "HeatSourceModel",
     "HybridScheme",
