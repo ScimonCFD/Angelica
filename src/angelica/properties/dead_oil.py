@@ -81,12 +81,13 @@ def dead_oil_viscosity_pa_s(api_gravity: float, temperature_c: float) -> float:
     Correlation: log10(log10(mu_od + 1)) = (3.0324 - 0.02023*API) - 1.163*log10(T_F)
     where T_F is temperature in Fahrenheit and mu_od is in centipoise.
 
-    Stated range: 16 <= API <= 58, -6.7 °C <= T <= 146 °C.
+    Correlation stated range: 16 <= API <= 58, -6.7 °C <= T <= 146 °C.
+    Hard lower bound: T > 0 °F (> -17.78 °C) — log10(0) is undefined below this point.
     Returns viscosity in Pa·s.
     """
     temperature_f = temperature_c * 9.0 / 5.0 + 32.0
     if temperature_f <= 0.0:
-        raise ValueError(f"Temperature must be above 0 °F; got {temperature_f:.1f} °F ({temperature_c:.1f} °C).")
+        raise ValueError(f"Temperature must be above 0 °F (-17.78 °C); got {temperature_f:.1f} °F ({temperature_c:.1f} °C).")
     z = 3.0324 - 0.02023 * api_gravity - 1.163 * math.log10(temperature_f)
     viscosity_cp = 10.0 ** (10.0 ** z) - 1.0
     return max(viscosity_cp / 1000.0, 1e-9)

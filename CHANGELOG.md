@@ -1,5 +1,61 @@
 # Changelog
 
+## [1.6.83] — 2026-08-29
+
+### Fix + refactor: third full audit (compositional solver, PVT cache, validation, tests)
+
+**Bugs fixed:**
+
+**`solvers/steady_compositional.py`** (Q6-compositional) — `_initialise_pressure_field`
+was still called on every outer iteration in the compositional solver (the same bug fixed
+in B1/Q6 for the other three solvers in v1.6.82 was missed here).  Moved to a single call
+before the loop.
+
+**`solvers/steady_compositional.py`** (final-sync) — unlike the non-isothermal and
+compressible solvers, the compositional solver had no final synchronous pass after the
+outer loop.  The reported flow and temperature fields could therefore come from different
+outer iterations.  Added a final hydraulics + energy pass so the result is self-consistent.
+
+**`solvers/steady_compositional.py`** (init) — per-pipe composition initialisation only
+covered `PipeState`; `HeatSourceState` entered the first iteration with no `zs` attribute,
+relying on a dynamic `getattr` fallback instead of the declared default.  Expanded the
+initialisation to `(PipeState, HeatSourceState)`.
+
+**`core/state.py`** — `HeatSourceState` lacked a declared `zs: tuple[float, ...] = ()`
+field while `PipeState` had one.  The asymmetry broke type safety and required `getattr`
+workarounds throughout the solver and result-builder code.  Added the field.
+
+**Performance improvements:**
+
+**`properties/black_oil.py`** — `BlackOilFluid.density_for_link`,
+`viscosity_for_link`, `specific_heat_for_link`, and `thermal_conductivity_for_link` each
+called `pvt()` independently, triggering a full Hall-Yarborough Newton solve four times
+per link per property query.  Added `@functools.lru_cache(maxsize=512)` to `compute_pvt`
+so repeated calls with the same `(P, T, API, GG, GOR, WOR)` are free.
+
+**`closures/friction.py`** — `build_colebrook_friction_factor_strategy` instantiated a
+new `ColebrookFrictionFactorStrategy` on every call.  Both strategy classes are stateless;
+replaced with module-level singleton caching.
+
+**Validation improvements:**
+
+**`core/case.py`** — `InletFluidBC` accepted physically nonsensical parameters (negative
+GOR, negative WOR, invalid API gravity) without raising.  Added `__post_init__` matching
+the validation already present on `BlackOilFluid`.
+
+**`properties/dead_oil.py`** — docstring for `dead_oil_viscosity_pa_s` stated only the
+correlation's validity range (-6.7 °C to 146 °C) without mentioning the hard mathematical
+lower bound (T > 0 °F = -17.78 °C) at which the code raises.  Clarified both limits.
+
+**Tests:**
+
+Added 19 new tests covering three previously untested components:
+- `HazenWilliamsPipeCorrelation` — 6 tests (velocity sign, symmetry, coupling monotonicity)
+- `HeatSourceModel` — 6 tests (rated mode, fixed mode, transparent device, coupling bound)
+- `MinorLossModel` — 7 tests (finite K, infinite K / closed valve, symmetry, K ordering)
+
+Total: 252 tests, all passing.
+
 ## [1.6.82] — 2026-08-29
 
 ### Fix + refactor: second full audit (B1–B4, Q1–Q6, M1–M2, M4)

@@ -18,6 +18,7 @@ field units (psia, °F, scf/STB) are confined to the correlation functions.
 """
 from __future__ import annotations
 
+import functools
 import math
 from dataclasses import dataclass
 
@@ -316,6 +317,7 @@ class BlackOilComposition:
 
 # ── Standalone PVT function ───────────────────────────────────────────────────
 
+@functools.lru_cache(maxsize=512)
 def compute_pvt(
     pressure_pa: float,
     temperature_c: float,

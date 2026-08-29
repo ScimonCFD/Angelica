@@ -78,14 +78,20 @@ class TransformedColebrookFrictionFactorSolver(ColebrookFrictionFactorStrategy):
         return max(math.exp(transformed_friction), 1e-8)
 
 
+_STRATEGY_SINGLETONS: dict[str, ColebrookFrictionFactorStrategy] = {}
+
+
 def build_colebrook_friction_factor_strategy(
     strategy_name: str,
 ) -> ColebrookFrictionFactorStrategy:
-    if strategy_name == "direct":
-        return DirectColebrookFrictionFactorSolver()
-    if strategy_name == "transformed":
-        return TransformedColebrookFrictionFactorSolver()
-    raise ValueError(f"Unsupported Colebrook friction-factor strategy: {strategy_name}")
+    if strategy_name not in _STRATEGY_SINGLETONS:
+        if strategy_name == "direct":
+            _STRATEGY_SINGLETONS[strategy_name] = DirectColebrookFrictionFactorSolver()
+        elif strategy_name == "transformed":
+            _STRATEGY_SINGLETONS[strategy_name] = TransformedColebrookFrictionFactorSolver()
+        else:
+            raise ValueError(f"Unsupported Colebrook friction-factor strategy: {strategy_name}")
+    return _STRATEGY_SINGLETONS[strategy_name]
 
 
 class LaminarPipeCorrelation(PressureDropCorrelation):

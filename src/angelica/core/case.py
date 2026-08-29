@@ -28,6 +28,18 @@ class InletFluidBC:
     gor_sc_m3_per_m3: float
     wor_sc_m3_per_m3: float
 
+    def __post_init__(self) -> None:
+        if self.api_gravity <= -131.5:
+            raise ValueError(f"api_gravity must be > -131.5 (got {self.api_gravity})")
+        if self.gas_gravity <= 0.0 and self.gor_sc_m3_per_m3 > 0.0:
+            raise ValueError(
+                f"gas_gravity must be > 0 when gor_sc_m3_per_m3 > 0 (got {self.gas_gravity})"
+            )
+        if self.gor_sc_m3_per_m3 < 0.0:
+            raise ValueError(f"gor_sc_m3_per_m3 must be >= 0 (got {self.gor_sc_m3_per_m3})")
+        if self.wor_sc_m3_per_m3 < 0.0:
+            raise ValueError(f"wor_sc_m3_per_m3 must be >= 0 (got {self.wor_sc_m3_per_m3})")
+
 
 @dataclass(frozen=True)
 class InletCompositionBC:

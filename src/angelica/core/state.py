@@ -62,6 +62,7 @@ class HeatSourceState(PressureChangerState):
     component: HeatSource
     reynolds: float = 0.0
     temperature_c: float | None = None
+    zs: tuple[float, ...] = ()
 
 
 @dataclass
