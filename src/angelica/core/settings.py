@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)
 class SolverSettings:
-    laminar_iterations: Optional[int] = None
+    laminar_iterations: int | None = None
     laminar_iterations_without_fittings: int = 1
     laminar_iterations_with_fittings: int = 7
     turbulent_iterations: int = 60

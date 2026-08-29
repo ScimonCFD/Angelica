@@ -1,5 +1,56 @@
 # Changelog
 
+## [1.6.84] — 2026-08-30
+
+### Fix + refactor: fourth full audit (black-oil sync, flash cache, singletons, validation)
+
+**Bugs fixed:**
+
+**`solvers/steady_black_oil.py`** (final-sync) — the black-oil solver was the only
+thermal solver without a final synchronous pass after the outer loop.  The non-isothermal,
+compressible, and compositional solvers all have one; black-oil now does too.  The reported
+flow field and temperature field are now guaranteed to come from the same hydraulic+energy
+solve.
+
+**Performance improvements:**
+
+**`properties/compositional_fluid.py`** (`vapor_fraction_for_link`) — the method called
+`flash_obj.flash()` directly, bypassing the `_flash_properties` lru_cache and performing a
+redundant EOS flash per link at result-building time.  Now delegates to `_props()` and reads
+`VF` from the cached 5-tuple, eliminating the duplicate flash entirely.
+
+**`solvers/steady_black_oil.py`** (`_propagate_compositions`) — the inlet-node frozenset
+was reconstructed as `{ibc.node_id for ibc in case.inlet_fluid_bcs}` inside the inner
+junction loop, allocating a new set for every junction on every propagation pass.  Moved to
+a single `frozenset(...)` construction before the outer propagation loop.
+
+**`numerics/nonlinear_solvers.py`** — `build_nonlinear_solver` instantiated a new
+`FixedPointSolver`, `SecantSolver`, or `NewtonSolver` on every call.  All three are
+stateless (only `max_iterations`); replaced with module-level singleton caching keyed by
+`(method_name, max_iterations)`, matching the pattern already applied to Colebrook strategies
+in v1.6.82.
+
+**Validation improvements:**
+
+**`core/case.py`** (`PressureBoundary`) — the dataclass accepted negative absolute
+pressures silently.  Added `__post_init__` validation consistent with `FlowBoundary`,
+`InletFluidBC`, `InletCompositionBC`, and `ThermalBoundary`.
+
+**Code quality:**
+
+**`properties/compositional_fluid.py`** (`component_mws`) — replaced manual `hasattr` /
+`setattr` lazy-cache pattern with `@functools.cached_property`, which is idiomatic Python
+3.8+ and avoids bypassing `__init__` encapsulation.
+
+**`core/settings.py`** — `laminar_iterations` was typed as `Optional[int]` (imported from
+`typing`); updated to `int | None` with `from __future__ import annotations` for consistency
+with the rest of the codebase.
+
+**Tests added:** `TestPressureBoundary` (3 tests), `test_factory_returns_same_instance_for_same_key`,
+`test_factory_returns_different_instances_for_different_max_iterations` — 5 new tests, total 257.
+
+---
+
 ## [1.6.83] — 2026-08-29
 
 ### Fix + refactor: third full audit (compositional solver, PVT cache, validation, tests)

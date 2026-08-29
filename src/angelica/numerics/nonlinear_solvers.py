@@ -103,11 +103,18 @@ class NewtonSolver(NonlinearSolver):
         return value
 
 
+_SOLVER_SINGLETONS: dict[tuple[str, int], NonlinearSolver] = {}
+
+
 def build_nonlinear_solver(method_name: str, max_iterations: int = 50) -> NonlinearSolver:
-    if method_name == "fixed_point":
-        return FixedPointSolver(max_iterations=max_iterations)
-    if method_name == "secant":
-        return SecantSolver(max_iterations=max_iterations)
-    if method_name == "newton":
-        return NewtonSolver(max_iterations=max_iterations)
-    raise ValueError(f"Unsupported nonlinear method: {method_name}")
+    key = (method_name, max_iterations)
+    if key not in _SOLVER_SINGLETONS:
+        if method_name == "fixed_point":
+            _SOLVER_SINGLETONS[key] = FixedPointSolver(max_iterations=max_iterations)
+        elif method_name == "secant":
+            _SOLVER_SINGLETONS[key] = SecantSolver(max_iterations=max_iterations)
+        elif method_name == "newton":
+            _SOLVER_SINGLETONS[key] = NewtonSolver(max_iterations=max_iterations)
+        else:
+            raise ValueError(f"Unsupported nonlinear method: {method_name}")
+    return _SOLVER_SINGLETONS[key]

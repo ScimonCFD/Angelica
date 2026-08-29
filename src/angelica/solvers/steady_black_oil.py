@@ -133,6 +133,8 @@ class SteadyBlackOilSolver(BaseSolver):
             if isinstance(ps, (PipeState, HeatSourceState))
         ]
 
+        inlet_node_ids = frozenset(ibc.node_id for ibc in case.inlet_fluid_bcs)
+
         # ── first pass: propagate from seeded nodes into their downstream pipes
         # We iterate several times to handle networks where compositions must
         # travel through multiple junctions (convergence in O(diameter) passes).
@@ -153,7 +155,7 @@ class SteadyBlackOilSolver(BaseSolver):
 
             # Mix at each non-inlet junction
             for nid, contributions in incoming.items():
-                if nid in {ibc.node_id for ibc in case.inlet_fluid_bcs}:
+                if nid in inlet_node_ids:
                     continue  # inlet nodes keep their prescribed composition
                 if not contributions:
                     continue
@@ -437,6 +439,31 @@ class SteadyBlackOilSolver(BaseSolver):
             density_converged     = max_rel_delta  < settings.density_rel_tolerance
             if temperature_converged and density_converged:
                 break
+
+        # ── final synchronous pass ────────────────────────────────────────────
+        # Always runs so that the reported flow field and temperature field
+        # come from the same solve with the final compositions and PVT.
+        self._hydraulic_solver._initialise_pressure_field(network_state, case)
+        lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
+            network_state, effective_fluid, progress_callback=progress_callback
+        )
+        turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
+            network_state, effective_fluid, progress_callback=progress_callback
+        )
+        all_lam_hist.extend(lam_hist)
+        all_lam_metrics.extend(lam_metrics)
+        all_turb_hist.extend(turb_hist)
+        all_turb_metrics.extend(turb_metrics)
+        outer_boundaries.append(len(all_turb_metrics))
+        if turb_metrics:
+            outer_turb_final.append(turb_metrics[-1])
+        final_node_temps, final_pipe_mean_temps = solve_energy_system(
+            network_state, effective_fluid, self.convection_scheme, T_ref=T_init
+        )
+        for nid, T_new in final_node_temps.items():
+            if not network_state.nodes[nid].is_thermal_inlet:
+                network_state.nodes[nid].temperature_c = T_new
+        self._update_component_temperatures(network_state, T_init, final_pipe_mean_temps)
 
         # ── build result ──────────────────────────────────────────────────────
         node_pressures = {

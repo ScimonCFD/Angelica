@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cached_property, lru_cache
 
 from .base import FluidModel
 
@@ -38,8 +38,8 @@ def _flash_properties(
     temperature_c: float,
     zs: tuple[float, ...],
     eos_name: str = "PR",
-) -> tuple[float, float, float, float]:
-    """Return (rho kg/m³, mu Pa·s, Cp J/(kg·K), k W/(m·K)) for a mixture PT flash.
+) -> tuple[float, float, float, float, float]:
+    """Return (rho kg/m³, mu Pa·s, Cp J/(kg·K), k W/(m·K), VF –) for a mixture PT flash.
 
     Results are cached by (component_names, pressure_pa, temperature_c, zs, eos_name).
     Callers should round inputs before calling to maximise cache hit rates.
@@ -64,8 +64,9 @@ def _flash_properties(
     mu  = float(res.mu())
     Cp  = float(res.Cp_mass())
     k   = float(res.k())
+    VF  = float(res.VF) if res.VF is not None else 0.0
 
-    return (max(rho, 0.001), max(mu, 1e-10), max(Cp, 1.0), max(k, 1e-6))
+    return (max(rho, 0.001), max(mu, 1e-10), max(Cp, 1.0), max(k, 1e-6), VF)
 
 
 class CompositionalFluid(FluidModel):
@@ -117,14 +118,12 @@ class CompositionalFluid(FluidModel):
 
     # ── component molecular weights ───────────────────────────────────────────
 
-    @property
+    @cached_property
     def component_mws(self) -> tuple[float, ...]:
         """Molecular weights (g/mol) for each component, in the same order as component_names."""
-        if not hasattr(self, "_mws_cache"):
-            from thermo import ChemicalConstantsPackage
-            constants, _ = ChemicalConstantsPackage.from_IDs(list(self.component_names))
-            self._mws_cache: tuple[float, ...] = tuple(constants.MWs)
-        return self._mws_cache
+        from thermo import ChemicalConstantsPackage
+        constants, _ = ChemicalConstantsPackage.from_IDs(list(self.component_names))
+        return tuple(constants.MWs)
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
@@ -148,7 +147,7 @@ class CompositionalFluid(FluidModel):
         t = getattr(link_state, "temperature_c", None)
         return float(t) if t is not None else 20.0
 
-    def _props(self, link_state) -> tuple[float, float, float, float]:
+    def _props(self, link_state) -> tuple[float, float, float, float, float]:
         zs = self._get_zs(link_state)
         P  = self._get_pressure_pa(link_state)
         T  = self._get_temperature_c(link_state)
@@ -175,22 +174,11 @@ class CompositionalFluid(FluidModel):
         """Return the equilibrium vapor fraction (VF) at the link's average P and T.
 
         Returns 0.0 for all-liquid, 1.0 for all-gas, and a value in (0, 1) for
-        two-phase conditions.  Uses the same cached flash object as density/viscosity,
-        so no additional EOS evaluation is needed.
+        two-phase conditions.  Reuses the cached flash result from _props.
         """
-        zs = self._get_zs(link_state)
-        P  = self._get_pressure_pa(link_state)
-        T  = self._get_temperature_c(link_state)
-        flash_obj = _get_flash_obj(self.component_names, self.eos_name)
-        T_K = T + 273.15
         try:
-            res = flash_obj.flash(T=T_K, P=P, zs=list(zs))
-            return float(res.VF)
-        except Exception as exc:
+            return self._props(link_state)[4]
+        except RuntimeError as exc:
             import warnings
-            warnings.warn(
-                f"VF flash failed at T={T:.1f} °C, P={P/1e6:.3f} MPa: {exc}",
-                RuntimeWarning,
-                stacklevel=2,
-            )
+            warnings.warn(str(exc), RuntimeWarning, stacklevel=2)
             return float("nan")

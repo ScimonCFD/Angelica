@@ -93,6 +93,24 @@ class TestInletCompositionBC:
 
 
 # ---------------------------------------------------------------------------
+# PressureBoundary validation
+# ---------------------------------------------------------------------------
+
+class TestPressureBoundary:
+    def test_non_negative_pressure_accepted(self):
+        pb = PressureBoundary(node_id=1, pressure_pa=101325.0)
+        assert pb.pressure_pa == 101325.0
+
+    def test_zero_pressure_accepted(self):
+        pb = PressureBoundary(node_id=1, pressure_pa=0.0)
+        assert pb.pressure_pa == 0.0
+
+    def test_negative_pressure_raises(self):
+        with pytest.raises(ValueError, match=">= 0"):
+            PressureBoundary(node_id=1, pressure_pa=-1.0)
+
+
+# ---------------------------------------------------------------------------
 # CompositionalFluid validation
 # ---------------------------------------------------------------------------
 

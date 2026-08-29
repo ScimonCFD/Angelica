@@ -75,6 +75,12 @@ class PressureBoundary:
     node_id: int
     pressure_pa: float
 
+    def __post_init__(self) -> None:
+        if self.pressure_pa < 0.0:
+            raise ValueError(
+                f"PressureBoundary pressure_pa must be >= 0 (got {self.pressure_pa})"
+            )
+
 
 @dataclass(frozen=True)
 class FlowBoundary:

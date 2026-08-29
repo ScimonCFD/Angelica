@@ -57,3 +57,15 @@ class NonlinearSolverTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             build_nonlinear_solver("unknown")
+
+    def test_factory_returns_same_instance_for_same_key(self) -> None:
+        a = build_nonlinear_solver("newton", max_iterations=50)
+        b = build_nonlinear_solver("newton", max_iterations=50)
+        self.assertIs(a, b)
+
+    def test_factory_returns_different_instances_for_different_max_iterations(self) -> None:
+        a = build_nonlinear_solver("secant", max_iterations=30)
+        b = build_nonlinear_solver("secant", max_iterations=80)
+        self.assertIsNot(a, b)
+        self.assertEqual(a.max_iterations, 30)
+        self.assertEqual(b.max_iterations, 80)
