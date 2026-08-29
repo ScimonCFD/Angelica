@@ -769,6 +769,7 @@ class NetSimGui:
         mat = dict(self.scene.material)
         names_var = tk.StringVar(value=mat.get("component_names", ""))
         zs_var = tk.StringVar(value=mat.get("default_zs", ""))
+        eos_var = tk.StringVar(value=mat.get("eos_name", "PR"))
 
         ttk.Label(frame, text="Components (CSV)").grid(
             row=0, column=0, sticky="w", pady=4, padx=(0, 8)
@@ -790,13 +791,22 @@ class NetSimGui:
             row=3, column=0, columnspan=2, sticky="w", pady=(0, 6)
         )
 
+        ttk.Label(frame, text="Equation of state").grid(
+            row=4, column=0, sticky="w", pady=4, padx=(0, 8)
+        )
+        eos_combo = ttk.Combobox(
+            frame, textvariable=eos_var, values=["PR", "SRK"],
+            state="readonly", width=8,
+        )
+        eos_combo.grid(row=4, column=1, sticky="w", pady=4)
+
         ttk.Label(
             frame,
             text="Each source node must also specify its inlet composition\n"
                  "(double-click the source node → Composition section).",
             foreground="gray",
             justify="left",
-        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(0, 4))
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 4))
 
         def _save() -> None:
             names_text = names_var.get().strip()
@@ -829,6 +839,7 @@ class NetSimGui:
                 "definition_mode": "compositional",
                 "component_names": ", ".join(names_list),
                 "default_zs": ", ".join(f"{z:.6g}" for z in zs_list),
+                "eos_name": eos_var.get().upper(),
                 "name": " + ".join(names_list),
             }
             self.scene.update_material(new_mat)
@@ -866,10 +877,11 @@ class NetSimGui:
                 title=f"Phase Envelope — {', '.join(names_list)}",
                 component_names=tuple(names_list),
                 zs=tuple(zs_list),
+                eos_name=eos_var.get().upper(),
             )
 
         btn_row = ttk.Frame(frame)
-        btn_row.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        btn_row.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         ttk.Button(btn_row, text="Phase Envelope…", command=_preview_envelope).pack(side="left")
         ttk.Button(btn_row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
         ttk.Button(btn_row, text="Save", command=_save).pack(side="right")
@@ -3648,11 +3660,13 @@ class NetSimGui:
             return
         names = self.latest_result.component_names
         op_pts = self._get_link_op_conditions(link)
+        eos_name = self.scene.material.get("eos_name", "PR") if self.scene.material else "PR"
         self._open_phase_envelope_dialog(
             title=f"Phase Envelope — Connection #{link.link_id}",
             component_names=names,
             zs=zs,
             op_points=op_pts,
+            eos_name=eos_name,
         )
 
     def _open_phase_envelope_dialog(
@@ -3661,6 +3675,7 @@ class NetSimGui:
         component_names: "tuple[str, ...]",
         zs: "tuple[float, ...]",
         op_points: "list[tuple[float, float]] | None" = None,
+        eos_name: str = "PR",
     ) -> None:
         win = tk.Toplevel(self.root)
         win.title(title)
@@ -3726,7 +3741,7 @@ class NetSimGui:
 
             def _compute_line() -> None:
                 from angelica.properties.phase_envelope import compute_quality_line
-                pts = compute_quality_line(component_names, zs, vf)
+                pts = compute_quality_line(component_names, zs, vf, eos_name=eos_name)
                 if pts:
                     quality_lines.append((vf, pts))
                 if win.winfo_exists():
@@ -3751,7 +3766,7 @@ class NetSimGui:
         def _compute() -> None:
             from angelica.properties.phase_envelope import compute_phase_envelope
             try:
-                bubble, dew, Tc, Pc = compute_phase_envelope(component_names, zs)
+                bubble, dew, Tc, Pc = compute_phase_envelope(component_names, zs, eos_name=eos_name)
                 result_holder["bubble"] = bubble
                 result_holder["dew"] = dew
                 result_holder["Tc"] = Tc

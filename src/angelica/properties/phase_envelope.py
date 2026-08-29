@@ -357,6 +357,7 @@ def compute_phase_envelope(
     component_names: "tuple[str, ...] | list[str]",
     zs: "tuple[float, ...] | list[float]",
     n_T: int = 20,
+    eos_name: str = "PR",
 ) -> "tuple[list[tuple[float, float]], list[tuple[float, float]], float, float]":
     """Compute bubble and dew point curves for a multi-component mixture.
 
@@ -366,6 +367,7 @@ def compute_phase_envelope(
         envelope is closed.  Tc_K / Pc_Pa are mole-fraction-weighted
         pseudo-critical coordinates used only for the plot marker.
         n_T is accepted for API compatibility but ignored (arc-length is used).
+        eos_name: ``"PR"`` (Peng-Robinson, default) or ``"SRK"``.
     """
     import warnings
 
@@ -374,7 +376,9 @@ def compute_phase_envelope(
     from thermo import ChemicalConstantsPackage
     from thermo.flash import FlashVL
     from thermo.phases import CEOSGas, CEOSLiquid
-    from thermo.eos_mix import PRMIX
+    from thermo.eos_mix import PRMIX, SRKMIX
+
+    eos_cls = SRKMIX if eos_name.upper() == "SRK" else PRMIX
 
     names = list(component_names)
     fracs = list(zs)
@@ -382,8 +386,8 @@ def compute_phase_envelope(
 
     constants, props = ChemicalConstantsPackage.from_IDs(names)
     eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas)
-    gas_phase = CEOSGas(PRMIX, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
-    liq_phase = CEOSLiquid(PRMIX, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+    gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+    liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
     flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
 
     Tcs: list[float] = list(constants.Tcs)
@@ -423,11 +427,13 @@ def compute_quality_line(
     component_names: "tuple[str, ...] | list[str]",
     zs: "tuple[float, ...] | list[float]",
     vf: float,
+    eos_name: str = "PR",
 ) -> "list[tuple[float, float]]":
     """Compute a constant-vapor-fraction (quality) line inside the phase envelope.
 
     Returns [(T_K, P_Pa)] ordered from low to high temperature, covering the
     two-phase region at the given vapor fraction (0 < vf < 1).
+    eos_name: ``"PR"`` (Peng-Robinson, default) or ``"SRK"``.
     """
     import warnings
 
@@ -436,15 +442,17 @@ def compute_quality_line(
     from thermo import ChemicalConstantsPackage
     from thermo.flash import FlashVL
     from thermo.phases import CEOSGas, CEOSLiquid
-    from thermo.eos_mix import PRMIX
+    from thermo.eos_mix import PRMIX, SRKMIX
+
+    eos_cls = SRKMIX if eos_name.upper() == "SRK" else PRMIX
 
     names = list(component_names)
     fracs = list(zs)
 
     constants, props = ChemicalConstantsPackage.from_IDs(names)
     eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas)
-    gas_phase = CEOSGas(PRMIX, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
-    liq_phase = CEOSLiquid(PRMIX, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+    gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+    liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
     flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
 
     Tbs: list[float] = list(constants.Tbs)

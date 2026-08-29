@@ -4,6 +4,29 @@ from functools import lru_cache
 
 from .base import FluidModel
 
+# Flash-object cache keyed by (component_names, eos_name) — avoids recreating
+# ChemicalConstantsPackage + CEOSGas/Liquid on every cache miss.
+_FLASH_OBJS: dict = {}
+
+
+def _get_flash_obj(component_names: tuple[str, ...], eos_name: str):
+    key = (component_names, eos_name)
+    if key not in _FLASH_OBJS:
+        import warnings
+        warnings.filterwarnings("ignore")
+        from thermo import ChemicalConstantsPackage
+        from thermo.flash import FlashVL
+        from thermo.phases import CEOSGas, CEOSLiquid
+        from thermo.eos_mix import PRMIX, SRKMIX
+        eos_cls = SRKMIX if eos_name == "SRK" else PRMIX
+        constants, props = ChemicalConstantsPackage.from_IDs(list(component_names))
+        eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas)
+        gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+        liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
+        flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
+        _FLASH_OBJS[key] = flash_obj
+    return _FLASH_OBJS[key]
+
 
 @lru_cache(maxsize=2048)
 def _flash_properties(
@@ -11,23 +34,20 @@ def _flash_properties(
     pressure_pa: float,
     temperature_c: float,
     zs: tuple[float, ...],
+    eos_name: str = "PR",
 ) -> tuple[float, float, float, float]:
     """Return (rho kg/m³, mu Pa·s, Cp J/(kg·K), k W/(m·K)) for a mixture PT flash.
 
-    Results are cached by (component_names, pressure_pa, temperature_c, zs).
+    Results are cached by (component_names, pressure_pa, temperature_c, zs, eos_name).
     Callers should round inputs before calling to maximise cache hit rates.
 
-    Two-phase handling uses the no-slip (homogeneous) model:
-      - Volumetric fractions α_g, α_l from molar vapour fraction and phase MWs.
-      - μ_mix = α_g·μ_g + α_l·μ_l
-      - Cp_mix = (α_g·ρ_g·Cp_g + α_l·ρ_l·Cp_l) / ρ_mix
-      - k_mix  = α_g·k_g  + α_l·k_l
+    Two-phase handling: EquilibriumState bulk properties use volumetric-fraction
+    mixing automatically via the thermo library.
     """
-    from thermo import Mixture  # optional dependency
-
+    flash_obj = _get_flash_obj(component_names, eos_name)
     T_K = temperature_c + 273.15
     try:
-        m = Mixture(list(component_names), zs=list(zs), T=T_K, P=pressure_pa)
+        res = flash_obj.flash(T=T_K, P=pressure_pa, zs=list(zs))
     except Exception as _exc:
         raise RuntimeError(
             f"EOS flash failed at T={temperature_c:.1f} °C, "
@@ -36,32 +56,11 @@ def _flash_properties(
             "Check boundary conditions (pressure/flow BCs) and try reducing "
             "the relaxation factor in Numerics settings."
         ) from _exc
-    rho = m.rho  # always available; homogeneous (no-slip) density
 
-    if m.phase in ("g", "l", "s"):
-        mu = m.mu
-        Cp = m.Cp
-        k  = m.k
-    else:
-        # Two-phase VLE: compute volumetric fractions from molar VF and phase MWs.
-        VF   = m.VF
-        L    = 1.0 - VF
-        rhog = m.rhog or 1e-6
-        rhol = m.rhol or 1e-6
-        vol_g = VF * m.MWg / rhog
-        vol_l = L  * m.MWl / rhol
-        denom = vol_g + vol_l
-        if denom < 1e-30:
-            alpha_g, alpha_l = VF, L
-        else:
-            alpha_g = vol_g / denom
-            alpha_l = 1.0 - alpha_g
-        mu = alpha_g * (m.mug or 0.0) + alpha_l * (m.mul or 0.0)
-        Cp = (
-            (alpha_g * rhog * (m.Cpg or 0.0) + alpha_l * rhol * (m.Cpl or 0.0))
-            / max(rho, 1e-30)
-        )
-        k  = alpha_g * (m.kg or 0.0) + alpha_l * (m.kl or 0.0)
+    rho = float(res.rho_mass())
+    mu  = float(res.mu())
+    Cp  = float(res.Cp_mass())
+    k   = float(res.k())
 
     return (max(rho, 0.001), max(mu, 1e-10), max(Cp, 1.0), max(k, 1e-6))
 
@@ -86,15 +85,22 @@ class CompositionalFluid(FluidModel):
             (e.g. ``["methane", "ethane", "propane"]``).
         default_zs: Overall mole fractions used when a pipe's ``zs`` is not
             yet set.  Must sum to 1.0.
+        eos_name: Equation of state — ``"PR"`` (Peng-Robinson, default) or
+            ``"SRK"`` (Soave-Redlich-Kwong).
     """
 
     def __init__(
         self,
         components: list[str] | tuple[str, ...],
         default_zs: list[float] | tuple[float, ...],
+        eos_name: str = "PR",
     ) -> None:
         self.component_names: tuple[str, ...] = tuple(components)
         self.default_zs: tuple[float, ...] = tuple(default_zs)
+        eos_name = eos_name.upper()
+        if eos_name not in ("PR", "SRK"):
+            raise ValueError(f"eos_name must be 'PR' or 'SRK' (got {eos_name!r})")
+        self.eos_name: str = eos_name
         if len(self.component_names) != len(self.default_zs):
             raise ValueError(
                 f"components ({len(self.component_names)}) and default_zs "
@@ -112,9 +118,9 @@ class CompositionalFluid(FluidModel):
     def component_mws(self) -> tuple[float, ...]:
         """Molecular weights (g/mol) for each component, in the same order as component_names."""
         if not hasattr(self, "_mws_cache"):
-            from thermo import Mixture
-            m = Mixture(list(self.component_names), zs=list(self.default_zs), T=300.0, P=101325.0)
-            self._mws_cache: tuple[float, ...] = tuple(m.MWs)
+            from thermo import ChemicalConstantsPackage
+            constants, _ = ChemicalConstantsPackage.from_IDs(list(self.component_names))
+            self._mws_cache: tuple[float, ...] = tuple(constants.MWs)
         return self._mws_cache
 
     # ── helpers ───────────────────────────────────────────────────────────────
@@ -141,11 +147,10 @@ class CompositionalFluid(FluidModel):
         zs = self._get_zs(link_state)
         P  = self._get_pressure_pa(link_state)
         T  = self._get_temperature_c(link_state)
-        # Round inputs so nearby conditions share cache entries.
         P_r  = float(round(P / 100.0) * 100.0)
         T_r  = round(T, 1)
         zs_r = tuple(round(z, 4) for z in zs)
-        return _flash_properties(self.component_names, P_r, T_r, zs_r)
+        return _flash_properties(self.component_names, P_r, T_r, zs_r, self.eos_name)
 
     # ── FluidModel interface ──────────────────────────────────────────────────
 

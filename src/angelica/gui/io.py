@@ -631,6 +631,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
         fluid_model = CompositionalFluid(
             components=component_names,
             default_zs=default_zs_list,
+            eos_name=scene.material.get("eos_name", "PR"),
         )
         inlet_comp_bcs: list[InletCompositionBC] = []
         for node in scene.nodes:

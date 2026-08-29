@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.6.72] — 2026-08-29
+
+### Feature: SRK equation of state for compositional fluid model
+
+Added Soave-Redlich-Kwong (SRK) as an alternative EOS alongside Peng-Robinson
+(PR) in `CompositionalFluid`, `compute_phase_envelope`, and `compute_quality_line`.
+
+- `CompositionalFluid(eos_name="SRK")` selects SRKMIX via the thermo library;
+  `eos_name="PR"` (default) retains existing Peng-Robinson behaviour.
+- The compositional fluid dialog now shows a PR/SRK combobox (row 4).
+- The chosen EOS is saved in the scene file and restored on reload.
+- Phase envelope and quality-line dialogs respect the material's `eos_name`.
+- Flash-object cache is keyed by `(component_names, eos_name)` so both EOS
+  variants can coexist in the same session without redundant initialisation.
+- Fixed `rho_mass`, `mu`, `Cp_mass`, `k` calls (methods, not properties in
+  the installed thermo version).
+
 ## [1.6.71] — 2026-08-26
 
 ### Feature: constant vapor-fraction lines on phase envelope
