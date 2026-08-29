@@ -444,17 +444,19 @@ def compute_phase_envelope(
 
     # Close the envelope: average the final T/P pair of both arcs as the
     # shared critical point, and use it as the returned Tc/Pc marker.
-    # This is the thermodynamic critical point from the arc-length algorithm,
-    # which is far more accurate than the Kay's-rule pseudo-critical above.
+    # The arc-length endpoint average is far more accurate than the Kay's-rule
+    # pseudo-critical computed above, so always update Tc/Pc from the arcs.
+    # Only merge the last curve points into a single shared coordinate when
+    # the two arcs converge closely enough for the visual to look closed.
     if bubble_pts and dew_pts:
         T_bc, P_bc = bubble_pts[-1]
         T_dc, P_dc = dew_pts[-1]
         T_crit = (T_bc + T_dc) / 2.0
         P_crit = (P_bc + P_dc) / 2.0
+        Tc, Pc = T_crit, P_crit  # always prefer arc-endpoint estimate over Kay's rule
         if abs(T_bc - T_dc) < 2.0 and abs(P_bc - P_dc) / max(P_bc, P_dc) < 0.02:
             bubble_pts[-1] = (T_crit, P_crit)
             dew_pts[-1] = (T_crit, P_crit)
-            Tc, Pc = T_crit, P_crit
 
     return bubble_pts, dew_pts, Tc, Pc
 
