@@ -207,22 +207,6 @@ class SteadyBlackOilSolver(BaseSolver):
 
         return pipe_comp, node_comp
 
-    @staticmethod
-    def _pipe_density(ps: PipeState, comp: BlackOilComposition) -> float:
-        P = 0.5 * ((ps.start_node.pressure_pa or 0.0) + (ps.end_node.pressure_pa or 0.0))
-        T = ps.temperature_c if ps.temperature_c is not None else 20.0
-        return compute_pvt(P, T, comp.api_gravity, comp.gas_gravity,
-                           comp.gor_sc_m3_per_m3, comp.wor_sc_m3_per_m3
-                           ).mixture_density_kg_per_m3
-
-    @staticmethod
-    def _pipe_viscosity(ps: PipeState, comp: BlackOilComposition) -> float:
-        P = 0.5 * ((ps.start_node.pressure_pa or 0.0) + (ps.end_node.pressure_pa or 0.0))
-        T = ps.temperature_c if ps.temperature_c is not None else 20.0
-        return compute_pvt(P, T, comp.api_gravity, comp.gas_gravity,
-                           comp.gor_sc_m3_per_m3, comp.wor_sc_m3_per_m3
-                           ).mixture_viscosity_pa_s
-
     # ── FluidModel proxy ──────────────────────────────────────────────────────
 
     @staticmethod

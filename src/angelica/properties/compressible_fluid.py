@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from .base import FluidModel
 from .eos import EquationOfState
@@ -80,27 +80,31 @@ class CompressibleFluid(FluidModel):
             reference_temperature_c=reference_temperature_c,
         )
 
-    def _pressure(self, link_state) -> float:
+    def _pt(self, link_state) -> tuple[float, float]:
         start = getattr(link_state, "start_node", None)
         end = getattr(link_state, "end_node", None)
         p_start = getattr(start, "pressure_pa", None) if start is not None else None
         p_end = getattr(end, "pressure_pa", None) if end is not None else None
         if p_start is not None and p_end is not None:
-            return 0.5 * (p_start + p_end)
-        return p_start if p_start is not None else (p_end if p_end is not None else self.reference_pressure_pa)
-
-    def _temperature(self, link_state) -> float:
+            P = 0.5 * (p_start + p_end)
+        else:
+            P = p_start if p_start is not None else (p_end if p_end is not None else self.reference_pressure_pa)
         t = getattr(link_state, "temperature_c", None)
-        return float(t) if t is not None else self.reference_temperature_c
+        T = float(t) if t is not None else self.reference_temperature_c
+        return P, T
 
     def density_for_link(self, link_state) -> float:
-        return self.eos.density(self._pressure(link_state), self._temperature(link_state))
+        P, T = self._pt(link_state)
+        return self.eos.density(P, T)
 
     def viscosity_for_link(self, link_state) -> float:
-        return self._viscosity_fn(self._pressure(link_state), self._temperature(link_state))
+        P, T = self._pt(link_state)
+        return self._viscosity_fn(P, T)
 
     def specific_heat_for_link(self, link_state) -> float:
-        return self._specific_heat_fn(self._pressure(link_state), self._temperature(link_state))
+        P, T = self._pt(link_state)
+        return self._specific_heat_fn(P, T)
 
     def thermal_conductivity_for_link(self, link_state) -> float:
-        return self._thermal_conductivity_fn(self._pressure(link_state), self._temperature(link_state))
+        P, T = self._pt(link_state)
+        return self._thermal_conductivity_fn(P, T)

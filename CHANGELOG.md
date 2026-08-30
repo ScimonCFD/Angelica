@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.6.86] — 2026-08-30
+
+### Refactor: dead code removal, CompressibleFluid helper, collections.abc Callable
+
+**Dead code removed:**
+
+**`solvers/steady_black_oil.py`** — `_pipe_density` and `_pipe_viscosity` were `@staticmethod`
+methods that called `compute_pvt` independently for the same pipe; they were never called
+anywhere in the codebase (the solver uses `effective_fluid.density_for_link` instead).
+Removed.
+
+**Performance / clarity:**
+
+**`properties/compressible_fluid.py`** — replaced the separate `_pressure` and `_temperature`
+helpers with a single `_pt(link_state) -> tuple[float, float]` that computes both in one
+traversal of `link_state`.  Each of the four property methods (`density_for_link`,
+`viscosity_for_link`, `specific_heat_for_link`, `thermal_conductivity_for_link`) now calls
+`_pt` once, halving the attribute lookups per property evaluation.
+
+**Code quality:**
+
+**`properties/compressible_fluid.py`**, **`properties/thermal_fluid.py`**,
+**`solvers/base.py`** — replaced `from typing import Callable` with
+`from collections.abc import Callable`, consistent with Python 3.10+ best practice.
+
+---
+
 ## [1.6.85] — 2026-08-30
 
 ### Refactor: fifth full audit (pump validation, typing modernisation, energy hasattr)
