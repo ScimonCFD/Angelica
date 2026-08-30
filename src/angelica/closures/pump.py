@@ -39,33 +39,9 @@ class PumpCurveModel(PressureDropCorrelation):
         raw_points_q_head: tuple[tuple[float, float], ...],
         required_head_m: float,
     ) -> tuple[float, float]:
-        points_q_head = self._normalise_curve_points(raw_points_q_head)
         if len(raw_points_q_head) == 1:
-            return self._single_point_epanet_curve_response(points_q_head, required_head_m)
-        return self._piecewise_linear_curve_response(points_q_head, required_head_m)
-
-    def _normalise_curve_points(
-        self,
-        raw_points_q_head: tuple[tuple[float, float], ...],
-    ) -> tuple[tuple[float, float], ...]:
-        if not raw_points_q_head:
-            raise ValueError("Pump curve requires at least one Q-Head point.")
-
-        points_q_head = tuple(sorted((float(q), float(head)) for q, head in raw_points_q_head))
-        if any(q < 0.0 for q, _head in points_q_head):
-            raise ValueError("Pump curve flow values must be non-negative.")
-        if any(head < 0.0 for _q, head in points_q_head):
-            raise ValueError("Pump curve head values must be non-negative.")
-
-        for index in range(1, len(points_q_head)):
-            previous_q, previous_head = points_q_head[index - 1]
-            current_q, current_head = points_q_head[index]
-            if current_q <= previous_q:
-                raise ValueError("Pump curve flow values must be strictly increasing.")
-            if current_head >= previous_head:
-                raise ValueError("Pump curve head values must decrease as flow increases.")
-
-        return points_q_head
+            return self._single_point_epanet_curve_response(raw_points_q_head, required_head_m)
+        return self._piecewise_linear_curve_response(raw_points_q_head, required_head_m)
 
     def _single_point_epanet_curve_response(
         self,

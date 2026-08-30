@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "angelica"
-version = "1.6.84"
+version = "1.6.85"
 description = "Open-source platform for steady isothermal, non-isothermal, compressible, and black-oil pipe network simulation."
 readme = "README.md"
 requires-python = ">=3.10"

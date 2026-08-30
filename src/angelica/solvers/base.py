@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from angelica.core.case import NetworkCase
@@ -18,7 +18,7 @@ class BaseSolver(ABC):
     def solve(
         self,
         case: NetworkCase,
-        progress_callback: Optional[Callable] = None,
+        progress_callback: Callable | None = None,
     ) -> SolveResult:
         raise NotImplementedError
 

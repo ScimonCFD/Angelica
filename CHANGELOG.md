@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.6.85] — 2026-08-30
+
+### Refactor: fifth full audit (pump validation, typing modernisation, energy hasattr)
+
+**Performance improvement:**
+
+**`closures/pump.py` + `core/components.py`** (`_normalise_curve_points`) — the pump
+curve was being re-validated and re-sorted on every `calculate_velocity` and
+`calculate_coupling` call (once per pump per SIMPLE iteration).  Moved the full
+validation logic into `Pump.__post_init__`, which also normalises `curve_points_q_head`
+in-place (sorted float tuples) via `object.__setattr__`.  `PumpCurveModel` now uses the
+pre-validated curve directly, eliminating all redundant validation work at runtime.
+
+**Code quality:**
+
+**`core/results.py`**, **`solvers/base.py`**, **`solvers/steady_black_oil.py`**,
+**`solvers/steady_compositional.py`** — replaced legacy `Optional[X]` / `Dict[K, V]`
+typing imports with modern `X | None` and `dict[K, V]` union syntax, consistent with
+the rest of the codebase.  Removed unused `Optional` and `Dict` imports from all four
+files.
+
+**`numerics/energy.py`** (lines 133, 231) — removed redundant `hasattr(ps, "temperature_c")`
+guard.  Both `PipeState` and `HeatSourceState` always declare `temperature_c` as a
+dataclass field so the guard was always `True`; simplified to `ps.temperature_c is not None`.
+
+---
+
 ## [1.6.84] — 2026-08-30
 
 ### Fix + refactor: fourth full audit (black-oil sync, flash cache, singletons, validation)

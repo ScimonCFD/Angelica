@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, Optional
 
 from angelica.closures.convection_scheme import ConvectionScheme, HybridScheme
 from angelica.closures.pressure_drop import PressureDropCorrelation
@@ -83,10 +82,10 @@ class SteadyCompositionalSolver(BaseSolver):
 
     def __init__(
         self,
-        hydraulic_settings: Optional[SolverSettings] = None,
-        compositional_settings: Optional[CompositionalSolverSettings] = None,
-        turbulent_pipe_correlation: Optional[PressureDropCorrelation] = None,
-        convection_scheme: Optional[ConvectionScheme] = None,
+        hydraulic_settings: SolverSettings | None = None,
+        compositional_settings: CompositionalSolverSettings | None = None,
+        turbulent_pipe_correlation: PressureDropCorrelation | None = None,
+        convection_scheme: ConvectionScheme | None = None,
     ) -> None:
         self.hydraulic_settings = hydraulic_settings or SolverSettings(
             pressure_correction_abs_tolerance_pa=10.0
@@ -105,9 +104,9 @@ class SteadyCompositionalSolver(BaseSolver):
         network_state: NetworkState,
         case: NetworkCase,
         default_zs: tuple[float, ...],
-        node_zs_prev: "Dict[int, tuple[float, ...]] | None" = None,
+        node_zs_prev: dict[int, tuple[float, ...]] | None = None,
         relaxation: float = 1.0,
-    ) -> "Dict[int, tuple[float, ...]]":
+    ) -> dict[int, tuple[float, ...]]:
         """Propagate inlet mole fractions through the network and write to PipeState.zs.
 
         Seeded at inlet nodes from ``case.inlet_composition_bcs``, compositions
@@ -127,7 +126,7 @@ class SteadyCompositionalSolver(BaseSolver):
         """
         # ── seed inlet node compositions ──────────────────────────────────────
         inlet_ids: set[int] = set()
-        node_zs: Dict[int, tuple[float, ...]] = {}
+        node_zs: dict[int, tuple[float, ...]] = {}
         for ibc in case.inlet_composition_bcs:
             node_zs[ibc.node_id] = tuple(ibc.zs)
             inlet_ids.add(ibc.node_id)
@@ -142,7 +141,7 @@ class SteadyCompositionalSolver(BaseSolver):
         # ── fixed-point iteration over junction mixing ────────────────────────
         for _ in range(len(network_state.nodes) + 1):
             changed = False
-            incoming: Dict[int, list] = defaultdict(list)
+            incoming: dict[int, list] = defaultdict(list)
 
             for _, ps in pipe_states:
                 mdot = ps.mass_flow_kg_per_s
@@ -255,7 +254,7 @@ class SteadyCompositionalSolver(BaseSolver):
         hydraulic_converged   = False
         density_converged     = False
         temperature_converged = False
-        node_zs_outer: Dict[int, tuple[float, ...]] = {}
+        node_zs_outer: dict[int, tuple[float, ...]] = {}
 
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
         for _outer in range(settings.max_outer_iterations):
@@ -370,7 +369,7 @@ class SteadyCompositionalSolver(BaseSolver):
             )
 
         # Derive per-node compositions (mass-flow-weighted mix of incoming pipes).
-        _incoming: Dict[int, list] = {}
+        _incoming: dict[int, list] = {}
         for link in network_state.components:
             _zs = getattr(link, "zs", ())
             if not _zs:
@@ -378,7 +377,7 @@ class SteadyCompositionalSolver(BaseSolver):
             _mdot = link.mass_flow_kg_per_s
             _nid = link.end_node.node_id if _mdot >= 0.0 else link.start_node.node_id
             _incoming.setdefault(_nid, []).append((abs(_mdot), tuple(_zs)))
-        node_compositions: Dict[int, tuple] = {}
+        node_compositions: dict[int, tuple] = {}
         for _nid, _arr in _incoming.items():
             _tot = sum(m for m, _ in _arr)
             if _tot <= 0.0:

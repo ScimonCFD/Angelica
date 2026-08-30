@@ -90,6 +90,19 @@ class Pump(PressureChanger):
     def __post_init__(self) -> None:
         if not self.curve_points_q_head:
             raise ValueError("Pump curve_points_q_head must contain at least one (Q, head) point")
+        points = tuple(sorted((float(q), float(head)) for q, head in self.curve_points_q_head))
+        if any(q < 0.0 for q, _ in points):
+            raise ValueError("Pump curve flow values must be non-negative.")
+        if any(head < 0.0 for _, head in points):
+            raise ValueError("Pump curve head values must be non-negative.")
+        for i in range(1, len(points)):
+            prev_q, prev_head = points[i - 1]
+            curr_q, curr_head = points[i]
+            if curr_q <= prev_q:
+                raise ValueError("Pump curve flow values must be strictly increasing.")
+            if curr_head >= prev_head:
+                raise ValueError("Pump curve head values must decrease as flow increases.")
+        object.__setattr__(self, "curve_points_q_head", points)
 
 
 @dataclass(frozen=True)

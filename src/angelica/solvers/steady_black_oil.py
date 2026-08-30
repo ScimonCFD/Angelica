@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict
 
 from angelica.closures.convection_scheme import ConvectionScheme, HybridScheme
 from angelica.closures.pressure_drop import PressureDropCorrelation
@@ -98,9 +97,9 @@ class SteadyBlackOilSolver(BaseSolver):
         network_state: NetworkState,
         case: NetworkCase,
         default_comp: BlackOilComposition,
-        node_comp_prev: "Dict[int, BlackOilComposition] | None" = None,
+        node_comp_prev: dict[int, BlackOilComposition] | None = None,
         relaxation: float = 1.0,
-    ) -> "tuple[Dict[int, BlackOilComposition], Dict[int, BlackOilComposition]]":
+    ) -> tuple[dict[int, BlackOilComposition], dict[int, BlackOilComposition]]:
         """Return a per-pipe-index composition map after one propagation pass.
 
         Compositions are seeded at inlet nodes and propagated downstream
@@ -113,7 +112,7 @@ class SteadyBlackOilSolver(BaseSolver):
         dict mapping index-in-network_state.components → BlackOilComposition
         """
         # ── seed inlet node compositions ──────────────────────────────────────
-        node_comp: Dict[int, BlackOilComposition] = {
+        node_comp: dict[int, BlackOilComposition] = {
             ibc.node_id: BlackOilComposition(
                 api_gravity      = ibc.api_gravity,
                 gas_gravity      = ibc.gas_gravity,
@@ -126,7 +125,7 @@ class SteadyBlackOilSolver(BaseSolver):
         # ── determine flow directions from current mass-flow field ────────────
         # For each node accumulate (mass_flow, composition) of incoming pipes.
         # Incoming means: flow is from the pipe's upstream end TO this node.
-        incoming: Dict[int, list] = defaultdict(list)
+        incoming: dict[int, list] = defaultdict(list)
         pipe_states = [
             (idx, ps)
             for idx, ps in enumerate(network_state.components)
@@ -192,7 +191,7 @@ class SteadyBlackOilSolver(BaseSolver):
                 break
 
         # ── assign per-pipe composition from upstream node ────────────────────
-        pipe_comp: Dict[int, BlackOilComposition] = {}
+        pipe_comp: dict[int, BlackOilComposition] = {}
         for idx, ps in pipe_states:
             ṁ = ps.mass_flow_kg_per_s
             if ṁ >= 0.0:
@@ -244,7 +243,7 @@ class SteadyBlackOilSolver(BaseSolver):
     def _build_mixed_fluid(
         self,
         network_state: NetworkState,
-        pipe_comps: Dict[int, BlackOilComposition],
+        pipe_comps: dict[int, BlackOilComposition],
         default_comp: BlackOilComposition,
         ref_t: float,
     ):
@@ -252,7 +251,7 @@ class SteadyBlackOilSolver(BaseSolver):
         from angelica.properties.black_oil import BlackOilFluid
 
         # Build a lookup: component_object_id → per-pipe fluid
-        id_to_comp: Dict[int, BlackOilComposition] = {}
+        id_to_comp: dict[int, BlackOilComposition] = {}
         for idx, ps in enumerate(network_state.components):
             id_to_comp[id(ps)] = pipe_comps.get(idx, default_comp)
 
@@ -367,8 +366,8 @@ class SteadyBlackOilSolver(BaseSolver):
         temperature_converged  = False
 
         # pipe_comps: per-pipe composition (None → use global fluid_model)
-        pipe_comps: Dict[int, BlackOilComposition] | None = None
-        node_comp_prev: Dict[int, BlackOilComposition] | None = None
+        pipe_comps: dict[int, BlackOilComposition] | None = None
+        node_comp_prev: dict[int, BlackOilComposition] | None = None
 
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
         for _outer in range(settings.max_outer_iterations):

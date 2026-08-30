@@ -130,7 +130,7 @@ def solve_energy_system(
             U = pipe.heat_transfer_coefficient_w_per_m2k
             T_amb = pipe.ambient_temperature_c
 
-        T_repr = ps.temperature_c if hasattr(ps, "temperature_c") and ps.temperature_c is not None else T_ref
+        T_repr = ps.temperature_c if ps.temperature_c is not None else T_ref
         _ls = _TempCarrier(T_repr)
 
         cp = fluid_model.specific_heat_for_link(_ls)
@@ -228,7 +228,7 @@ def solve_energy_system(
         n_internal = n_segs - 1
         offset = pipe_internal_offset[pipe_idx]
 
-        T_repr = ps.temperature_c if hasattr(ps, "temperature_c") and ps.temperature_c is not None else T_ref
+        T_repr = ps.temperature_c if ps.temperature_c is not None else T_ref
         _ls = _TempCarrier(T_repr)
         cp = fluid_model.specific_heat_for_link(_ls)
         mdot = float(ps.mass_flow_kg_per_s)

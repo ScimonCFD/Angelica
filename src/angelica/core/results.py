@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -79,8 +78,8 @@ class SolveResult:
     density_history: list[float] = field(default_factory=list)
     outer_turbulent_final_metrics: tuple[IterationMetrics, ...] = field(default_factory=tuple)
     outer_iteration_boundaries: tuple[int, ...] = field(default_factory=tuple)
-    global_balance: Optional[GlobalBalance] = None
-    global_energy_balance: Optional[GlobalEnergyBalance] = None
+    global_balance: GlobalBalance | None = None
+    global_energy_balance: GlobalEnergyBalance | None = None
     mass_balance_history: list[float] = field(default_factory=list)
     energy_balance_history: list[float] = field(default_factory=list)
     component_names: tuple[str, ...] = ()
