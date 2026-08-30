@@ -27,7 +27,6 @@ from angelica import (
     ThermalFluid,
     build_thermal_dead_oil,
 )
-from angelica.closures import HybridScheme, PowerLawScheme, UpwindScheme
 from angelica.cases import (
     build_crude_oil_pipeline_thermal_case,
     build_inline_heater_fixed_flow_case,
@@ -35,7 +34,7 @@ from angelica.cases import (
     build_symmetric_heat_loss_loop_case,
     build_thermal_mixing_junction_case,
 )
-
+from angelica.closures import HybridScheme, PowerLawScheme, UpwindScheme
 
 # ---------------------------------------------------------------------------
 # Shared fixture: single pipe with heat loss
@@ -81,11 +80,11 @@ _PIPE_ADIABATIC = Pipe(
     n_thermal_segments=20,
 )
 
-_BOUNDARIES = dict(
-    pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=111_325.0),),
-    pressure_outlets=(PressureBoundary(node_id=2, pressure_pa=101_325.0),),
-    thermal_inlets=(ThermalBoundary(node_id=1, temperature_c=80.0),),
-)
+_BOUNDARIES = {
+    "pressure_inlets": (PressureBoundary(node_id=1, pressure_pa=111_325.0),),
+    "pressure_outlets": (PressureBoundary(node_id=2, pressure_pa=101_325.0),),
+    "thermal_inlets": (ThermalBoundary(node_id=1, temperature_c=80.0),),
+}
 
 
 def _analytical_T_out(mdot: float) -> float:

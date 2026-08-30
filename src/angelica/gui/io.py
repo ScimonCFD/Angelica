@@ -4,36 +4,42 @@ import json
 import math
 from pathlib import Path
 
-from angelica.core.case import FlowBoundary, InletCompositionBC, InletFluidBC, NetworkCase, PressureBoundary, ThermalBoundary
+from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
+from angelica.closures.convection_scheme import HybridScheme, PowerLawScheme, UpwindScheme
+from angelica.core.case import (
+    FlowBoundary,
+    InletCompositionBC,
+    InletFluidBC,
+    NetworkCase,
+    PressureBoundary,
+    ThermalBoundary,
+)
 from angelica.core.components import FITTING_PRESET_LIBRARY, Fitting, HeatSource, Pipe, Pump
 from angelica.core.results import ComponentFlowResult, IterationMetrics
 from angelica.core.settings import SolverSettings
-from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
-from angelica.closures.convection_scheme import HybridScheme, PowerLawScheme, UpwindScheme
 from angelica.properties.black_oil import BlackOilFluid
-from angelica.properties.compressible_fluid import CompressibleFluid
 from angelica.properties.compositional_fluid import CompositionalFluid
+from angelica.properties.compressible_fluid import CompressibleFluid
 from angelica.properties.eos import IdealGasEOS, PengRobinsonEOS
 from angelica.properties.single_component import SingleComponentFluid
 from angelica.properties.thermal_fluid import ThermalFluid
 from angelica.solvers import (
-    BlackOilSolverSettings,
     CompositionalSolverSettings,
     CompressibleSolverSettings,
     NonIsothermalSolverSettings,
     SteadyBlackOilSolver,
-    SteadyCompressibleSolver,
     SteadyCompositionalSolver,
+    SteadyCompressibleSolver,
     SteadyIsothermalIncompressibleSolver,
     SteadyNonIsothermalIncompressibleSolver,
 )
 
 from .model import (
+    DEFAULT_PRESSURE_DROP_MODEL,
     CanvasLink,
     CanvasLinkComponent,
     CanvasNode,
     CanvasScene,
-    DEFAULT_PRESSURE_DROP_MODEL,
 )
 
 

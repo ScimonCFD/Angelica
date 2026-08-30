@@ -12,7 +12,6 @@ TUTORIALS_ROOT = SRC_ROOT / "angelica" / "tutorials"
 
 from angelica.gui.io import build_network_case_from_scene, build_solver_from_scene, load_scene_from_file
 
-
 M_PER_FT = 0.3048
 PSI_PER_FT_OF_WATER = 0.433527504
 M3H_PER_GPM = 0.22712470704

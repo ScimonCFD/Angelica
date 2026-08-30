@@ -30,9 +30,9 @@ SRC_ROOT = Path(__file__).resolve().parents[4] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from angelica.core.case import NetworkCase, PressureBoundary, ThermalBoundary, InletFluidBC
+from angelica.core.case import InletFluidBC, NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import Pipe
-from angelica.properties.black_oil import BlackOilFluid, BlackOilComposition, bubble_point_pa
+from angelica.properties.black_oil import BlackOilFluid, bubble_point_pa
 from angelica.solvers import SteadyBlackOilSolver
 
 # ── Reservoir fluid definitions ───────────────────────────────────────────────
@@ -121,6 +121,7 @@ m_tot = m_A + m_B
 
 from angelica.properties.dead_oil import dead_oil_density_kg_per_m3
 
+
 def surface_rates(m_kg_s, api, gg, gor, wor):
     rho_oil = dead_oil_density_kg_per_m3(api)
     rho_gas = gg * 1.225
@@ -147,5 +148,5 @@ api_blend = (m_A * API_A + m_B * API_B) / m_tot
 gor_blend = (m_A * GOR_A + m_B * GOR_B) / m_tot
 wor_blend = (m_A * WOR_A + m_B * WOR_B) / m_tot
 print()
-print(f"Blended fluid at Node 3 (junction):")
+print("Blended fluid at Node 3 (junction):")
 print(f"  API = {api_blend:.1f}°  |  GOR = {gor_blend:.1f} m³/m³  |  WOR = {wor_blend:.2f} m³/m³")

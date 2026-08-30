@@ -13,7 +13,6 @@ from angelica.gui.io import (
     load_scene_from_file,
 )
 
-
 M_PER_FT = 0.3048
 M3H_PER_GPM = 0.22712470704
 PSI_PER_FT_OF_WATER = 0.433527504

@@ -21,7 +21,6 @@ if str(SRC_ROOT) not in sys.path:
 
 from angelica.cases.crude_oil_pipeline_thermal import build_crude_oil_pipeline_thermal_case
 from angelica.properties.dead_oil import (
-    build_thermal_dead_oil,
     dead_oil_density_kg_per_m3,
     dead_oil_specific_heat_j_per_kg_k,
     dead_oil_thermal_conductivity_w_per_m_k,

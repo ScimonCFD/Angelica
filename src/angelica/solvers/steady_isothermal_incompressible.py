@@ -9,12 +9,12 @@ from angelica.closures import (
 )
 from angelica.closures.pressure_drop import PressureDropCorrelation
 from angelica.core.case import NetworkCase
-from angelica.core.components import Fitting, Pipe, Pump
 from angelica.core.network import build_network_state
 from angelica.core.results import ComponentFlowResult, IterationMetrics, SolveResult
 from angelica.core.settings import SolverSettings
 from angelica.core.state import FittingState, HeatSourceState, PipeState, PumpState
 from angelica.numerics import assemble_pressure_system, max_abs_value, solve_linear_system
+
 from .base import BaseSolver
 
 
@@ -53,7 +53,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             converged = laminar_converged
 
         node_pressures = {
-            node_id: float(network_state.nodes[node_id].pressure_pa)
+            node_id: float(network_state.nodes[node_id].pressure_pa)  # type: ignore[arg-type]
             for node_id in sorted(network_state.nodes)
         }
         component_flows = []
@@ -338,7 +338,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
     def _apply_pressure_correction(self, network_state, correction) -> tuple[float, float, float]:
         _P_MIN = 0.0  # Pa — absolute pressure cannot be negative
         node_ids = sorted(network_state.nodes)
-        old_pressures = [float(network_state.nodes[nid].pressure_pa) for nid in node_ids]
+        old_pressures = [float(network_state.nodes[nid].pressure_pa) for nid in node_ids]  # type: ignore[arg-type]
         raw_corrections = [float(correction[i]) for i in range(len(node_ids))]
 
         # Adaptive relaxation: halve alpha until all new pressures are non-negative.
@@ -362,8 +362,8 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
 
     def _compute_max_nodal_mass_imbalance(self, network_state) -> float:
         """Return max relative mass imbalance across junction nodes: |in-out|/(in+out)."""
-        imbalance_by_node = {node_id: 0.0 for node_id in network_state.nodes}
-        throughput_by_node = {node_id: 0.0 for node_id in network_state.nodes}
+        imbalance_by_node = dict.fromkeys(network_state.nodes, 0.0)
+        throughput_by_node = dict.fromkeys(network_state.nodes, 0.0)
 
         for link_state in network_state.components:
             mass_flow = float(link_state.mass_flow_kg_per_s)

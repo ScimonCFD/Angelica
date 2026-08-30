@@ -127,8 +127,9 @@ def solve_energy_system(
             U = 0.0
             T_amb = T_ref  # U=0 so this is unused; kept for structural symmetry with pipe branch
         else:
-            U = pipe.heat_transfer_coefficient_w_per_m2k
-            T_amb = pipe.ambient_temperature_c
+            assert isinstance(ps, PipeState)
+            U = ps.component.heat_transfer_coefficient_w_per_m2k
+            T_amb = ps.component.ambient_temperature_c
 
         T_repr = ps.temperature_c if ps.temperature_c is not None else T_ref
         _ls = _TempCarrier(T_repr)
@@ -221,7 +222,7 @@ def solve_energy_system(
 
     # ── junction node equations ───────────────────────────────────────────
     inflow: dict[int, list[tuple[int, float]]] = {i: [] for i in range(N_nodes)}
-    outflow_total: dict[int, float] = {i: 0.0 for i in range(N_nodes)}
+    outflow_total: dict[int, float] = dict.fromkeys(range(N_nodes), 0.0)
 
     for pipe_idx, ps in enumerate(pipe_states):
         n_segs = max(ps.component.n_thermal_segments, 2)

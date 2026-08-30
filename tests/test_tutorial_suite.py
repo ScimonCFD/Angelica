@@ -13,9 +13,13 @@ from angelica.cases import (
     build_black_oil_gathering_elevation_case,
     build_crude_oil_pipeline_case,
     build_crude_oil_pipeline_thermal_case,
+    build_district_heating_branch_case,
     build_gas_pipeline_hill_crossing_case,
     build_hilly_hot_water_network_case,
+    build_hot_water_pipe_heat_loss_case,
+    build_inline_heater_case,
     build_laminar_parallel_pipes_case,
+    build_looped_network_heat_loss_case,
     build_natural_gas_pipeline_case,
     build_steady_water_network_aggressive_elevation_case,
     build_steady_water_network_aggressive_elevation_outlet_flow_case,
@@ -24,17 +28,8 @@ from angelica.cases import (
     build_steady_water_network_no_fittings_case,
     build_steady_water_network_two_flow_boundaries_case,
     build_three_reservoir_junction_case,
-    build_hot_water_pipe_heat_loss_case,
-    build_district_heating_branch_case,
-    build_looped_network_heat_loss_case,
-    build_inline_heater_case,
 )
 from angelica.closures import ColebrookPipeCorrelation
-from angelica.gui.io import (
-    build_network_case_from_scene,
-    build_solver_from_scene,
-    load_scene_from_file,
-)
 from angelica.core.case import (
     FlowBoundary,
     InletFluidBC,
@@ -44,15 +39,18 @@ from angelica.core.case import (
 )
 from angelica.core.components import Pipe
 from angelica.core.settings import SolverSettings
+from angelica.gui.io import (
+    build_network_case_from_scene,
+    build_solver_from_scene,
+    load_scene_from_file,
+)
 from angelica.properties.black_oil import BlackOilFluid
-from angelica.properties.compressible_fluid import CompressibleFluid
-from angelica.properties.eos import IdealGasEOS
 from angelica.solvers import (
+    NonIsothermalSolverSettings,
     SteadyBlackOilSolver,
     SteadyCompressibleSolver,
     SteadyIsothermalIncompressibleSolver,
     SteadyNonIsothermalIncompressibleSolver,
-    NonIsothermalSolverSettings,
 )
 
 _TUTORIALS_ROOT = (

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .case import NetworkCase
 from .components import Fitting, HeatSource, Pipe, Pump
-from .state import FittingState, HeatSourceState, NetworkState, NodeState, PipeState, PumpState
+from .state import FittingState, HeatSourceState, NetworkState, NodeState, PipeState, PressureChangerState, PumpState
 
 
 def build_network_state(case: NetworkCase) -> NetworkState:
@@ -26,19 +26,19 @@ def build_network_state(case: NetworkCase) -> NetworkState:
         node.is_inlet = False
         node.is_pressure_boundary = True
 
-    for boundary in case.flow_inlets:
-        node = nodes[boundary.node_id]
+    for fb in case.flow_inlets:
+        node = nodes[fb.node_id]
         node.is_boundary = True
         node.is_inlet = True
-        node.prescribed_mass_flow_kg_per_s = boundary.mass_flow_kg_per_s
+        node.prescribed_mass_flow_kg_per_s = fb.mass_flow_kg_per_s
 
-    for boundary in case.flow_outlets:
-        node = nodes[boundary.node_id]
+    for fb in case.flow_outlets:
+        node = nodes[fb.node_id]
         node.is_boundary = True
         node.is_inlet = False
-        node.prescribed_mass_flow_kg_per_s = boundary.mass_flow_kg_per_s
+        node.prescribed_mass_flow_kg_per_s = fb.mass_flow_kg_per_s
 
-    components = []
+    components: list[PressureChangerState] = []
     for component in case.components:
         start_node = nodes[component.start_node]
         end_node = nodes[component.end_node]

@@ -7,6 +7,8 @@ through the critical point.  Works for both bubble (VF=0) and dew (VF=1).
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 
@@ -45,8 +47,8 @@ def _build_kij_matrix(constants) -> list[list[float]]:
 
 
 def _eval_FJ(
-    gas_phase: object,
-    liq_phase: object,
+    gas_phase: Any,
+    liq_phase: Any,
     T: float,
     P: float,
     K: "np.ndarray",
@@ -267,9 +269,9 @@ def _trace_arc(
 
 
 def _bubble_trace(
-    gas_phase: object,
-    liq_phase: object,
-    flash_obj: object,
+    gas_phase: Any,
+    liq_phase: Any,
+    flash_obj: Any,
     z: "np.ndarray",
     names: list[str],
     fracs: list[float],
@@ -286,7 +288,7 @@ def _bubble_trace(
 
     for T in np.arange(T_lo, T_hi, 0.5):
         try:
-            hs = {"hot_start": prev} if prev is not None else {}
+            hs: dict[str, Any] = {"hot_start": prev} if prev is not None else {}
             res = flash_obj.flash(zs=fracs, T=float(T), VF=0, **hs)
             if res.phase_count != 2 or not res.P or res.P <= 1e3:
                 continue
@@ -320,9 +322,9 @@ def _bubble_trace(
 
 
 def _dew_trace(
-    gas_phase: object,
-    liq_phase: object,
-    flash_obj: object,
+    gas_phase: Any,
+    liq_phase: Any,
+    flash_obj: Any,
     z: "np.ndarray",
     names: list[str],
     fracs: list[float],
@@ -406,9 +408,9 @@ def compute_phase_envelope(
     import warnings
 
     from thermo import ChemicalConstantsPackage
+    from thermo.eos_mix import PRMIX, SRKMIX
     from thermo.flash import FlashVL
     from thermo.phases import CEOSGas, CEOSLiquid
-    from thermo.eos_mix import PRMIX, SRKMIX
 
     eos_cls = SRKMIX if eos_name.upper() == "SRK" else PRMIX
 
@@ -420,10 +422,10 @@ def compute_phase_envelope(
         warnings.filterwarnings("ignore")
         constants, props = ChemicalConstantsPackage.from_IDs(names)
         kijs = _build_kij_matrix(constants)
-        eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas, kijs=kijs)
+        eos_kw = {"Tcs": constants.Tcs, "Pcs": constants.Pcs, "omegas": constants.omegas, "kijs": kijs}
         gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
         liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
-        flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
+        flash_obj: Any = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
 
     Tcs: list[float] = list(constants.Tcs)
     Pcs: list[float] = list(constants.Pcs)
@@ -476,9 +478,9 @@ def compute_quality_line(
     import warnings
 
     from thermo import ChemicalConstantsPackage
+    from thermo.eos_mix import PRMIX, SRKMIX
     from thermo.flash import FlashVL
     from thermo.phases import CEOSGas, CEOSLiquid
-    from thermo.eos_mix import PRMIX, SRKMIX
 
     eos_cls = SRKMIX if eos_name.upper() == "SRK" else PRMIX
 
@@ -489,10 +491,10 @@ def compute_quality_line(
         warnings.filterwarnings("ignore")
         constants, props = ChemicalConstantsPackage.from_IDs(names)
         kijs = _build_kij_matrix(constants)
-        eos_kw = dict(Tcs=constants.Tcs, Pcs=constants.Pcs, omegas=constants.omegas, kijs=kijs)
+        eos_kw = {"Tcs": constants.Tcs, "Pcs": constants.Pcs, "omegas": constants.omegas, "kijs": kijs}
         gas_phase = CEOSGas(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
         liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
-        flash_obj = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
+        flash_obj: Any = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
 
     Tbs: list[float] = list(constants.Tbs)
     Tcs_list: list[float] = list(constants.Tcs)
@@ -504,7 +506,7 @@ def compute_quality_line(
 
     for T in np.arange(T_lo, T_hi, 1.0):
         try:
-            hs = {"hot_start": prev} if prev is not None else {}
+            hs: dict[str, Any] = {"hot_start": prev} if prev is not None else {}
             res = flash_obj.flash(zs=fracs, T=float(T), VF=vf, **hs)
             if res.phase_count == 2 and res.P and res.P > 1e3:
                 pts.append((float(T), float(res.P)))

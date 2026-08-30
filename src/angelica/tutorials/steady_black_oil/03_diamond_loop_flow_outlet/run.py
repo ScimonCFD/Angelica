@@ -28,7 +28,7 @@ SRC_ROOT = Path(__file__).resolve().parents[4] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from angelica.core.case import NetworkCase, PressureBoundary, FlowBoundary, ThermalBoundary
+from angelica.core.case import FlowBoundary, NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import Pipe
 from angelica.properties.black_oil import BlackOilFluid, bubble_point_pa
 from angelica.solvers import SteadyBlackOilSolver

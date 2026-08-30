@@ -4,7 +4,6 @@ import math
 
 from .pressure_drop import PressureDropCorrelation
 
-
 _K_MAX = 1.0e9  # sentinel for K=∞ presets (e.g. closed check valve)
 
 

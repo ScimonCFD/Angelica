@@ -104,7 +104,7 @@ def main() -> None:
     m_a   = flows.get("well_a_flowline", 0.0)
     m_b   = flows.get("well_b_flowline", 0.0)
     m_sep = flows.get("manifold_to_separator", 0.0)
-    print(f"Mass balance:")
+    print("Mass balance:")
     print(f"  Well A + Well B in:  {m_a + m_b:.4f} kg/s")
     print(f"  Separator out:       {m_sep:.4f} kg/s")
     print(f"  Imbalance:           {abs(m_a + m_b - m_sep):.2e} kg/s")

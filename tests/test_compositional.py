@@ -21,7 +21,6 @@ if str(SRC_ROOT) not in sys.path:
 from angelica import (
     CompositionalFluid,
     CompositionalSolverSettings,
-    FlowBoundary,
     InletCompositionBC,
     NetworkCase,
     Pipe,
@@ -214,8 +213,8 @@ class TestPropagateCompositions:
 
     def _build_network_state(self, mdots: list[float], nodes: list[int], pipes: list[tuple]):
         """Build a minimal NetworkState from (start, end) pipe list."""
-        from angelica.core.state import NetworkState, NodeState, PipeState
         from angelica.core.components import Pipe
+        from angelica.core.state import NetworkState, NodeState, PipeState
 
         node_states = {nid: NodeState(node_id=nid) for nid in nodes}
         pipe_states = []
@@ -228,7 +227,7 @@ class TestPropagateCompositions:
 
     def test_single_inlet_propagates_to_outlet(self):
         """Composition from node 1 should reach node 2 through one pipe."""
-        from angelica.core.case import NetworkCase, PressureBoundary, InletCompositionBC
+        from angelica.core.case import InletCompositionBC, NetworkCase, PressureBoundary
         from angelica.properties.compositional_fluid import CompositionalFluid
         from angelica.solvers.steady_compositional import SteadyCompositionalSolver
 
@@ -253,7 +252,7 @@ class TestPropagateCompositions:
 
     def test_two_inlets_mix_at_junction(self):
         """Equal mass-flows from nodes 1 and 2 should mix to the average at node 3."""
-        from angelica.core.case import NetworkCase, PressureBoundary, InletCompositionBC
+        from angelica.core.case import InletCompositionBC, NetworkCase, PressureBoundary
         from angelica.properties.compositional_fluid import CompositionalFluid
         from angelica.solvers.steady_compositional import SteadyCompositionalSolver
 
@@ -296,7 +295,6 @@ class TestPropagateCompositions:
 class TestSteadyCompositionalSolver:
 
     def test_wrong_fluid_type_raises(self):
-        from angelica.properties.thermal_fluid import ThermalFluid
         from angelica.properties.single_component import SingleComponentFluid
 
         bad_fluid = SingleComponentFluid(density_kg_per_m3=700.0, viscosity_pa_s=1e-3)

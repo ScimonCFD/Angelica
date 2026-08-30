@@ -9,7 +9,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from angelica.cases import build_looped_network_heat_loss_case
 from angelica.core.settings import SolverSettings
-from angelica.solvers import SteadyNonIsothermalIncompressibleSolver, NonIsothermalSolverSettings
+from angelica.solvers import NonIsothermalSolverSettings, SteadyNonIsothermalIncompressibleSolver
 
 
 def main() -> None:

@@ -104,7 +104,7 @@ def main() -> None:
     m_trunk = flows.get("trunk_ascending", 0.0)
     m_a     = flows.get("branch_a_partial_descent", 0.0)
     m_b     = flows.get("branch_b_full_descent", 0.0)
-    print(f"Mass balance:")
+    print("Mass balance:")
     print(f"  Trunk in:            {m_trunk:.4f} kg/s")
     print(f"  Branch A + B out:    {m_a + m_b:.4f} kg/s")
     print(f"  Imbalance:           {abs(m_trunk - m_a - m_b):.2e} kg/s")

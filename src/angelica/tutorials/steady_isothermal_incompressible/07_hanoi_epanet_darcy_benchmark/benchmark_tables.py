@@ -13,7 +13,6 @@ from angelica.gui.io import (
     load_scene_from_file,
 )
 
-
 TERMINAL_NODE_MAP = {
     13: 112,
     22: 121,

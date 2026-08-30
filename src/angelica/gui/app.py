@@ -24,25 +24,24 @@ except ImportError as _sv_err:
 import angelica
 from angelica.core.case import NetworkCase
 from angelica.core.components import FITTING_PRESET_LIBRARY
-from angelica.core.results import ComponentFlowResult, SolveResult
+from angelica.core.results import SolveResult
 from angelica.io import export_solve_result_csv, export_solve_result_workbook
 
 from .io import (
     build_network_case_from_scene,
     build_solver_from_scene,
     load_scene_and_results_from_file,
-    load_scene_from_file,
     save_scene_to_file,
     scene_from_dict,
     scene_to_dict,
 )
 from .model import (
+    DEFAULT_LIBRARY_MATERIAL,
+    DEFAULT_PRESSURE_DROP_MODEL,
     CanvasLink,
     CanvasLinkComponent,
     CanvasNode,
     CanvasScene,
-    DEFAULT_LIBRARY_MATERIAL,
-    DEFAULT_PRESSURE_DROP_MODEL,
 )
 
 
@@ -270,7 +269,7 @@ class NetSimGui:
         self.root.minsize(900, 600)
         self._set_window_icon()
 
-        self.metric_label_to_name = {label: name for label, name in self.METRIC_OPTIONS}
+        self.metric_label_to_name = dict(self.METRIC_OPTIONS)
         self.metric_name_to_label = {name: label for label, name in self.METRIC_OPTIONS}
         self.convergence_metric_var = tk.StringVar(
             master=self.root,
@@ -1020,7 +1019,6 @@ class NetSimGui:
             k_var.set(preset.get("thermal_conductivity_w_per_m_k", ""))
 
         is_non_isothermal = self.scene.physics_mode == "non_isothermal"
-        is_compressible = self.scene.physics_mode == "compressible"
 
         def sync_mode_state(*_args: object) -> None:
             mode = mode_var.get()
@@ -3820,8 +3818,8 @@ class NetSimGui:
         save_btn.config(command=_save_image)
 
         def _save_csv() -> None:
-            from tkinter import filedialog
             import csv as _csv
+            from tkinter import filedialog
 
             path = filedialog.asksaveasfilename(
                 parent=win,

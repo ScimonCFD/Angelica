@@ -7,8 +7,8 @@ from .friction import (
 from .gravity import elevation_pressure_term
 from .heat_source import HeatSourceModel
 from .minor_losses import MinorLossModel
-from .pump import PumpCurveModel
 from .pressure_drop import PressureDropCorrelation
+from .pump import PumpCurveModel
 
 __all__ = [
     "ConvectionScheme",

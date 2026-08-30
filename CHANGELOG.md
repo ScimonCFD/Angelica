@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.6.87] — 2026-08-30
+
+### CI, linting, type checking, and documentation
+
+**Ruff configured** (`pyproject.toml` `[tool.ruff]`): select `E4`, `E7`, `E9`, `F`, `I`, `C4`. All
+auto-fixable violations resolved (import sorting, unused imports, f-string placeholders,
+dict literals). Tutorials and tests exempt from `E402`/`F841` where intentional.
+
+**Mypy configured** (`[tool.mypy]`): `ignore_missing_imports = true`, GUI and tutorials
+excluded. All 70 type errors in core code resolved:
+- `core/network.py` — explicit `list[PressureChangerState]`, renamed flow-boundary loop vars
+- `numerics/energy.py` — narrowing assertion `isinstance(ps, PipeState)` in else-branch
+- Solvers — `T_old` patterns use a local variable for mypy narrowing; `float(pressure_pa)`
+  and temperature ternaries annotated with `# type: ignore[arg-type]` where the solver
+  invariant guarantees non-None; `IterationMetrics` type annotations on metric lists
+- `properties/phase_envelope.py` — EOS parameters typed `Any`; `flash_obj` annotated `Any`
+- `properties/compositional_fluid.py` — `dict()` keyword calls converted to literals
+- `solvers/steady_compositional.py` — `link.zs` access via `getattr`
+- `cases/steady_water_network_aggressive_elevation.py` — explicit `list[PressureChanger]`
+
+**CI updated** (`.github/workflows/test.yml`):
+- Added `lint` job: runs `ruff check` + `mypy` on Python 3.11 (fast, single matrix entry)
+- `test` job: removed Python 3.9 (below `requires-python = ">=3.10"`); now 3.10, 3.11, 3.12
+
+**mkdocs documentation** set up:
+- `mkdocs.yml` with Material theme, `mkdocstrings` for API autodoc
+- `docs/index.md`, `docs/guide/` (solvers, fluids, network), `docs/api/` (case, solvers,
+  properties, results, numerics) — all pages verified with `mkdocs build`
+- `docs` optional dependency group added to `pyproject.toml`
+
+**Minor fixes:**
+- `gui/app.py` — removed unused `is_compressible` variable; `metric_label_to_name` dict
+  comprehension simplified to `dict(self.METRIC_OPTIONS)`
+- `solvers/steady_black_oil.py` — removed unreachable `comp = None` branch
+
 ## [1.6.86] — 2026-08-30
 
 ### Refactor: dead code removal, CompressibleFluid helper, collections.abc Callable

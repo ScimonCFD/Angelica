@@ -51,7 +51,7 @@ class BaseSolver(ABC):
     @staticmethod
     def _compute_global_balance(network_state) -> GlobalBalance:
         # Net flow INTO each node (positive = fluid arriving at this node)
-        node_net_in: dict[int, float] = {nid: 0.0 for nid in network_state.nodes}
+        node_net_in: dict[int, float] = dict.fromkeys(network_state.nodes, 0.0)
         for link in network_state.components:
             flow = link.mass_flow_kg_per_s
             node_net_in[link.start_node.node_id] -= flow
@@ -95,7 +95,7 @@ class BaseSolver(ABC):
                 self.temperature_c = t
 
         # Net flow into each node
-        node_net_in: dict[int, float] = {nid: 0.0 for nid in network_state.nodes}
+        node_net_in: dict[int, float] = dict.fromkeys(network_state.nodes, 0.0)
         for link in network_state.components:
             flow = link.mass_flow_kg_per_s
             node_net_in[link.start_node.node_id] -= flow

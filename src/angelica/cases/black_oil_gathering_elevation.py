@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from angelica.core.case import NetworkCase, PressureBoundary, ThermalBoundary, InletFluidBC
+from angelica.core.case import InletFluidBC, NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import Pipe
 from angelica.properties.black_oil import BlackOilFluid
 

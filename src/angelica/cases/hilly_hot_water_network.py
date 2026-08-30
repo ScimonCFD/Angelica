@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from angelica.core.case import NetworkCase, PressureBoundary, FlowBoundary, ThermalBoundary
+from angelica.core.case import FlowBoundary, NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import Pipe
 from angelica.properties.water_liquid import build_water_thermal_fluid
 

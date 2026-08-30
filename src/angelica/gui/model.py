@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-
 NODE_TYPES = ("source", "sink", "junction")
 LINK_COMPONENT_TYPES = ("pipe", "fitting", "pump", "heat_source")
 DEFAULT_LIBRARY_MATERIAL = {

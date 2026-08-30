@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-
 FITTING_PRESET_LIBRARY = {
     "regular_90_flanged": {"name": "90 elbow, regular, flanged", "loss_coefficient": 0.3},
     "regular_90_threaded": {"name": "90 elbow, regular, threaded", "loss_coefficient": 1.5},

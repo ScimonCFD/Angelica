@@ -10,6 +10,8 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from angelica.properties.black_oil import (
+    _M3M3_TO_SCFSTB,
+    _PSIA_TO_PA,
     BlackOilFluid,
     bubble_point_pa,
     gas_fvf,
@@ -20,8 +22,6 @@ from angelica.properties.black_oil import (
     water_fvf,
     water_viscosity_pa_s,
     z_factor_hall_yarborough,
-    _M3M3_TO_SCFSTB,
-    _PSIA_TO_PA,
 )
 
 

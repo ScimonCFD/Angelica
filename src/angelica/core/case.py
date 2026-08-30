@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .components import PressureChanger
 from angelica.properties.base import FluidModel
+
+from .components import PressureChanger
 
 
 @dataclass(frozen=True)

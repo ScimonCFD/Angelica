@@ -1,6 +1,7 @@
 """Angelica: open-source platform for pipe network simulation."""
 
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version
+
 try:
     __version__ = version("angelica")
 except PackageNotFoundError:
@@ -22,9 +23,9 @@ from .io.reporting import print_solve_result
 from .properties.black_oil import BlackOilFluid
 from .properties.compositional_fluid import CompositionalFluid
 from .properties.compressible_fluid import CompressibleFluid
-from .properties.gas_correlations import lee_gonzalez_eakin_viscosity
 from .properties.dead_oil import build_thermal_dead_oil
 from .properties.eos import EquationOfState, IdealGasEOS, PengRobinsonEOS
+from .properties.gas_correlations import lee_gonzalez_eakin_viscosity
 from .properties.single_component import SingleComponentFluid
 from .properties.thermal_fluid import ThermalFluid
 from .properties.water_liquid import build_water_thermal_fluid

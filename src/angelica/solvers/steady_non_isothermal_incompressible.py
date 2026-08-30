@@ -6,9 +6,10 @@ from angelica.closures.convection_scheme import ConvectionScheme, UpwindScheme
 from angelica.closures.pressure_drop import PressureDropCorrelation
 from angelica.core.case import NetworkCase
 from angelica.core.network import build_network_state
-from angelica.core.results import SolveResult
+from angelica.core.results import IterationMetrics, SolveResult
 from angelica.core.settings import SolverSettings
-from angelica.core.state import HeatSourceState, PipeState
+from angelica.core.state import PipeState
+
 from .base import BaseSolver
 from .steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
 
@@ -107,15 +108,15 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         mass_balance_history: list[float] = []
         energy_balance_history: list[float] = []
         all_lam_hist: list[float] = []
-        all_lam_metrics = []
+        all_lam_metrics: list[IterationMetrics] = []
         all_turb_hist: list[float] = []
-        all_turb_metrics = []
-        outer_turb_final = []
+        all_turb_metrics: list[IterationMetrics] = []
+        outer_turb_final: list[IterationMetrics] = []
         outer_boundaries: list[int] = []
         lam_hist: list[float] = []
-        lam_metrics = []
+        lam_metrics: list[IterationMetrics] = []
         turb_hist: list[float] = []
-        turb_metrics = []
+        turb_metrics: list[IterationMetrics] = []
         hydraulic_converged = False
 
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
@@ -146,7 +147,8 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             max_delta_t = 0.0
             alpha = settings.temperature_relaxation
             for nid, T_new in new_node_temps.items():
-                T_old = network_state.nodes[nid].temperature_c if network_state.nodes[nid].temperature_c is not None else T_init
+                _tc = network_state.nodes[nid].temperature_c
+                T_old = _tc if _tc is not None else T_init
                 delta = alpha * (T_new - T_old)
                 max_delta_t = max(max_delta_t, abs(delta))
                 if not network_state.nodes[nid].is_thermal_inlet:
@@ -198,11 +200,11 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
 
         # ── build results ──────────────────────────────────────────────────
         node_pressures = {
-            nid: float(network_state.nodes[nid].pressure_pa)
+            nid: float(network_state.nodes[nid].pressure_pa)  # type: ignore[arg-type]
             for nid in sorted(network_state.nodes)
         }
         node_temperatures = {
-            nid: float(network_state.nodes[nid].temperature_c if network_state.nodes[nid].temperature_c is not None else T_init)
+            nid: float(network_state.nodes[nid].temperature_c if network_state.nodes[nid].temperature_c is not None else T_init)  # type: ignore[arg-type]
             for nid in sorted(network_state.nodes)
         }
         from angelica.core.results import ComponentFlowResult

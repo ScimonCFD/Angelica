@@ -177,8 +177,8 @@ class TestVelocityLoopEdgeCases(unittest.TestCase):
         corr = ColebrookPipeCorrelation()
         ps_smooth = _make_pipe_state(roughness_m=1e-6)
         ps_rough  = _make_pipe_state(roughness_m=5e-4)
-        kw = dict(tolerance=_TOL, velocity_loop_method="secant",
-                  velocity_loop_max_iterations=100)
+        kw = {"tolerance": _TOL, "velocity_loop_method": "secant",
+                  "velocity_loop_max_iterations": 100}
         v_smooth = corr.calculate_velocity(ps_smooth, _DP, _RHO, _MU, **kw)
         v_rough  = corr.calculate_velocity(ps_rough,  _DP, _RHO, _MU, **kw)
         self.assertGreater(v_smooth, v_rough)

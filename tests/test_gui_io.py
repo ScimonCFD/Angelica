@@ -235,7 +235,6 @@ class GuiIoTests(unittest.TestCase):
         self.assertEqual(type(solver.turbulent_pipe_correlation).__name__, "HazenWilliamsPipeCorrelation")
 
     def test_hazen_williams_single_pipe_matches_analytical(self) -> None:
-        import math
 
         D = 0.05      # m
         L = 100.0     # m

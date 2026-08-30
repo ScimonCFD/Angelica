@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from angelica.core.case import NetworkCase
-from angelica.core.components import Pipe
+from angelica.core.components import Pipe, PressureChanger
 
 from .steady_water_network import build_steady_water_network_case
 
@@ -21,7 +21,7 @@ def build_steady_water_network_aggressive_elevation_case() -> NetworkCase:
         (3, 6): 4.0,
     }
 
-    components = []
+    components: list[PressureChanger] = []
     for component in base_case.components:
         if isinstance(component, Pipe):
             components.append(

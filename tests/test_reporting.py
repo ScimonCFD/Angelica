@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 import pytest
+
 openpyxl = pytest.importorskip("openpyxl")
 load_workbook = openpyxl.load_workbook
 
@@ -18,22 +19,22 @@ from angelica.io.reporting import export_solve_result_workbook
 
 
 def _minimal_result(**kwargs) -> SolveResult:
-    defaults = dict(
-        case_name="Test case",
-        converged=True,
-        node_pressures_pa={1: 101325.0, 2: 95000.0},
-        component_flows=[
+    defaults = {
+        "case_name": "Test case",
+        "converged": True,
+        "node_pressures_pa": {1: 101325.0, 2: 95000.0},
+        "component_flows": [
             ComponentFlowResult(
                 label="Pipe:1",
                 mass_flow_kg_per_s=1.23,
                 volumetric_flow_m3_per_h=4.56,
             )
         ],
-        laminar_history=[],
-        laminar_metrics=[],
-        turbulent_history=[],
-        turbulent_metrics=[],
-    )
+        "laminar_history": [],
+        "laminar_metrics": [],
+        "turbulent_history": [],
+        "turbulent_metrics": [],
+    }
     defaults.update(kwargs)
     return SolveResult(**defaults)
 

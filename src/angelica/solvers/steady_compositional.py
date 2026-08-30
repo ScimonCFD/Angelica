@@ -7,10 +7,11 @@ from angelica.closures.convection_scheme import ConvectionScheme, HybridScheme
 from angelica.closures.pressure_drop import PressureDropCorrelation
 from angelica.core.case import NetworkCase
 from angelica.core.network import build_network_state
-from angelica.core.state import HeatSourceState, NetworkState, PipeState
 from angelica.core.results import ComponentFlowResult, SolveResult
 from angelica.core.settings import SolverSettings
+from angelica.core.state import HeatSourceState, NetworkState, PipeState
 from angelica.properties.compositional_fluid import CompositionalFluid
+
 from .base import BaseSolver
 from .steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
 
@@ -290,7 +291,8 @@ class SteadyCompositionalSolver(BaseSolver):
             max_delta_t = 0.0
             alpha = settings.temperature_relaxation
             for nid, T_new in new_node_temps.items():
-                T_old = network_state.nodes[nid].temperature_c if network_state.nodes[nid].temperature_c is not None else T_init
+                _tc = network_state.nodes[nid].temperature_c
+                T_old = _tc if _tc is not None else T_init
                 delta = alpha * (T_new - T_old)
                 max_delta_t = max(max_delta_t, abs(delta))
                 if not network_state.nodes[nid].is_thermal_inlet:
@@ -341,11 +343,11 @@ class SteadyCompositionalSolver(BaseSolver):
 
         # ── build result ──────────────────────────────────────────────────────
         node_pressures = {
-            nid: float(network_state.nodes[nid].pressure_pa)
+            nid: float(network_state.nodes[nid].pressure_pa)  # type: ignore[arg-type]
             for nid in sorted(network_state.nodes)
         }
         node_temperatures = {
-            nid: float(network_state.nodes[nid].temperature_c if network_state.nodes[nid].temperature_c is not None else T_init)
+            nid: float(network_state.nodes[nid].temperature_c if network_state.nodes[nid].temperature_c is not None else T_init)  # type: ignore[arg-type]
             for nid in sorted(network_state.nodes)
         }
         component_flows = []
@@ -363,7 +365,7 @@ class SteadyCompositionalSolver(BaseSolver):
                     ),
                     temperature_in_c=t_in,
                     temperature_out_c=t_out,
-                    zs=tuple(link.zs) if getattr(link, "zs", ()) else (),
+                    zs=tuple(getattr(link, "zs", ())),
                     vapor_fraction=vf,
                 )
             )

@@ -41,7 +41,7 @@ SRC_ROOT = Path(__file__).resolve().parents[4] / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from angelica.core.case import NetworkCase, PressureBoundary, ThermalBoundary, InletCompositionBC
+from angelica.core.case import InletCompositionBC, NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import Pipe
 from angelica.properties.compositional_fluid import CompositionalFluid
 from angelica.solvers import SteadyCompositionalSolver
