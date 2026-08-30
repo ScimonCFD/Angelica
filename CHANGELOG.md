@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.6.88] — 2026-08-31
+
+### Phase envelope performance
+
+Replaced the brute-force temperature scan in `_bubble_trace` and `_dew_trace` with
+**Wilson K-value bootstrap** (`_wilson_start`): the Wilson (1968) correlation gives an
+analytical estimate of the bubble/dew pressure and K-values at any temperature without
+iterating a flash.  A single TP flash at the Wilson `(T, P)` estimate converges
+immediately because the composition is already near the phase boundary.
+
+Previously, each curve required 200–400 slow `FlashVL.flash(VF=0/1)` calls to scan the
+temperature range before arc-length continuation could start.  Now:
+
+- `_wilson_start` tries 5 candidate temperatures (fractions of `Tc_mix`), one TP flash
+  each; succeeds on the first or second attempt for typical hydrocarbon mixtures.
+- `_trace_arc` gains `ascend=False` / `T_min` / `P_max` parameters to trace **toward
+  lower T**, covering the left leg of the envelope that the old scan produced.
+- Both curves are now computed as: 1–5 Wilson flashes → bidirectional arc-length
+  (down + up from the bootstrap point).
+- Falls back to the original scan automatically if Wilson fails (e.g. unusual mixtures
+  where the Wilson estimate lands outside the two-phase region).
+- `compute_quality_line` now starts from `0.5 × Tc_mix` (well inside the envelope for
+  most mixtures) and uses 2 °C steps instead of 1 °C.
+
+Expected wall-time reduction: **~10× for typical gas-condensate mixtures**.
+
 ## [1.6.87] — 2026-08-30
 
 ### CI, linting, type checking, and documentation

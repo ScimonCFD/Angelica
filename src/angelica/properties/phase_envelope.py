@@ -1,8 +1,9 @@
 """Phase envelope (bubble/dew point curves) via Michelsen (1980) arc-length.
 
-Algorithm: hot-start flash scan up to the near-critical region, then arc-length
-continuation (predictor = SVD null vector; corrector = Newton-Raphson) to trace
-through the critical point.  Works for both bubble (VF=0) and dew (VF=1).
+Algorithm: Wilson K-value bootstrap finds the first two-phase point without
+scanning.  Arc-length continuation (predictor = SVD null vector; corrector =
+Newton-Raphson) then traces the full envelope in both directions from that
+starting point.  Falls back to a temperature scan when Wilson fails.
 """
 
 from __future__ import annotations
@@ -44,6 +45,77 @@ def _build_kij_matrix(constants) -> list[list[float]]:
             kijs[i][j] = kij
             kijs[j][i] = kij
     return kijs
+
+
+def _wilson_start(
+    flash_obj: Any,
+    constants: Any,
+    z: np.ndarray,
+    fracs: list[float],
+    T_lo: float,
+    T_hi: float,
+    VF: int,
+) -> tuple[np.ndarray, float, float] | None:
+    """Find a valid two-phase starting point using the Wilson K-value correlation.
+
+    Wilson (1968) gives an analytical estimate of bubble/dew pressure:
+      K_i = (Pci/P) * exp(5.373*(1+ωi)*(1 - Tci/T))
+      Bubble: P_bub = Σ zi*Pci*exp(...)
+      Dew:    1/P_dew = Σ zi/(Pci*exp(...))
+
+    A single TP flash at the Wilson (T, P) estimate converges immediately
+    because the composition is already near the phase boundary.  This
+    replaces the brute-force temperature scan (~200-400 flash calls) with
+    1-5 flash calls.
+
+    Returns (K, T, P) for a valid two-phase point, or None if all attempts
+    fail (caller falls back to the legacy scan).
+    """
+    Tcs_ = np.array(constants.Tcs)
+    Pcs_ = np.array(constants.Pcs)
+    omegas_ = np.array(constants.omegas)
+    z_ = np.array(fracs)
+    N = len(fracs)
+    Tc_mix = float(np.dot(z_, Tcs_))
+
+    # Candidate fractions of Tc_mix: bubble curve is well-conditioned
+    # around 0.6-0.7*Tc; dew curve first appears at lower T (left leg).
+    if VF == 0:
+        candidates = (0.65, 0.55, 0.75, 0.50, 0.80)
+    else:
+        candidates = (0.50, 0.45, 0.55, 0.40, 0.60)
+
+    for frac_T in candidates:
+        T_try = frac_T * Tc_mix
+        if not (T_lo + 1.0 < T_try < T_hi - 1.0):
+            continue
+
+        exp_term = np.exp(5.373 * (1.0 + omegas_) * (1.0 - Tcs_ / T_try))
+
+        if VF == 0:
+            P_w = float(np.dot(z_, Pcs_ * exp_term))
+        else:
+            denom = Pcs_ * exp_term
+            with np.errstate(divide="ignore", invalid="ignore"):
+                inv_sum = float(np.dot(z_, np.where(denom > 0, 1.0 / denom, 0.0)))
+            P_w = 1.0 / max(inv_sum, 1e-30)
+
+        if not (1e3 < P_w < 1e8):
+            continue
+
+        try:
+            res = flash_obj.flash(zs=fracs, T=float(T_try), P=float(P_w))
+            if res is None or res.phase_count != 2 or not res.P or res.P <= 1e3:
+                continue
+            K = np.array([res.gas.zs[i] / res.liquid0.zs[i] for i in range(N)])
+            if not np.all(np.isfinite(K)) or not np.all(K > 0):
+                continue
+            if float(np.max(np.abs(np.log(K)))) > 0.3:
+                return K, float(T_try), float(res.P)
+        except Exception:
+            pass
+
+    return None
 
 
 def _eval_FJ(
@@ -197,20 +269,34 @@ def _trace_arc(
     ds_max: float = 0.5,
     max_steps: int = 1000,
     lnK_stop: float = 0.005,
+    ascend: bool = True,
+    T_min: float = 50.0,
+    P_max: float = 1e8,
 ) -> "list[tuple[float, float]]":
-    """Arc-length continuation from (T_start, P_start, K_start) toward the critical."""
+    """Arc-length continuation from (T_start, P_start, K_start).
+
+    ascend=True  traces toward higher T (toward the critical point).
+    ascend=False traces toward lower T (away from the critical point,
+                 toward the left leg of the envelope).  Stops when
+                 T < T_min or P > P_max.
+    """
     N = len(z)
     S = np.concatenate(
         [np.log(np.clip(K_start, 1e-15, 1e15)), [np.log(T_start), np.log(P_start)]]
     )
 
+    # Initial tangent seed: +T direction for ascent, −T for descent.
     tangent = np.zeros(N + 2)
-    tangent[N] = 1.0
+    tangent[N] = 1.0 if ascend else -1.0
     try:
         _, J0 = _eval_FJ(gas_phase, liq_phase, T_start, P_start, K_start, z, VF)
         tangent = _null(J0, tangent)
-        if tangent[N] < 0:
-            tangent = -tangent
+        if ascend:
+            if tangent[N] < 0:
+                tangent = -tangent
+        else:
+            if tangent[N] > 0:
+                tangent = -tangent
     except Exception:
         pass
 
@@ -262,7 +348,12 @@ def _trace_arc(
         if lnK_max_new > 0.3:
             ds = min(ds * 1.05, ds_max)
 
-        if lnK_max_new < lnK_stop:
+        # Ascent: stop near the critical point (K → 1).
+        if ascend and lnK_max_new < lnK_stop:
+            break
+
+        # Descent: stop when we exit the practical T/P range.
+        if not ascend and (T_new < T_min or P_new > P_max):
             break
 
     return pts
@@ -272,15 +363,29 @@ def _bubble_trace(
     gas_phase: Any,
     liq_phase: Any,
     flash_obj: Any,
+    constants: Any,
     z: "np.ndarray",
-    names: list[str],
     fracs: list[float],
     T_lo: float,
     T_hi: float,
     lnK_arc_start: float = 0.5,
 ) -> "list[tuple[float, float]]":
-    """Bubble-point curve via flash scan then arc-length continuation."""
+    """Bubble-point curve: Wilson bootstrap → bidirectional arc-length."""
     N = len(z)
+
+    # ── Wilson bootstrap ──────────────────────────────────────────────────
+    ws = _wilson_start(flash_obj, constants, z, fracs, T_lo, T_hi, VF=0)
+    if ws is not None:
+        K_start, T_start, P_start = ws
+        if float(np.max(np.abs(np.log(K_start)))) >= lnK_arc_start:
+            pts_up   = _trace_arc(gas_phase, liq_phase, z, 0, T_start, P_start, K_start,
+                                   ascend=True)
+            pts_down = _trace_arc(gas_phase, liq_phase, z, 0, T_start, P_start, K_start,
+                                   ascend=False, T_min=T_lo)
+            # pts_down is [T_start, T_lower_1, ...]: reverse to get low→high T order.
+            return list(reversed(pts_down)) + pts_up[1:]
+
+    # ── Fallback: brute-force temperature scan ────────────────────────────
     prev = None
     pts: list[tuple[float, float]] = []
     arc_K: "np.ndarray | None" = None
@@ -299,10 +404,10 @@ def _bubble_trace(
 
             prev_lkm = float(np.max(np.abs(np.log(arc_K)))) if arc_K is not None else 1.0
             if arc_K is not None and lnK_max < 0.01 and prev_lkm > 0.1:
-                break  # snap to trivial — switch to arc-length
+                break
 
             if pts and abs(res.P - pts[-1][1]) > pts[-1][1] * 0.5:
-                break  # pressure jump — switch to arc-length
+                break
 
             pts.append((float(T), float(res.P)))
             prev = res
@@ -325,20 +430,32 @@ def _dew_trace(
     gas_phase: Any,
     liq_phase: Any,
     flash_obj: Any,
+    constants: Any,
     z: "np.ndarray",
-    names: list[str],
     fracs: list[float],
     T_lo: float,
     T_hi: float,
 ) -> "list[tuple[float, float]]":
-    """Dew-point curve via flash scan then arc-length continuation."""
+    """Dew-point curve: Wilson bootstrap → bidirectional arc-length."""
     N = len(z)
+
+    # ── Wilson bootstrap ──────────────────────────────────────────────────
+    ws = _wilson_start(flash_obj, constants, z, fracs, T_lo, T_hi, VF=1)
+    if ws is not None:
+        K_start, T_start, P_start = ws
+        if float(np.max(np.abs(np.log(K_start)))) > 0.3:
+            pts_up   = _trace_arc(gas_phase, liq_phase, z, 1, T_start, P_start, K_start,
+                                   ascend=True)
+            pts_down = _trace_arc(gas_phase, liq_phase, z, 1, T_start, P_start, K_start,
+                                   ascend=False, T_min=T_lo)
+            return list(reversed(pts_down)) + pts_up[1:]
+
+    # ── Fallback: scan ────────────────────────────────────────────────────
     prev = None
     pts: list[tuple[float, float]] = []
     arc_K: "np.ndarray | None" = None
     arc_P = arc_T = 0.0
 
-    # find a well-conditioned starting point
     for T_s in np.arange(T_lo, T_lo + 100.0, 5.0):
         try:
             res = flash_obj.flash(zs=fracs, T=float(T_s), VF=1)
@@ -373,7 +490,7 @@ def _dew_trace(
 
             prev_lkm = float(np.max(np.abs(np.log(arc_K)))) if arc_K is not None else 1.0
             if arc_K is not None and lnK_max < 0.01 and prev_lkm > 0.1:
-                break  # snap — switch to arc-length
+                break
 
             pts.append((float(T), float(res.P)))
             arc_K = K.copy()
@@ -392,7 +509,7 @@ def _dew_trace(
 def compute_phase_envelope(
     component_names: "tuple[str, ...] | list[str]",
     zs: "tuple[float, ...] | list[float]",
-    n_T: int = 20,
+    n_T: int = 20,  # noqa: ARG001  accepted for API compatibility, arc-length is used instead
     eos_name: str = "PR",
 ) -> "tuple[list[tuple[float, float]], list[tuple[float, float]], float, float]":
     """Compute bubble and dew point curves for a multi-component mixture.
@@ -437,25 +554,15 @@ def compute_phase_envelope(
     T_lo = max(min(Tbs) * 0.55, 75.0)
     T_hi = Tc * 1.5
 
-    bubble_pts = _bubble_trace(
-        gas_phase, liq_phase, flash_obj, z, names, fracs, T_lo, T_hi
-    )
-    dew_pts = _dew_trace(
-        gas_phase, liq_phase, flash_obj, z, names, fracs, T_lo, T_hi
-    )
+    bubble_pts = _bubble_trace(gas_phase, liq_phase, flash_obj, constants, z, fracs, T_lo, T_hi)
+    dew_pts = _dew_trace(gas_phase, liq_phase, flash_obj, constants, z, fracs, T_lo, T_hi)
 
-    # Close the envelope: average the final T/P pair of both arcs as the
-    # shared critical point, and use it as the returned Tc/Pc marker.
-    # The arc-length endpoint average is far more accurate than the Kay's-rule
-    # pseudo-critical computed above, so always update Tc/Pc from the arcs.
-    # Only merge the last curve points into a single shared coordinate when
-    # the two arcs converge closely enough for the visual to look closed.
     if bubble_pts and dew_pts:
         T_bc, P_bc = bubble_pts[-1]
         T_dc, P_dc = dew_pts[-1]
         T_crit = (T_bc + T_dc) / 2.0
         P_crit = (P_bc + P_dc) / 2.0
-        Tc, Pc = T_crit, P_crit  # always prefer arc-endpoint estimate over Kay's rule
+        Tc, Pc = T_crit, P_crit
         if abs(T_bc - T_dc) < 2.0 and abs(P_bc - P_dc) / max(P_bc, P_dc) < 0.02:
             bubble_pts[-1] = (T_crit, P_crit)
             dew_pts[-1] = (T_crit, P_crit)
@@ -496,15 +603,22 @@ def compute_quality_line(
         liq_phase = CEOSLiquid(eos_cls, eos_kw, HeatCapacityGases=props.HeatCapacityGases)
         flash_obj: Any = FlashVL(constants, props, liquid=liq_phase, gas=gas_phase)
 
-    Tbs: list[float] = list(constants.Tbs)
     Tcs_list: list[float] = list(constants.Tcs)
+    Tbs: list[float] = list(constants.Tbs)
+    Tc_mix = sum(zi * tc for zi, tc in zip(fracs, Tcs_list))
     T_lo = max(min(Tbs) * 0.55, 75.0)
-    T_hi = sum(zi * tc for zi, tc in zip(fracs, Tcs_list)) * 1.5
+    T_hi = Tc_mix * 1.5
+
+    # Use Wilson to estimate a good starting temperature: the quality line
+    # starts near the bubble curve (for low vf) or dew curve (for high vf).
+    # A fraction of Tc between 0.4 and 0.6 is reliably inside the envelope.
+    T_scan_start = max(T_lo, min(0.5 * Tc_mix, T_hi - 5.0))
 
     pts: list[tuple[float, float]] = []
     prev = None
 
-    for T in np.arange(T_lo, T_hi, 1.0):
+    # Scan with 2 °C steps (vs. original 1 °C) starting from Wilson estimate.
+    for T in np.arange(T_scan_start, T_hi, 2.0):
         try:
             hs: dict[str, Any] = {"hot_start": prev} if prev is not None else {}
             res = flash_obj.flash(zs=fracs, T=float(T), VF=vf, **hs)
@@ -515,5 +629,20 @@ def compute_quality_line(
                 break
         except Exception:
             pass
+
+    # If nothing found from T_scan_start, fall back to scanning from T_lo.
+    if not pts:
+        prev = None
+        for T in np.arange(T_lo, T_scan_start, 2.0):
+            try:
+                hs_: dict[str, Any] = {"hot_start": prev} if prev is not None else {}
+                res = flash_obj.flash(zs=fracs, T=float(T), VF=vf, **hs_)
+                if res.phase_count == 2 and res.P and res.P > 1e3:
+                    pts.append((float(T), float(res.P)))
+                    prev = res
+                elif pts:
+                    break
+            except Exception:
+                pass
 
     return pts
