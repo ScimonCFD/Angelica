@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.6.90] — 2026-08-31
+
+### Tutorial: free water in a wet-gas pipeline
+
+Added `tutorials/steady_compositional/04_free_water/run.py` — a four-section
+tutorial demonstrating the immiscible-water model introduced in v1.6.89:
+
+- **Section 1** — PVT comparison: wet-gas vs dry-gas flash at inlet conditions
+- **Section 2** — Free-water fraction scan across temperature and pressure
+- **Section 3** — Full network solve (two 50 km pipes, 80 → 20 bar, cooling from 50 → 15 °C)
+- **Section 4** — `free_water_fraction` and estimated liquid-water mass flow per pipe
+
+Also fixes `tutorials/steady_compositional/01_single_pipe/run.py`: the direct
+call to `_flash_properties` was unpacking 4 values; updated to `rho, mu, Cp, k, *_`
+to handle the new 6-tuple return (VF and free_water_frac added in v1.6.89).
+
 ## [1.6.89] — 2026-08-31
 
 ### Free-water support in compositional solver

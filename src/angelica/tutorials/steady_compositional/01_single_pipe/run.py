@@ -48,8 +48,8 @@ P_IN  = 100e5   # Pa
 P_OUT =  20e5   # Pa
 ZS_T  = tuple(round(z, 4) for z in ZS)
 
-rho_in,  mu_in,  Cp_in,  k_in  = _flash_properties(tuple(COMPONENTS), P_IN,  T_INLET_C, ZS_T)
-rho_out, mu_out, Cp_out, k_out = _flash_properties(tuple(COMPONENTS), P_OUT, T_INLET_C, ZS_T)
+rho_in,  mu_in,  Cp_in,  k_in,  *_ = _flash_properties(tuple(COMPONENTS), P_IN,  T_INLET_C, ZS_T)
+rho_out, mu_out, Cp_out, k_out, *_ = _flash_properties(tuple(COMPONENTS), P_OUT, T_INLET_C, ZS_T)
 
 print("=" * 60)
 print("EOS flash preview (thermo library)")
