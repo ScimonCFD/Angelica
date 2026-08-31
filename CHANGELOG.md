@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.6.89] — 2026-08-31
+
+### Free-water support in compositional solver
+
+**New module `src/angelica/properties/free_water.py`** — immiscible-water utilities:
+- `find_water_index` — detects water in a component list by name/CAS (`"water"`, `"h2o"`, `"7732-18-5"`, etc.)
+- `water_psat_pa` — Wagner / IAPWS-IF97 saturation pressure (error < 0.005 %, valid 273–647 K)
+- `water_liquid_density_kg_m3` — Kell (1975) correlation (0–150 °C)
+- `water_liquid_viscosity_pa_s` — VFT empirical fit
+- `free_water_split` — immiscible-water phase split given HC vapour fraction and water Psat
+
+**`CompositionalFluid` / `_flash_properties`** — automatic free-water detection:
+- If the component list contains no water → behaviour is identical to before (zero change)
+- If water is present → the HC mole fractions are normalised (water removed), a standard
+  VL flash is performed on the HC-only composition, and the water phase is split using the
+  immiscible-water model (water condenses when its partial pressure would exceed Psat(T))
+- Bulk density accounts for the liquid-water volume contribution (volume-fraction mixing)
+- New `free_water_fraction_for_link` method returns the mole fraction of the feed that is
+  liquid free water at each pipe's average P and T
+
+**`ComponentFlowResult`** — new field `free_water_fraction: float = 0.0` (backward compatible)
+
+**`SteadyCompositionalSolver`** — propagates `free_water_fraction` into the result
+
+**Single-component fix** — `thermo`'s Michelsen stability test divides by `N-1 = 0` for
+pure-component mixtures.  When the `ZeroDivisionError` occurs the phase (gas/liquid) is
+determined via the Wilson Psat estimate and the EOS phase object is evaluated directly
+(bypassing `FlashVL.flash`) — `constants` and `correlations` are copied from the cached
+parent phase so that `rho_mass()`, `mu()`, `Cp_mass()`, and `k()` work correctly.
+
+Bumps to v1.6.89.
+
 ## [1.6.88] — 2026-08-31
 
 ### Phase envelope performance
