@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.6.91] — 2026-09-02
+
+### Three-phase volumetric density in free-water path (temporary)
+
+Replaces the previous two-phase HC+water density mixing in `_flash_properties`
+with the proper PIPEPHASE-style three-phase volumetric average:
+
+```
+ρ_mix = φ_gas · ρ_HC_gas + φ_HCliq · ρ_HC_liq + φ_water · ρ_water
+```
+
+Volume fractions are computed from the molar phase splits and individual phase
+densities returned by the EOS flash.  A new cached helper `_hc_phase_densities`
+extracts the gas and liquid HC densities separately from the thermo flash result
+(using `getattr(res, "gas", None)` / `getattr(res, "liquid0", None)` to handle
+single-phase results safely).
+
+The HC-phase molecular weight used for volume conversion is approximated as the
+feed MW — a simplification noted in the code that will be corrected when the
+full three-phase solver is implemented.
+
+**Marked as temporary** (`while until main solver is complete`).
+
 ## [1.6.90] — 2026-08-31
 
 ### Tutorial: free water in a wet-gas pipeline

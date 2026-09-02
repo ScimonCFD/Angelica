@@ -48,6 +48,43 @@ def _wilson_psat(Tc: float, Pc: float, omega: float, T_K: float) -> float:
     return Pc * math.exp(5.373 * (1.0 + omega) * (1.0 - Tc / T_K))
 
 
+@lru_cache(maxsize=512)
+def _hc_phase_densities(
+    component_names: tuple[str, ...],
+    pressure_pa: float,
+    temperature_c: float,
+    zs: tuple[float, ...],
+    eos_name: str = "PR",
+) -> tuple[float, float, float]:
+    """Return (rho_gas kg/m³, rho_liq kg/m³, VF –) for an HC-only PT flash.
+
+    Temporary helper for three-phase volumetric density mixing in the
+    free-water path.  When the mixture is single-phase the unused density is a
+    placeholder — its volume fraction will be zero in the mixing formula.
+    """
+    flash_obj = _get_flash_obj(component_names, eos_name)
+    T_K = temperature_c + 273.15
+    try:
+        res = flash_obj.flash(T=T_K, P=pressure_pa, zs=list(zs))
+    except ZeroDivisionError:
+        const  = flash_obj.constants
+        Psat   = _wilson_psat(const.Tcs[0], const.Pcs[0], const.omegas[0], T_K)
+        is_gas = T_K >= const.Tcs[0] or pressure_pa <= Psat
+        parent = flash_obj.gas if is_gas else flash_obj.liquid
+        phase  = parent.to(T=T_K, P=pressure_pa, zs=[1.0])
+        phase.constants    = parent.constants
+        phase.correlations = parent.correlations
+        rho = max(float(phase.rho_mass()), 0.001)
+        return (rho, rho, 1.0 if is_gas else 0.0)
+
+    VF = float(res.VF) if res.VF is not None else 0.0
+    gas_ph = getattr(res, "gas", None)
+    liq_ph = getattr(res, "liquid0", None)
+    rho_gas = max(float(gas_ph.rho_mass()), 0.001) if gas_ph is not None and VF > 1e-10 else 0.001
+    rho_liq = max(float(liq_ph.rho_mass()), 0.001) if liq_ph is not None and VF < 1.0 - 1e-10 else 0.001
+    return (rho_gas, rho_liq, VF)
+
+
 @lru_cache(maxsize=2048)
 def _flash_properties(
     component_names: tuple[str, ...],
@@ -72,8 +109,9 @@ def _flash_properties(
     3. Water-phase split: the maximum amount of water vapour that the gas
        stream can carry is limited by the water saturation pressure
        (Wagner / IAPWS-IF97).  The remainder condenses as free liquid water.
-    4. Bulk mixture density accounts for the liquid-water volume contribution;
-       all other bulk properties (μ, Cp, k) use the HC flash result.
+    4. Bulk mixture density is the three-phase volumetric average
+       (φ_gas·ρ_gas + φ_HCliq·ρ_HCliq + φ_water·ρ_water, PIPEPHASE-style);
+       μ, Cp, k use the HC flash result.
     5. The overall vapour fraction (VF) includes water vapour in the gas phase.
 
     Single-component mixtures
@@ -112,12 +150,26 @@ def _flash_properties(
         # Water phase split (immiscible-water model)
         n_wl, n_wv = free_water_split(z_w, VF_hc, sum_hc, T_K, pressure_pa)
 
-        # Bulk density: volume-weighted mix of HC bulk and liquid water
+        # Three-phase volumetric density: φ_gas·ρ_gas + φ_HCliq·ρ_HCliq + φ_water·ρ_water
+        # (temporary — approximates HC-phase MW as feed MW; replace when main solver done)
+        rho_gas_hc, rho_liq_hc, _ = _hc_phase_densities(
+            hc_names, pressure_pa, temperature_c, hc_zs_norm, eos_name
+        )
         rho_wl = water_liquid_density_kg_m3(T_K)
-        v_hc = sum_hc / hc_rho           # relative HC volume (arbitrary unit)
-        v_wl = n_wl * WATER_MW / rho_wl  # relative liquid-water volume (same unit)
-        phi_wl = v_wl / (v_hc + v_wl) if (v_hc + v_wl) > 1e-30 else 0.0
-        bulk_rho = hc_rho * (1.0 - phi_wl) + rho_wl * phi_wl
+        MWs_hc = _get_flash_obj(hc_names, eos_name).constants.MWs
+        MW_hc  = sum(z * mw for z, mw in zip(hc_zs_norm, MWs_hc))
+
+        n_gas_hc = VF_hc * sum_hc
+        n_liq_hc = (1.0 - VF_hc) * sum_hc
+        V_gas    = n_gas_hc * MW_hc / (1000.0 * rho_gas_hc)
+        V_liq    = n_liq_hc * MW_hc / (1000.0 * rho_liq_hc)
+        V_wat    = n_wl * WATER_MW / (1000.0 * rho_wl)
+        V_tot    = V_gas + V_liq + V_wat
+        bulk_rho = (
+            (V_gas * rho_gas_hc + V_liq * rho_liq_hc + V_wat * rho_wl) / V_tot
+            if V_tot > 1e-30
+            else hc_rho
+        )
 
         # Overall vapour fraction: HC vapour + water vapour (moles per mole of feed)
         bulk_VF = VF_hc * sum_hc + n_wv
