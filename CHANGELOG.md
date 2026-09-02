@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.92] — 2026-09-02
+
+### GUI case file for tutorial 04 (free water)
+
+Added `04_free_water.gui.json` so the free-water wet-gas pipeline case
+loads correctly in the Angelica GUI.  Two 50 km pipes, 80 → 20 bar,
+50 °C inlet cooling to 15 °C ambient, wet gas with 12 mol% water.
+
 ## [1.6.91] — 2026-09-02
 
 ### Three-phase volumetric density in free-water path (temporary)

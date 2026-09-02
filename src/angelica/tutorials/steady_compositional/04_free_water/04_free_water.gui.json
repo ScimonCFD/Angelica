@@ -1,0 +1,100 @@
+{
+  "case_name": "04 — Free water in a wet-gas pipeline",
+  "physics_mode": "compositional",
+  "material": {
+    "definition_mode": "compositional",
+    "name": "wet natural gas + water",
+    "component_names": "methane, ethane, propane, n-butane, water",
+    "default_zs": "0.75, 0.08, 0.04, 0.01, 0.12"
+  },
+  "pressure_drop_model": {
+    "library_key": "colebrook_white",
+    "name": "Colebrook-White"
+  },
+  "solver_settings": {},
+  "initial_node_pressures_pa": {},
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 120.0,
+      "y": 300.0,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "8000000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "50.0",
+        "thermal_gradient_dc_per_m": "0.0",
+        "zs": "0.75, 0.08, 0.04, 0.01, 0.12"
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "junction",
+      "x": 450.0,
+      "y": 300.0,
+      "properties": {
+        "label": "Mid"
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "sink",
+      "x": 780.0,
+      "y": 300.0,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "2000000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "50000.0",
+            "diameter_m": "0.20",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "5",
+            "heat_transfer_coefficient_w_per_m2k": "3.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 2,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": 2,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "50000.0",
+            "diameter_m": "0.20",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "5",
+            "heat_transfer_coefficient_w_per_m2k": "3.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
+    }
+  ]
+}
