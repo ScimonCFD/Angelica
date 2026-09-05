@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.97] — 2026-09-05
+
+### Phase Report: explicit phase state label and improved readability
+
+The Phase Report section of the CSV/Excel export now includes a **"Phase state"** column for every pipe with a plain-language description such as "Single-phase gas", "2 phases: Gas + Free water", or "3 phases: Gas + HC liquid + Free water".  The section header is now prominently labelled `=== PHASE REPORT ===` in CSV so it is easy to find by scrolling.  The detection trigger was also broadened: the Phase Report now appears whenever EOS phase data is available (it previously required the newer `liquid_fraction` field and was silently absent for results saved before v1.6.96).
+
 ## [1.6.96] — 2026-09-05
 
 ### Full phase report in CSV and Excel export

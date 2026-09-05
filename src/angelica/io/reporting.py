@@ -459,6 +459,8 @@ def _plot_history(axis, title: str, history) -> None:
 
 _WATER_IDS = {"water", "h2o", "7732-18-5"}
 
+_THRESH = 1e-4  # minimum mole fraction to consider a phase present
+
 
 def _hc_component_names(result) -> tuple[str, ...]:
     """Return component names with water removed (HC-only basis for phase compositions)."""
@@ -467,10 +469,42 @@ def _hc_component_names(result) -> tuple[str, ...]:
 
 
 def _has_phase_detail(result) -> bool:
+    """True when any pipe has EOS phase data (VF is enough — available since compositional solver)."""
     return any(
-        getattr(cf, "liquid_fraction", None) is not None
+        getattr(cf, "vapor_fraction", None) is not None
         for cf in result.component_flows
     )
+
+
+def _phase_state_label(vf, lf, fw) -> str:
+    """Plain-language phase state for one pipe.
+
+    vf  = gas mole fraction of feed (HC gas + water vapour)
+    lf  = HC liquid mole fraction of feed (None if not computed)
+    fw  = free liquid water mole fraction of feed
+    """
+    has_gas = vf is not None and vf > _THRESH
+    has_liq = lf is not None and lf > _THRESH
+    has_fw  = fw > _THRESH
+
+    if not has_gas and not has_liq and not has_fw:
+        # everything accounted for as liquid HC (VF≈0, no water)
+        return "Single-phase liquid"
+
+    if has_gas and not has_liq and not has_fw:
+        return "Single-phase gas"
+
+    phases = []
+    if has_gas:
+        phases.append("Gas")
+    if has_liq:
+        phases.append("HC liquid")
+    if has_fw:
+        phases.append("Free water")
+
+    n = len(phases)
+    label = " + ".join(phases)
+    return f"{n} phases: {label}"
 
 
 def _write_phase_report_csv(writer, result) -> None:
@@ -478,26 +512,29 @@ def _write_phase_report_csv(writer, result) -> None:
         return
     hc_names = _hc_component_names(result)
     writer.writerow([])
-    writer.writerow(["Phase Report (mole fractions, feed basis)"])
+    writer.writerow(["=== PHASE REPORT ==="])
+    writer.writerow(["Fractions are mole fractions of the total feed (gas + HC liq + free water = 1)"])
 
-    # Phase fractions per pipe
-    writer.writerow(["Pipe", "Gas frac (-)", "HC liquid frac (-)", "Free water frac (-)"])
+    # Phase state + fractions per pipe
+    writer.writerow([])
+    writer.writerow(["Pipe", "Phase state", "Gas frac (-)", "HC liquid frac (-)", "Free water frac (-)"])
     for cf in result.component_flows:
-        vf  = getattr(cf, "vapor_fraction", None)
-        lf  = getattr(cf, "liquid_fraction", None)
-        fw  = getattr(cf, "free_water_fraction", 0.0)
+        vf = getattr(cf, "vapor_fraction", None)
+        lf = getattr(cf, "liquid_fraction", None)
+        fw = getattr(cf, "free_water_fraction", 0.0)
         writer.writerow([
             cf.label,
-            round(vf,  6) if vf  is not None else "",
-            round(lf,  6) if lf  is not None else "",
-            round(fw,  6),
+            _phase_state_label(vf, lf, fw),
+            round(vf, 6) if vf is not None else "",
+            round(lf, 6) if lf is not None else "",
+            round(fw, 6),
         ])
 
     # Gas phase composition (y_i)
-    has_gas = any(getattr(cf, "gas_phase_zs", ()) for cf in result.component_flows)
-    if has_gas and hc_names:
+    has_gas_zs = any(getattr(cf, "gas_phase_zs", ()) for cf in result.component_flows)
+    if has_gas_zs and hc_names:
         writer.writerow([])
-        writer.writerow(["Gas phase composition (mole fractions in gas, y_i)"])
+        writer.writerow(["Gas phase composition  y_i  (mole fraction of each component IN the gas phase)"])
         writer.writerow(["Pipe", *hc_names])
         for cf in result.component_flows:
             y = getattr(cf, "gas_phase_zs", ())
@@ -507,10 +544,10 @@ def _write_phase_report_csv(writer, result) -> None:
                 writer.writerow([cf.label, *[""] * len(hc_names)])
 
     # HC liquid phase composition (x_i)
-    has_liq = any(getattr(cf, "liquid_phase_zs", ()) for cf in result.component_flows)
-    if has_liq and hc_names:
+    has_liq_zs = any(getattr(cf, "liquid_phase_zs", ()) for cf in result.component_flows)
+    if has_liq_zs and hc_names:
         writer.writerow([])
-        writer.writerow(["HC liquid phase composition (mole fractions in liquid, x_i)"])
+        writer.writerow(["HC liquid phase composition  x_i  (mole fraction of each component IN the HC liquid phase)"])
         writer.writerow(["Pipe", *hc_names])
         for cf in result.component_flows:
             x = getattr(cf, "liquid_phase_zs", ())
@@ -526,24 +563,28 @@ def _write_phase_report_sheet(workbook, result) -> None:
     hc_names = _hc_component_names(result)
     ws = workbook.create_sheet("Phase Report")
 
-    # Phase fractions per pipe
-    ws.append(["Pipe", "Gas frac (-)", "HC liquid frac (-)", "Free water frac (-)"])
+    ws.append(["Fractions are mole fractions of the total feed  (gas + HC liq + free water = 1)"])
+    ws.append([])
+
+    # Phase state + fractions per pipe
+    ws.append(["Pipe", "Phase state", "Gas frac (-)", "HC liquid frac (-)", "Free water frac (-)"])
     for cf in result.component_flows:
         vf = getattr(cf, "vapor_fraction", None)
         lf = getattr(cf, "liquid_fraction", None)
         fw = getattr(cf, "free_water_fraction", 0.0)
         ws.append([
             cf.label,
+            _phase_state_label(vf, lf, fw),
             round(vf, 6) if vf is not None else None,
             round(lf, 6) if lf is not None else None,
             round(fw, 6),
         ])
 
     # Gas phase composition (y_i)
-    has_gas = any(getattr(cf, "gas_phase_zs", ()) for cf in result.component_flows)
-    if has_gas and hc_names:
+    has_gas_zs = any(getattr(cf, "gas_phase_zs", ()) for cf in result.component_flows)
+    if has_gas_zs and hc_names:
         ws.append([])
-        ws.append(["Gas phase composition (mole fractions in gas, y_i)"])
+        ws.append(["Gas phase composition  y_i  (mole fraction of each component IN the gas phase)"])
         ws.append(["Pipe", *hc_names])
         for cf in result.component_flows:
             y = getattr(cf, "gas_phase_zs", ())
@@ -553,10 +594,10 @@ def _write_phase_report_sheet(workbook, result) -> None:
                 ws.append([cf.label, *[None] * len(hc_names)])
 
     # HC liquid phase composition (x_i)
-    has_liq = any(getattr(cf, "liquid_phase_zs", ()) for cf in result.component_flows)
-    if has_liq and hc_names:
+    has_liq_zs = any(getattr(cf, "liquid_phase_zs", ()) for cf in result.component_flows)
+    if has_liq_zs and hc_names:
         ws.append([])
-        ws.append(["HC liquid phase composition (mole fractions in liquid, x_i)"])
+        ws.append(["HC liquid phase composition  x_i  (mole fraction of each component IN the HC liquid phase)"])
         ws.append(["Pipe", *hc_names])
         for cf in result.component_flows:
             x = getattr(cf, "liquid_phase_zs", ())
