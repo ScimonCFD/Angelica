@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.95] — 2026-09-05
+
+### Flash results in CSV and Excel export
+
+`vapor_fraction` and `free_water_fraction` now appear as columns in the
+Flows table of both the CSV and Excel exports (File → Export Results).
+Columns are added only when the data is present — VF when any pipe has a
+vapor fraction, free water when any pipe has liquid water.  Both fields
+are also saved and restored when saving/loading a case file.
+
 ## [1.6.94] — 2026-09-05
 
 ### Phase envelope computed on dry basis (water-free) in GUI

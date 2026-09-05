@@ -13,6 +13,12 @@ def export_solve_result_csv(result, output_path: str) -> None:
     has_component_temps = any(
         cf.temperature_in_c is not None for cf in result.component_flows
     )
+    has_vf = any(
+        getattr(cf, "vapor_fraction", None) is not None for cf in result.component_flows
+    )
+    has_fw = any(
+        getattr(cf, "free_water_fraction", 0.0) > 0.0 for cf in result.component_flows
+    )
 
     with output.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -37,36 +43,33 @@ def export_solve_result_csv(result, output_path: str) -> None:
                 writer.writerow([node_id, round(pressure_pa, 2), round(pressure_pa / 1000.0, 4)])
         writer.writerow([])
         has_mw = bool(getattr(result, "component_mws", ()))
+        header = ["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"]
         if has_component_temps:
-            header = ["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)", "T_in (°C)", "T_out (°C)"]
+            header += ["T_in (°C)", "T_out (°C)"]
+        if has_vf:
+            header.append("Vapor fraction (-)")
+        if has_fw:
+            header.append("Free water (mol frac)")
+        if has_mw:
+            header.append("MW_mix (g/mol)")
+        writer.writerow(header)
+        for component in result.component_flows:
+            row = [
+                component.label,
+                round(component.mass_flow_kg_per_s, 4),
+                round(component.volumetric_flow_m3_per_h, 4),
+            ]
+            if has_component_temps:
+                row.append(round(component.temperature_in_c, 4) if component.temperature_in_c is not None else "")
+                row.append(round(component.temperature_out_c, 4) if component.temperature_out_c is not None else "")
+            if has_vf:
+                vf = getattr(component, "vapor_fraction", None)
+                row.append(round(vf, 6) if vf is not None else "")
+            if has_fw:
+                row.append(round(getattr(component, "free_water_fraction", 0.0), 6))
             if has_mw:
-                header.append("MW_mix (g/mol)")
-            writer.writerow(header)
-            for component in result.component_flows:
-                row = [
-                    component.label,
-                    round(component.mass_flow_kg_per_s, 4),
-                    round(component.volumetric_flow_m3_per_h, 4),
-                    round(component.temperature_in_c, 4) if component.temperature_in_c is not None else "",
-                    round(component.temperature_out_c, 4) if component.temperature_out_c is not None else "",
-                ]
-                if has_mw:
-                    row.append(_mw_mix(getattr(component, "zs", ()), result.component_mws))
-                writer.writerow(row)
-        else:
-            header = ["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"]
-            if has_mw:
-                header.append("MW_mix (g/mol)")
-            writer.writerow(header)
-            for component in result.component_flows:
-                row = [
-                    component.label,
-                    round(component.mass_flow_kg_per_s, 4),
-                    round(component.volumetric_flow_m3_per_h, 4),
-                ]
-                if has_mw:
-                    row.append(_mw_mix(getattr(component, "zs", ()), result.component_mws))
-                writer.writerow(row)
+                row.append(_mw_mix(getattr(component, "zs", ()), result.component_mws))
+            writer.writerow(row)
         _write_balance_rows_csv(writer, result)
         _write_compositions_csv(writer, result)
         _write_component_mass_flows_csv(writer, result)
@@ -111,37 +114,40 @@ def export_solve_result_workbook(result, output_path: str) -> None:
             pressures_sheet.append([node_id, round(pressure_pa, 2), round(pressure_pa / 1000.0, 4)])
 
     has_mw = bool(getattr(result, "component_mws", ()))
+    has_vf = any(
+        getattr(cf, "vapor_fraction", None) is not None for cf in result.component_flows
+    )
+    has_fw = any(
+        getattr(cf, "free_water_fraction", 0.0) > 0.0 for cf in result.component_flows
+    )
     flows_sheet = workbook.create_sheet("Flows")
+    header = ["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"]
     if has_component_temps:
-        header = ["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)", "T_in (°C)", "T_out (°C)"]
+        header += ["T_in (°C)", "T_out (°C)"]
+    if has_vf:
+        header.append("Vapor fraction (-)")
+    if has_fw:
+        header.append("Free water (mol frac)")
+    if has_mw:
+        header.append("MW_mix (g/mol)")
+    flows_sheet.append(header)
+    for component in result.component_flows:
+        row = [
+            component.label,
+            round(component.mass_flow_kg_per_s, 4),
+            round(component.volumetric_flow_m3_per_h, 4),
+        ]
+        if has_component_temps:
+            row.append(round(component.temperature_in_c, 4) if component.temperature_in_c is not None else None)
+            row.append(round(component.temperature_out_c, 4) if component.temperature_out_c is not None else None)
+        if has_vf:
+            vf = getattr(component, "vapor_fraction", None)
+            row.append(round(vf, 6) if vf is not None else None)
+        if has_fw:
+            row.append(round(getattr(component, "free_water_fraction", 0.0), 6))
         if has_mw:
-            header.append("MW_mix (g/mol)")
-        flows_sheet.append(header)
-        for component in result.component_flows:
-            row = [
-                component.label,
-                round(component.mass_flow_kg_per_s, 4),
-                round(component.volumetric_flow_m3_per_h, 4),
-                round(component.temperature_in_c, 4) if component.temperature_in_c is not None else None,
-                round(component.temperature_out_c, 4) if component.temperature_out_c is not None else None,
-            ]
-            if has_mw:
-                row.append(_mw_mix(getattr(component, "zs", ()), result.component_mws))
-            flows_sheet.append(row)
-    else:
-        header = ["Component", "Mass flow (kg/s)", "Vol. flow (m^3/h)"]
-        if has_mw:
-            header.append("MW_mix (g/mol)")
-        flows_sheet.append(header)
-        for component in result.component_flows:
-            row = [
-                component.label,
-                round(component.mass_flow_kg_per_s, 4),
-                round(component.volumetric_flow_m3_per_h, 4),
-            ]
-            if has_mw:
-                row.append(_mw_mix(getattr(component, "zs", ()), result.component_mws))
-            flows_sheet.append(row)
+            row.append(_mw_mix(getattr(component, "zs", ()), result.component_mws))
+        flows_sheet.append(row)
 
     _write_balance_sheet(workbook, result)
     _write_compositions_sheet(workbook, result)
