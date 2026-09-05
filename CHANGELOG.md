@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.98] — 2026-09-05
+
+### Phase Report: cleaner layout with z_i feed column, x_i omitted when L=0
+
+The Phase Report in CSV/Excel now uses standard notation (V, L, Free water) and
+a component-by-component layout with columns `z_i feed` and `y_i gas` side by
+side for easy comparison.  The HC liquid composition table (`x_i`) is omitted
+entirely when no pipe has significant HC liquid (L > 0.0001), avoiding the
+confusing case where x_i = y_i = feed because there is no condensate.
+The `_hc_zs_for` helper renormalises the feed to HC-only basis (water removed)
+so z_i, y_i, and x_i are all on the same basis.
+
 ## [1.6.97] — 2026-09-05
 
 ### Phase Report: explicit phase state label and improved readability
