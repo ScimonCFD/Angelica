@@ -883,6 +883,15 @@ class NetSimGui:
                     parent=dialog,
                 )
                 return
+            # Phase envelope on dry basis (water-free), same as HYSYS
+            from angelica.properties.free_water import find_water_index
+            w_idx = find_water_index(tuple(names_list))
+            if w_idx is not None:
+                names_list = [n for i, n in enumerate(names_list) if i != w_idx]
+                zs_list = [z for i, z in enumerate(zs_list) if i != w_idx]
+                s = sum(zs_list)
+                if s > 0:
+                    zs_list = [z / s for z in zs_list]
             self._open_phase_envelope_dialog(
                 title=f"Phase Envelope — {', '.join(names_list)}",
                 component_names=tuple(names_list),
@@ -3710,6 +3719,16 @@ class NetSimGui:
         names = self.latest_result.component_names
         op_pts = self._get_link_op_conditions(link)
         eos_name = self.scene.material.get("eos_name", "PR") if self.scene.material else "PR"
+
+        # Phase envelope on dry basis (water-free), same as HYSYS
+        from angelica.properties.free_water import find_water_index
+        w_idx = find_water_index(names)
+        if w_idx is not None:
+            names = tuple(n for i, n in enumerate(names) if i != w_idx)
+            zs_dry = tuple(z for i, z in enumerate(zs) if i != w_idx)
+            s = sum(zs_dry)
+            zs = tuple(z / s for z in zs_dry) if s > 0 else zs_dry
+
         self._open_phase_envelope_dialog(
             title=f"Phase Envelope — Connection #{link.link_id}",
             component_names=names,

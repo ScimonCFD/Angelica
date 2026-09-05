@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.94] — 2026-09-05
+
+### Phase envelope computed on dry basis (water-free) in GUI
+
+When the fluid contains water, the GUI now strips it and renormalises the
+HC composition before calling `compute_phase_envelope` — matching HYSYS
+behaviour.  Applies to both the per-connection envelope (right-click a pipe)
+and the Material dialog preview.
+
 ## [1.6.93] — 2026-09-05
 
 ### Lower Python requirement to 3.8
