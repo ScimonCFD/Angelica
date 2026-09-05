@@ -85,6 +85,37 @@ def _hc_phase_densities(
     return (rho_gas, rho_liq, VF)
 
 
+@lru_cache(maxsize=512)
+def _hc_phase_compositions(
+    component_names: tuple[str, ...],
+    pressure_pa: float,
+    temperature_c: float,
+    zs: tuple[float, ...],
+    eos_name: str = "PR",
+) -> tuple[tuple[float, ...], tuple[float, ...], float]:
+    """Return (gas_zs, liquid_zs, VF) for an HC-only PT flash.
+
+    gas_zs and liquid_zs are mole fractions per HC component in the gas and
+    liquid phases respectively.  When single-phase both tuples equal the feed.
+    """
+    flash_obj = _get_flash_obj(component_names, eos_name)
+    T_K = temperature_c + 273.15
+    try:
+        res = flash_obj.flash(T=T_K, P=pressure_pa, zs=list(zs))
+    except ZeroDivisionError:
+        const  = flash_obj.constants
+        Psat   = _wilson_psat(const.Tcs[0], const.Pcs[0], const.omegas[0], T_K)
+        is_gas = T_K >= const.Tcs[0] or pressure_pa <= Psat
+        return (zs, zs, 1.0 if is_gas else 0.0)
+
+    VF = float(res.VF) if res.VF is not None else 0.0
+    gas_ph = getattr(res, "gas", None)
+    liq_ph = getattr(res, "liquid0", None)
+    gas_zs    = tuple(float(y) for y in gas_ph.zs) if gas_ph is not None else zs
+    liquid_zs = tuple(float(x) for x in liq_ph.zs) if liq_ph is not None else zs
+    return (gas_zs, liquid_zs, VF)
+
+
 @lru_cache(maxsize=2048)
 def _flash_properties(
     component_names: tuple[str, ...],
@@ -357,3 +388,44 @@ class CompositionalFluid(FluidModel):
             return self._props(link_state)[5]
         except RuntimeError:
             return 0.0
+
+    def flash_phase_detail_for_link(
+        self, link_state
+    ) -> tuple[float | None, tuple[float, ...], tuple[float, ...]]:
+        """Return (liquid_fraction, gas_phase_zs, liquid_phase_zs) for the HC flash.
+
+        liquid_fraction: mole fraction of feed that is HC liquid (feed basis).
+        gas_phase_zs:    per-HC-component mole fractions in the gas phase.
+        liquid_phase_zs: per-HC-component mole fractions in the HC liquid phase.
+
+        Returns (None, (), ()) when no EOS flash is available.
+        """
+        try:
+            zs = self._get_zs(link_state)
+            P  = self._get_pressure_pa(link_state)
+            T  = self._get_temperature_c(link_state)
+            P_r  = float(round(P / 100.0) * 100.0)
+            T_r  = round(T, 1)
+
+            water_idx = find_water_index(self.component_names)
+            if water_idx is not None:
+                hc_names   = tuple(n for i, n in enumerate(self.component_names) if i != water_idx)
+                hc_zs_raw  = tuple(z for i, z in enumerate(zs) if i != water_idx)
+                sum_hc     = sum(hc_zs_raw)
+                if sum_hc < 1e-10 or not hc_names:
+                    return (None, (), ())
+                hc_zs_norm = tuple(round(z / sum_hc, 4) for z in hc_zs_raw)
+                gas_zs, liquid_zs, VF_hc = _hc_phase_compositions(
+                    hc_names, P_r, T_r, hc_zs_norm, self.eos_name
+                )
+                liq_frac = (1.0 - VF_hc) * sum_hc
+            else:
+                zs_r = tuple(round(z, 4) for z in zs)
+                gas_zs, liquid_zs, VF_hc = _hc_phase_compositions(
+                    self.component_names, P_r, T_r, zs_r, self.eos_name
+                )
+                liq_frac = 1.0 - VF_hc
+
+            return (liq_frac, gas_zs, liquid_zs)
+        except Exception:
+            return (None, (), ())

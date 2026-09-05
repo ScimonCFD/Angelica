@@ -12,7 +12,10 @@ class ComponentFlowResult:
     temperature_out_c: float | None = None
     zs: tuple[float, ...] = ()        # mole fractions — non-empty for compositional runs
     vapor_fraction: float | None = None  # 0=liquid, 1=gas, (0,1)=two-phase; None for non-EOS modes
-    free_water_fraction: float = 0.0  # mole fraction of feed that is liquid free water (0 = no free water)
+    free_water_fraction: float = 0.0   # mole fraction of feed that is liquid free water
+    liquid_fraction: float | None = None  # mole fraction of feed that is HC liquid
+    gas_phase_zs: tuple[float, ...] = ()    # gas phase mole fractions per HC component
+    liquid_phase_zs: tuple[float, ...] = () # liquid HC phase mole fractions per HC component
 
 
 @dataclass(frozen=True)

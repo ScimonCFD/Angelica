@@ -357,6 +357,7 @@ class SteadyCompositionalSolver(BaseSolver):
             t_out = node_temperatures.get(link.end_node.node_id)
             vf = fluid.vapor_fraction_for_link(link)
             fw = fluid.free_water_fraction_for_link(link)
+            liq_frac, gas_zs, liquid_zs = fluid.flash_phase_detail_for_link(link)
             component_flows.append(
                 ComponentFlowResult(
                     label=self._hydraulic_solver._component_label(link),
@@ -369,6 +370,9 @@ class SteadyCompositionalSolver(BaseSolver):
                     zs=tuple(getattr(link, "zs", ())),
                     vapor_fraction=vf,
                     free_water_fraction=fw,
+                    liquid_fraction=liq_frac,
+                    gas_phase_zs=gas_zs,
+                    liquid_phase_zs=liquid_zs,
                 )
             )
 

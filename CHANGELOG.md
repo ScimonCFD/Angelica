@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.6.96] — 2026-09-05
+
+### Full phase report in CSV and Excel export
+
+When a compositional simulation produces multiphase results, the export
+(File → Export Results) now includes a **Phase Report** section with:
+
+- **Phase fractions (feed basis)**: gas fraction, HC liquid fraction, and
+  free water fraction — each as moles per mole of feed — for every pipe.
+- **Gas phase composition (y_i)**: mole fractions of each HC component in
+  the gas phase, per pipe.
+- **HC liquid phase composition (x_i)**: mole fractions of each HC component
+  in the HC liquid phase, per pipe.
+
+In the CSV this appears as extra blocks at the bottom.  In Excel it is a
+dedicated **Phase Report** sheet.  Sections are omitted when no multiphase
+data is present (pure single-phase runs are unaffected).
+
+Internally, a new `_hc_phase_compositions` cached function and a
+`flash_phase_detail_for_link` method on `CompositionalFluid` perform the
+per-link EOS flash and return the phase compositions.  The
+`ComponentFlowResult` dataclass gains three new optional fields:
+`liquid_fraction`, `gas_phase_zs`, and `liquid_phase_zs`.
+
 ## [1.6.95] — 2026-09-05
 
 ### Flash results in CSV and Excel export

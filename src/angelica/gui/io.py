@@ -185,6 +185,12 @@ def _component_flow_to_dict(cf: ComponentFlowResult) -> dict:
         d["vapor_fraction"] = cf.vapor_fraction
     if cf.free_water_fraction:
         d["free_water_fraction"] = cf.free_water_fraction
+    if cf.liquid_fraction is not None:
+        d["liquid_fraction"] = cf.liquid_fraction
+    if cf.gas_phase_zs:
+        d["gas_phase_zs"] = list(cf.gas_phase_zs)
+    if cf.liquid_phase_zs:
+        d["liquid_phase_zs"] = list(cf.liquid_phase_zs)
     return d
 
 
@@ -198,6 +204,9 @@ def _component_flow_from_dict(d: dict) -> ComponentFlowResult:
         zs=tuple(float(z) for z in d["zs"]) if "zs" in d else (),
         vapor_fraction=float(d["vapor_fraction"]) if "vapor_fraction" in d else None,
         free_water_fraction=float(d["free_water_fraction"]) if "free_water_fraction" in d else 0.0,
+        liquid_fraction=float(d["liquid_fraction"]) if "liquid_fraction" in d else None,
+        gas_phase_zs=tuple(float(v) for v in d["gas_phase_zs"]) if "gas_phase_zs" in d else (),
+        liquid_phase_zs=tuple(float(v) for v in d["liquid_phase_zs"]) if "liquid_phase_zs" in d else (),
     )
 
 
