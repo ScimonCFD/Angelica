@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.93] — 2026-09-05
+
+### Lower Python requirement to 3.8
+
+Changed `requires-python` from `>=3.10` to `>=3.8`.  The codebase uses
+`from __future__ import annotations` throughout, so all type hints are
+compatible with Python 3.8.  This allows installation on Ubuntu systems
+that ship Python 3.8 by default.
+
 ## [1.6.92] — 2026-09-02
 
 ### GUI case file for tutorial 04 (free water)
