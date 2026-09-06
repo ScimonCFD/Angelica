@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.99] — 2026-09-06
+
+### Tutorial 05 — Three-phase rich condensate pipeline
+
+New tutorial demonstrating simultaneous Gas + HC liquid + Free water
+(three coexisting phases) in a pipeline carrying a rich condensate fluid
+(methane 55 %, ethane 10 %, propane 10 %, n-butane 8 %, n-pentane 5 %,
+n-hexane 5 %, water 7 %).  The inlet (80 bar, 110 °C) is just above the
+hydrocarbon dew point (two phases: gas + free water).  As the fluid cools
+along the two 60 km pipes the HC dew point is crossed and a hydrocarbon
+liquid condenses, giving three-phase conditions at the outlet.  The Phase
+Report shows clearly differentiated y_i (gas, methane-rich) and x_i
+(HC liquid, pentane/hexane-rich), illustrating the K-value separation.
+Includes both a Python run script and a GUI case file.
+
 ## [1.6.98] — 2026-09-05
 
 ### Phase Report: cleaner layout with z_i feed column, x_i omitted when L=0
