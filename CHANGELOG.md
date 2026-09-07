@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.7.0] — 2026-09-07
+
+### Tutorial 06 — Three-phase rich condensate loop
+
+New tutorial demonstrating the same Gas + HC liquid + Free water three-phase
+fluid as tutorial 05, now in a **looped (ring) network**.  Flow leaves the
+source (80 bar, 110 °C), reaches a split junction, and travels through two
+independent paths before recombining at a merge junction:
+
+- **Upper path — Pipe B**: 60 km, D = 0.20 m (long and narrow → more
+  hydraulic resistance → less mass flow).
+- **Lower path — Pipes C + D**: 30 + 30 km = 60 km total, D = 0.25 m
+  (larger diameter → less resistance → more mass flow).
+
+The SIMPLE loop solver finds the unique flow split that satisfies both mass
+balance and the equal-pressure constraint at the merge junction.  All five
+pipes show three coexisting phases.  Pipe B, being longer, runs cooler and
+therefore accumulates more HC liquid condensate (higher L fraction).
+
+The tutorial highlights three concepts: hydraulic loop balancing, the effect
+of pipe geometry on cooling and condensation, and K-value phase separation
+(y_i enriched in methane, x_i enriched in pentane/hexane).  Includes both a
+Python run script and a GUI case file with a clear diamond-shaped layout.
+
 ## [1.6.99] — 2026-09-06
 
 ### Tutorial 05 — Three-phase rich condensate pipeline
