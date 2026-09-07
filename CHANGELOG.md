@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.7.2] — 2026-09-07
+
+### Five equations of state now available for compositional simulations
+
+The EOS selection in the compositional fluid dialog (and the `CompositionalFluid`
+API) now exposes five cubic equations of state instead of two:
+
+| Key      | Model                              | Best for                          |
+|----------|------------------------------------|-----------------------------------|
+| `PR`     | Peng-Robinson (1976)               | Gas/condensate — industry default |
+| `PR78`   | Peng-Robinson (1978 alpha)         | Heavier HC components             |
+| `PRSV`   | PR Stryjek-Vera                    | Polar components: CO₂, H₂S, H₂O  |
+| `SRK`    | Soave-Redlich-Kwong (1972)         | General alternative to PR         |
+| `APISRK` | API-modified SRK                   | Petroleum — API Technical Data Book standard |
+
+All five are implemented via `thermo`'s cubic mix EOS classes and are fully
+compatible with the existing `FlashVL` pipeline.  The GUI combobox now lists all
+five options and shows a one-line description when each is selected.  The
+`SUPPORTED_EOS` dict is exported from `angelica.properties.compositional_fluid`
+for programmatic use.
+
 ## [1.7.1] — 2026-09-07
 
 ### Tutorial 06 revised: two-source compositional loop

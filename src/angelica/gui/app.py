@@ -804,11 +804,26 @@ class NetSimGui:
         ttk.Label(frame, text="Equation of state").grid(
             row=4, column=0, sticky="w", pady=4, padx=(0, 8)
         )
+        from angelica.properties.compositional_fluid import SUPPORTED_EOS as _EOS
+        _EOS_KEYS = list(_EOS)
         eos_combo = ttk.Combobox(
-            frame, textvariable=eos_var, values=["PR", "SRK"],
-            state="readonly", width=8,
+            frame, textvariable=eos_var, values=_EOS_KEYS,
+            state="readonly", width=10,
         )
         eos_combo.grid(row=4, column=1, sticky="w", pady=4)
+
+        eos_desc_var = tk.StringVar()
+
+        def _update_eos_desc(*_):
+            eos_desc_var.set(_EOS.get(eos_var.get().upper(), ""))
+
+        eos_combo.bind("<<ComboboxSelected>>", _update_eos_desc)
+        _update_eos_desc()
+
+        ttk.Label(frame, textvariable=eos_desc_var, foreground="gray",
+                  wraplength=320, justify="left").grid(
+            row=5, column=0, columnspan=2, sticky="w", pady=(0, 4)
+        )
 
         ttk.Label(
             frame,
@@ -816,7 +831,7 @@ class NetSimGui:
                  "(double-click the source node → Composition section).",
             foreground="gray",
             justify="left",
-        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 4))
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(0, 4))
 
         def _save() -> None:
             names_text = names_var.get().strip()

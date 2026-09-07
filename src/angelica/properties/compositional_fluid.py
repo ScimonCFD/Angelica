@@ -16,19 +16,36 @@ from .free_water import (
 # ChemicalConstantsPackage + CEOSGas/Liquid on every cache miss.
 _FLASH_OBJS: dict = {}
 
+# Supported EOS keys and their descriptions (shown in GUI combobox).
+SUPPORTED_EOS: dict[str, str] = {
+    "PR":     "Peng-Robinson (1976) — industry standard for gas/condensate",
+    "PR78":   "Peng-Robinson (1978) — improved alpha for heavier HC",
+    "PRSV":   "PR Stryjek-Vera — better for polar components (CO₂, H₂S, H₂O)",
+    "SRK":    "Soave-Redlich-Kwong (1972)",
+    "APISRK": "API-SRK — API Technical Data Book standard for petroleum",
+}
+
+_EOS_CLASS_MAP = {
+    "PR":     "PRMIX",
+    "PR78":   "PR78MIX",
+    "PRSV":   "PRSVMIX",
+    "SRK":    "SRKMIX",
+    "APISRK": "APISRKMIX",
+}
+
 
 def _get_flash_obj(component_names: tuple[str, ...], eos_name: str):
     key = (component_names, eos_name)
     if key not in _FLASH_OBJS:
         import warnings
 
+        import thermo.eos_mix as _eos_mix
         from thermo import ChemicalConstantsPackage
-        from thermo.eos_mix import PRMIX, SRKMIX
         from thermo.flash import FlashVL
         from thermo.phases import CEOSGas, CEOSLiquid
 
         from .phase_envelope import _build_kij_matrix
-        eos_cls = SRKMIX if eos_name == "SRK" else PRMIX
+        eos_cls = getattr(_eos_mix, _EOS_CLASS_MAP.get(eos_name, "PRMIX"))
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
             constants, props = ChemicalConstantsPackage.from_IDs(list(component_names))
@@ -282,8 +299,13 @@ class CompositionalFluid(FluidModel):
             (e.g. ``["methane", "ethane", "water"]``).
         default_zs: Overall mole fractions used when a pipe's ``zs`` is not
             yet set.  Must sum to 1.0.
-        eos_name: Equation of state — ``"PR"`` (Peng-Robinson, default) or
-            ``"SRK"`` (Soave-Redlich-Kwong).
+        eos_name: Equation of state key.  Supported values:
+
+            - ``"PR"``     — Peng-Robinson (1976), default
+            - ``"PR78"``   — Peng-Robinson (1978 alpha correction)
+            - ``"PRSV"``   — Peng-Robinson-Stryjek-Vera (polar components)
+            - ``"SRK"``    — Soave-Redlich-Kwong (1972)
+            - ``"APISRK"`` — API-modified SRK (petroleum standard)
     """
 
     def __init__(
@@ -295,8 +317,10 @@ class CompositionalFluid(FluidModel):
         self.component_names: tuple[str, ...] = tuple(components)
         self.default_zs: tuple[float, ...] = tuple(default_zs)
         eos_name = eos_name.upper()
-        if eos_name not in ("PR", "SRK"):
-            raise ValueError(f"eos_name must be 'PR' or 'SRK' (got {eos_name!r})")
+        if eos_name not in SUPPORTED_EOS:
+            raise ValueError(
+                f"eos_name must be one of {list(SUPPORTED_EOS)} (got {eos_name!r})"
+            )
         self.eos_name: str = eos_name
         if len(self.component_names) != len(self.default_zs):
             raise ValueError(
