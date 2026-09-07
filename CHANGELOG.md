@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.7.1] — 2026-09-07
+
+### Tutorial 06 revised: two-source compositional loop
+
+Tutorial 06 now uses two inlet streams with **different compositions** entering
+a shared mixing junction, followed by a hydraulic loop to the outlet:
+
+- **Source A** (80 bar, 110 °C) — rich condensate: 55 % CH₄, heavy HCs, 7 % water.
+  Three-phase in its inlet pipe (Gas + HC liquid + Free water).
+- **Source B** (75 bar, 50 °C) — lean dry gas: 90 % CH₄, no heavy HCs, no water.
+  Single-phase gas in its inlet pipe.
+
+The solver blends the two streams at the mixer junction using a
+molar-flow-weighted average.  After mixing, the blended composition still
+produces three-phase conditions through the entire downstream loop because
+the water from Source A survives dilution and continues to condense.
+
+Key educational contrasts: (1) one stream is single-phase gas, the other is
+three-phase; (2) after blending the gas phase y_i is more methane-rich than
+the pure rich condensate; (3) the loop still distributes flow by resistance
+(upper path Pipe C, long/narrow; lower path Pipes D+E, larger diameter).
+
 ## [1.7.0] — 2026-09-07
 
 ### Tutorial 06 — Three-phase rich condensate loop

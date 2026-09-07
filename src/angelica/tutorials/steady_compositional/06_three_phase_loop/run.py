@@ -1,65 +1,61 @@
 """
-Tutorial 06 — Three-Phase Rich Condensate Loop
-===============================================
-Same rich condensate fluid as tutorial 05 (Gas + HC liquid + Free water),
-now in a looped (ring) network.  Flow leaves the source, reaches a split
-junction, travels through two independent paths of different resistance,
-recombines at a merge junction, and exits at the sink.
+Tutorial 06 — Two-Source Compositional Loop
+============================================
+Two gas streams with different compositions enter a shared mixing junction.
+The blended fluid then travels through a hydraulic loop before reaching the
+outlet.  The tutorial shows how the solver handles composition tracking
+through mixing, and how the phase behaviour of the combined stream differs
+from either source stream on its own.
 
-The loop forces the solver to find a flow distribution that satisfies both
-mass balance at every node AND the same pressure at the merge junction
-regardless of which path is taken.
+Source A  (rich condensate, 80 bar, 110 °C)
+  55 % CH₄, 10 % C₂H₆, 10 % C₃H₈, 8 % nC₄, 5 % nC₅, 5 % nC₆, 7 % H₂O
+  → three-phase in Pipe A  (gas + HC liquid + free water)
+
+Source B  (lean dry gas, 75 bar, 50 °C)
+  90 % CH₄, 6 % C₂H₆, 3 % C₃H₈, 1 % nC₄  (no water, no pentane/hexane)
+  → single-phase gas in Pipe F
+
+After mixing, the blended composition is intermediate between the two sources:
+more methane than the rich condensate alone, less than the lean gas alone.
+The water content is diluted but still sufficient for free-water condensation,
+so the combined stream remains three-phase through the entire loop.
 
 Geometry
 --------
 
-  Source (Node 1, 80 bar, 110 °C)
-         |
-     Pipe A  (20 km, D = 0.25 m)
-         |
-     Split junction (Node 2)
-       /                     \\
-  Pipe B (upper)          Pipe C (lower-left)
-  60 km, D = 0.20 m       30 km, D = 0.25 m
-  (long / narrow)              |
-       \\               Lower junction (Node 3)
-        \\                     |
-         \\              Pipe D (lower-right)
-          \\             30 km, D = 0.25 m
-           \\                  |
-     Merge junction (Node 4)
-         |
-     Pipe E  (20 km, D = 0.25 m)
-         |
-     Sink (Node 5, 30 bar)
-
-Upper path: Pipe B alone  (60 km, D = 0.20)  — longer and narrower → more resistance
-Lower path: Pipe C + Pipe D  (60 km total, D = 0.25)  — larger diameter → less resistance
-→ more mass flow takes the lower path
-
-Fluid
------
-  Component          mol%
-  ─────────          ────
-  methane            55.0
-  ethane             10.0
-  propane            10.0
-  n-butane            8.0
-  n-pentane           5.0
-  n-hexane            5.0
-  water               7.0
+  Source A (Node 1, 80 bar, 110 °C)  ──[Pipe A, 20 km, D=0.25]──┐
+                                                                   ├── Mixer (Node 2)
+  Source B (Node 7, 75 bar,  50 °C)  ──[Pipe F, 15 km, D=0.20]──┘
+                                                                        │
+                                                                   [Pipe B, 20 km, D=0.25]
+                                                                        │
+                                                               Split junction (Node 3)
+                                                              /                         \\
+                                                [Pipe C, 60 km, D=0.20]     [Pipe D, 30 km, D=0.25]
+                                                (upper: long/narrow)          (lower-left)
+                                                              \\                         /
+                                                               \\              Lower (Node 4)
+                                                                \\                  /
+                                                                 \\    [Pipe E, 30 km, D=0.25]
+                                                                  \\              /
+                                                               Merge junction (Node 5)
+                                                                        │
+                                                                   [Pipe G, 20 km, D=0.25]
+                                                                        │
+                                                                   Sink (Node 6, 30 bar)
 
 What this tutorial shows
 ------------------------
-  1. Hydraulic loop: the SIMPLE algorithm finds how flow distributes
-     between the upper path (Pipe B: long, narrow → more resistance) and
-     the lower path (Pipes C+D: same total length but larger diameter →
-     less resistance).  More flow takes the lower path.
-  2. Different phase fractions on each path: Pipe B runs cooler (longer,
-     more heat loss) so it accumulates more HC liquid condensate.
-  3. Gas/liquid compositions (y_i, x_i) in each pipe, demonstrating
-     K-value separation between light (methane) and heavy (hexane)
-     components.
+  1. Composition mixing: two streams of different composition enter a junction.
+     The solver computes the molar-flow-weighted blend automatically.
+  2. Phase behaviour contrast: Source A is 3-phase; Source B is single-phase
+     dry gas.  After mixing, all downstream pipes are 3-phase because the
+     water from Source A persists in the blend.
+  3. Hydraulic loop: the SIMPLE algorithm distributes the blended flow between
+     the upper path (Pipe C: long, narrow → more resistance) and the lower
+     path (Pipes D+E: same total length, larger diameter → less resistance).
+  4. K-value separation: y_i (gas) is methane-rich; x_i (HC liquid) is
+     enriched in heavier components.
 """
 import sys
 from pathlib import Path
@@ -75,52 +71,48 @@ from angelica.solvers import SteadyCompositionalSolver
 
 # ── Fluid ─────────────────────────────────────────────────────────────────────
 COMPONENTS = ["methane", "ethane", "propane", "n-butane", "n-pentane", "n-hexane", "water"]
-ZS         = [0.55, 0.10, 0.10, 0.08, 0.05, 0.05, 0.07]
 
-P_IN  = 80e5    # Pa  (80 bar)
-P_OUT = 30e5    # Pa  (30 bar)
-T_IN  = 110.0   # °C
-T_AMB = 15.0    # °C
+ZS_RICH = [0.55, 0.10, 0.10, 0.08, 0.05, 0.05, 0.07]   # Source A — rich condensate
+ZS_LEAN = [0.90, 0.06, 0.03, 0.01, 0.00, 0.00, 0.00]   # Source B — lean dry gas
+ZS_DEF  = [0.70, 0.08, 0.07, 0.05, 0.03, 0.03, 0.04]   # initial guess for pipes (rough blend)
 
-fluid = CompositionalFluid(components=COMPONENTS, default_zs=ZS)
+fluid = CompositionalFluid(components=COMPONENTS, default_zs=ZS_DEF)
+
+T_AMB = 15.0   # °C ambient temperature
 
 # ── Network ───────────────────────────────────────────────────────────────────
-#   1 → [A] → 2 → [B] ──────────→ 4 → [E] → 5
-#              ↘ [C] → 3 → [D] ↗
-pipe_A = Pipe(
-    component_id="pipe_A", start_node=1, end_node=2,
-    diameter_m=0.25, length_m=20_000.0, absolute_roughness_m=46e-6,
-    heat_transfer_coefficient_w_per_m2k=3.0, ambient_temperature_c=T_AMB,
-)
-pipe_B = Pipe(
-    component_id="pipe_B", start_node=2, end_node=4,
-    diameter_m=0.20, length_m=60_000.0, absolute_roughness_m=46e-6,
-    heat_transfer_coefficient_w_per_m2k=3.0, ambient_temperature_c=T_AMB,
-)
-pipe_C = Pipe(
-    component_id="pipe_C", start_node=2, end_node=3,
-    diameter_m=0.25, length_m=30_000.0, absolute_roughness_m=46e-6,
-    heat_transfer_coefficient_w_per_m2k=3.0, ambient_temperature_c=T_AMB,
-)
-pipe_D = Pipe(
-    component_id="pipe_D", start_node=3, end_node=4,
-    diameter_m=0.25, length_m=30_000.0, absolute_roughness_m=46e-6,
-    heat_transfer_coefficient_w_per_m2k=3.0, ambient_temperature_c=T_AMB,
-)
-pipe_E = Pipe(
-    component_id="pipe_E", start_node=4, end_node=5,
-    diameter_m=0.25, length_m=20_000.0, absolute_roughness_m=46e-6,
-    heat_transfer_coefficient_w_per_m2k=3.0, ambient_temperature_c=T_AMB,
-)
+def _pipe(cid, s, e, d, L):
+    return Pipe(
+        component_id=cid, start_node=s, end_node=e,
+        diameter_m=d, length_m=L, absolute_roughness_m=46e-6,
+        heat_transfer_coefficient_w_per_m2k=3.0, ambient_temperature_c=T_AMB,
+    )
+
+pipe_A = _pipe("pipe_A", 1, 2, 0.25, 20_000)   # Source A → Mixer
+pipe_F = _pipe("pipe_F", 7, 2, 0.20, 15_000)   # Source B → Mixer
+pipe_B = _pipe("pipe_B", 2, 3, 0.25, 20_000)   # Mixer    → Split
+pipe_C = _pipe("pipe_C", 3, 5, 0.20, 60_000)   # upper loop path (long, narrow)
+pipe_D = _pipe("pipe_D", 3, 4, 0.25, 30_000)   # lower-left
+pipe_E = _pipe("pipe_E", 4, 5, 0.25, 30_000)   # lower-right
+pipe_G = _pipe("pipe_G", 5, 6, 0.25, 20_000)   # Merge    → Sink
 
 case = NetworkCase(
-    name              = "Three-Phase Rich Condensate Loop",
+    name              = "Two-Source Compositional Loop",
     fluid_model       = fluid,
-    pressure_inlets   = (PressureBoundary(node_id=1, pressure_pa=P_IN),),
-    pressure_outlets  = (PressureBoundary(node_id=5, pressure_pa=P_OUT),),
-    components        = (pipe_A, pipe_B, pipe_C, pipe_D, pipe_E),
-    thermal_inlets    = (ThermalBoundary(node_id=1, temperature_c=T_IN, bc_type="fixed_temperature"),),
-    inlet_composition_bcs = (InletCompositionBC(node_id=1, zs=tuple(ZS)),),
+    pressure_inlets   = (
+        PressureBoundary(node_id=1, pressure_pa=80e5),   # Source A
+        PressureBoundary(node_id=7, pressure_pa=75e5),   # Source B
+    ),
+    pressure_outlets  = (PressureBoundary(node_id=6, pressure_pa=30e5),),
+    components        = (pipe_A, pipe_F, pipe_B, pipe_C, pipe_D, pipe_E, pipe_G),
+    thermal_inlets    = (
+        ThermalBoundary(node_id=1, temperature_c=110.0, bc_type="fixed_temperature"),
+        ThermalBoundary(node_id=7, temperature_c= 50.0, bc_type="fixed_temperature"),
+    ),
+    inlet_composition_bcs = (
+        InletCompositionBC(node_id=1, zs=tuple(ZS_RICH)),
+        InletCompositionBC(node_id=7, zs=tuple(ZS_LEAN)),
+    ),
 )
 
 # ── Solve ─────────────────────────────────────────────────────────────────────
@@ -133,13 +125,21 @@ print(f"Converged:  {result.converged}")
 print()
 
 # Node pressures and temperatures
-labels = {1: "Source", 2: "Split junction", 3: "Lower junction", 4: "Merge junction", 5: "Sink"}
-print(f"{'Node':>5}  {'Label':20}  {'P (bar)':>9}  {'T (°C)':>8}")
-print("-" * 50)
+NODE_LABELS = {
+    1: "Source A (rich)",
+    7: "Source B (lean)",
+    2: "Mixer junction",
+    3: "Split junction",
+    4: "Lower junction",
+    5: "Merge junction",
+    6: "Sink",
+}
+print(f"{'Node':>5}  {'Label':22}  {'P (bar)':>9}  {'T (°C)':>8}")
+print("-" * 54)
 for nid in sorted(result.node_pressures_pa):
     P = result.node_pressures_pa[nid]
     T = result.node_temperatures_c.get(nid, float("nan"))
-    print(f"{nid:>5}  {labels.get(nid,''):20}  {P/1e5:>9.3f}  {T:>8.2f}")
+    print(f"{nid:>5}  {NODE_LABELS.get(nid,''):22}  {P/1e5:>9.3f}  {T:>8.2f}")
 print()
 
 # Flow and phase summary per pipe
@@ -162,14 +162,16 @@ for cf in result.component_flows:
           f"{vf:>7.4f}  {lf:>9.4f}  {fw:>11.4f}  {state}")
 
 print()
-print("Note: Upper path (Pipe B, D=0.20 m) carries less flow than lower path (Pipes C+D, D=0.25 m).")
-print("      Pipe B runs cooler (longer) → more HC liquid condensate (L) than C or D.")
+print("  Source A (rich condensate): 3-phase gas entering Pipe A")
+print("  Source B (lean dry gas):    single-phase gas entering Pipe F")
+print("  After mixing (Pipe B onward): the blended stream is 3-phase")
+print("  (water from Source A survives dilution and still condenses)")
 print()
 
 # Gas and liquid compositions
-hc_names = [c for c in COMPONENTS if c != "water"]
+HC_NAMES = [c for c in COMPONENTS if c != "water"]
 print("Gas phase composition  y_i  (mole fractions within gas phase):")
-print(f"  {'Pipe':8}  " + "  ".join(f"{n:>10}" for n in hc_names))
+print(f"  {'Pipe':8}  " + "  ".join(f"{n:>10}" for n in HC_NAMES))
 for cf in result.component_flows:
     y = cf.gas_phase_zs
     if y:
@@ -180,7 +182,7 @@ print()
 has_liq = any((cf.liquid_fraction or 0.0) > 1e-3 for cf in result.component_flows)
 if has_liq:
     print("HC liquid phase composition  x_i  (mole fractions within HC liquid phase):")
-    print(f"  {'Pipe':8}  " + "  ".join(f"{n:>10}" for n in hc_names))
+    print(f"  {'Pipe':8}  " + "  ".join(f"{n:>10}" for n in HC_NAMES))
     for cf in result.component_flows:
         if (cf.liquid_fraction or 0.0) > 1e-3:
             x = cf.liquid_phase_zs
