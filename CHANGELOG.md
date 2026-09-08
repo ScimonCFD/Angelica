@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.8.2] — 2026-09-08
+
+### Bug fix: global energy balance used scalar U instead of composite U
+
+`_compute_global_energy_balance` in `base.py` computed wall heat loss using
+`pipe.heat_transfer_coefficient_w_per_m2k` directly, ignoring the composite
+multi-layer U introduced in v1.8.0.  For pipes with composite U parameters set,
+the reported energy balance was inconsistent with the actual calculation in the
+energy equation (which correctly uses `u_overall_w_per_m2k`).  Fixed to use
+`pipe.u_overall_w_per_m2k` throughout.
+
 ## [1.8.1] — 2026-09-08
 
 ### Bug fix: fittings and pumps invisible to the thermal energy equation

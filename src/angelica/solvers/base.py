@@ -131,7 +131,7 @@ class BaseSolver(ABC):
                 q_sources_w += link.component.power_w
             elif isinstance(link, PipeState):
                 pipe = link.component
-                U = pipe.heat_transfer_coefficient_w_per_m2k
+                U = pipe.u_overall_w_per_m2k
                 if U <= 0.0:
                     continue
                 T_amb = pipe.ambient_temperature_c
