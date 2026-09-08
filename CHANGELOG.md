@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.8.3] — 2026-09-08
+
+### Isenthalpic fitting treatment for compressible flow
+
+For compressible fluids (`CompressibleFluid` with PR or ideal-gas EOS), fittings
+and pumps are now treated isenthalpically in the thermal energy equation.
+
+**Incompressible** (`ThermalFluid`): h = Cp·T so T_out = T_in — fittings remain
+implicit matrix terms (unchanged from v1.8.1).
+
+**Compressible** (`CompressibleFluid`): h depends on both T and P.  At each outer
+iteration, the solver computes:
+
+    h_in  = h(T_in, P_in)           (enthalpy at upstream node)
+    T_out = T such that h(T, P_out) = h_in   (Newton inversion, ~5 steps)
+
+and injects `ṁ·Cp·T_out` as an explicit RHS term in the downstream junction
+mixing equation.  At convergence T_out satisfies the isenthalpic condition
+exactly regardless of the pressure drop across the fitting.
+
+New methods added to `EquationOfState` and `CompressibleFluid`:
+- `EquationOfState.enthalpy_departure_j_per_kg(P, T)` — base returns 0 (ideal);
+  `PengRobinsonEOS` uses `thermo.eos.PR.H_dep_g / M`.
+- `CompressibleFluid.enthalpy_j_per_kg(P, T)` — Cp·T + departure.
+- `CompressibleFluid.temperature_from_enthalpy(h, P, T_guess)` — Newton solver.
+
 ## [1.8.2] — 2026-09-08
 
 ### Bug fix: global energy balance used scalar U instead of composite U

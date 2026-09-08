@@ -10,6 +10,10 @@ class EquationOfState(ABC):
     def density(self, pressure_pa: float, temperature_c: float) -> float:
         raise NotImplementedError
 
+    def enthalpy_departure_j_per_kg(self, pressure_pa: float, temperature_c: float) -> float:
+        """Specific enthalpy departure H_real - H_ideal (J/kg). Zero for ideal gas."""
+        return 0.0
+
 
 class IdealGasEOS(EquationOfState):
     """Ideal gas: ρ = PM / RT."""
@@ -63,21 +67,28 @@ class PengRobinsonEOS(EquationOfState):
         self.critical_pressure_pa = critical_pressure_pa
         self.acentric_factor = acentric_factor
 
-    def density(self, pressure_pa: float, temperature_c: float) -> float:
+    def _pr_object(self, pressure_pa: float, temperature_c: float):
         from thermo.eos import PR as _PR
-        T = temperature_c + 273.15
-        pr = _PR(
+        return _PR(
             Tc=self.critical_temperature_k,
             Pc=self.critical_pressure_pa,
             omega=self.acentric_factor,
-            T=T,
+            T=temperature_c + 273.15,
             P=pressure_pa,
         )
-        # Prefer the gas root; fall back to liquid root when only one root exists.
+
+    def density(self, pressure_pa: float, temperature_c: float) -> float:
+        pr = self._pr_object(pressure_pa, temperature_c)
         Z = getattr(pr, "Z_g", None) or getattr(pr, "Z_l", None)
         if Z is None:
             raise RuntimeError(
                 f"PR EOS: no valid Z root at T={temperature_c:.1f} °C, "
                 f"P={pressure_pa / 1e6:.3f} MPa"
             )
+        T = temperature_c + 273.15
         return pressure_pa * self.molecular_weight_kg_per_mol / (Z * _R * T)
+
+    def enthalpy_departure_j_per_kg(self, pressure_pa: float, temperature_c: float) -> float:
+        pr = self._pr_object(pressure_pa, temperature_c)
+        H_dep = getattr(pr, "H_dep_g", None) or getattr(pr, "H_dep_l", None) or 0.0
+        return float(H_dep) / self.molecular_weight_kg_per_mol  # J/mol → J/kg

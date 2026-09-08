@@ -223,6 +223,14 @@ def solve_energy_system(
     # ── junction node equations ───────────────────────────────────────────
     inflow: dict[int, list[tuple[int, float]]] = {i: [] for i in range(N_nodes)}
     outflow_total: dict[int, float] = dict.fromkeys(range(N_nodes), 0.0)
+    # For compressible fittings the exit temperature T_out ≠ T_in (JT effect).
+    # We cannot express T_out as a matrix column, so we put ṁ·Cp·T_out on the
+    # RHS directly.  explicit_inflow_total tracks ṁ·Cp so the total_in check
+    # does not incorrectly flag the downstream node as degenerate.
+    explicit_inflow_total: dict[int, float] = dict.fromkeys(range(N_nodes), 0.0)
+    explicit_rhs: dict[int, float] = dict.fromkeys(range(N_nodes), 0.0)
+
+    _fluid_has_enthalpy = hasattr(fluid_model, "enthalpy_j_per_kg")
 
     for pipe_idx, ps in enumerate(pipe_states):
         n_segs = max(ps.component.n_thermal_segments, 2)
@@ -250,30 +258,48 @@ def solve_energy_system(
             inflow[junction_start_row].append((upstream_col, abs_mdot_cp))
             outflow_total[junction_end_row] += abs_mdot_cp
 
-    # ── passthrough devices (fittings, pumps): zero-length adiabatic conduits ─
-    # They carry ṁ·Cp between junction nodes but have no FV internal nodes.
-    # Without this loop, the downstream junction of a fitting gets total_in=0
-    # and defaults to T_ref regardless of the upstream temperature.
+    # ── passthrough devices (fittings, pumps) ────────────────────────────
+    # Incompressible (ThermalFluid): T_out = T_in — added implicitly to the
+    # mixing matrix so the downstream junction is not degenerate.
+    # Compressible (CompressibleFluid with enthalpy_j_per_kg): isenthalpic
+    # expansion means T_out ≠ T_in.  T_out is computed from h(T_in, P_in) =
+    # h(T_out, P_out) and injected as an explicit RHS term so that at
+    # convergence the isenthalpic condition is satisfied exactly.
     for ps in network_state.components:
         if not isinstance(ps, (FittingState, PumpState)):
             continue
-        T_repr = 0.5 * (
-            (ps.start_node.temperature_c if ps.start_node.temperature_c is not None else T_ref)
-            + (ps.end_node.temperature_c if ps.end_node.temperature_c is not None else T_ref)
-        )
-        cp = fluid_model.specific_heat_for_link(_TempCarrier(T_repr))
         mdot = float(ps.mass_flow_kg_per_s)
-        abs_mdot_cp = abs(mdot) * cp
-        if abs_mdot_cp < 1e-30:
+        if abs(mdot) < 1e-30:
             continue
-        if mdot >= 0.0:
-            inflow[node_index[ps.end_node.node_id]].append(
-                (node_index[ps.start_node.node_id], abs_mdot_cp))
-            outflow_total[node_index[ps.start_node.node_id]] += abs_mdot_cp
+
+        up_node   = ps.start_node if mdot >= 0.0 else ps.end_node
+        down_node = ps.end_node   if mdot >= 0.0 else ps.start_node
+        up_idx    = node_index[up_node.node_id]
+        down_idx  = node_index[down_node.node_id]
+
+        T_up = up_node.temperature_c if up_node.temperature_c is not None else T_ref
+        cp   = fluid_model.specific_heat_for_link(_TempCarrier(T_up))
+        abs_mdot_cp = abs(mdot) * cp
+
+        if _fluid_has_enthalpy:
+            # Isenthalpic: resolve T_out from h(T_in, P_in) = h(T_out, P_out)
+            P_up   = getattr(up_node,   "pressure_pa", None) or fluid_model.reference_pressure_pa
+            P_down = getattr(down_node, "pressure_pa", None) or fluid_model.reference_pressure_pa
+            h_in   = fluid_model.enthalpy_j_per_kg(P_up, T_up)
+            T_out  = fluid_model.temperature_from_enthalpy(h_in, P_down, T_guess_c=T_up)
+            cp_out = fluid_model._specific_heat_fn(P_down, T_out)
+            abs_mdot_cp_out = abs(mdot) * cp_out
+            # Upstream node loses ṁ·Cp (thermal drain)
+            outflow_total[up_idx] += abs_mdot_cp
+            # Downstream node receives ṁ·Cp·T_out as an explicit RHS term.
+            # The mixing equation at down_idx becomes:
+            #   -denom·T_down + Σ(implicit inflows) = -ṁ·Cp·T_out
+            explicit_inflow_total[down_idx] += abs_mdot_cp_out
+            explicit_rhs[down_idx]          -= abs_mdot_cp_out * T_out
         else:
-            inflow[node_index[ps.start_node.node_id]].append(
-                (node_index[ps.end_node.node_id], abs_mdot_cp))
-            outflow_total[node_index[ps.end_node.node_id]] += abs_mdot_cp
+            # Incompressible: T_out = T_in — add as implicit matrix term
+            inflow[down_idx].append((up_idx, abs_mdot_cp))
+            outflow_total[up_idx] += abs_mdot_cp
 
     thermal_inlet_map = {}
     for node in network_state.nodes.values():
@@ -311,7 +337,7 @@ def solve_energy_system(
                     rhs[row] = g * dx_p
             else:
                 # No interior nodes available: fall back to mixing or 20 °C
-                total_in = sum(w for _, w in inflow[row])
+                total_in = sum(w for _, w in inflow[row]) + explicit_inflow_total[row]
                 total_out = outflow_total[row]
                 if total_in < 1e-30:
                     add(row, row, 1.0)
@@ -321,11 +347,11 @@ def solve_energy_system(
                     add(row, row, -denom)
                     for col, weight in inflow[row]:
                         add(row, col, weight)
-                    rhs[row] = 0.0
+                    rhs[row] = explicit_rhs[row]
 
         else:
             # Mixing equation (default for junctions and unspecified boundary nodes)
-            total_in = sum(w for _, w in inflow[row])
+            total_in = sum(w for _, w in inflow[row]) + explicit_inflow_total[row]
             total_out = outflow_total[row]
             if total_in < 1e-30:
                 add(row, row, 1.0)
@@ -335,7 +361,7 @@ def solve_energy_system(
                 add(row, row, -denom)
                 for col, weight in inflow[row]:
                     add(row, col, weight)
-                rhs[row] = 0.0
+                rhs[row] = explicit_rhs[row]
 
     # ── solve ─────────────────────────────────────────────────────────────
     A_mat = sp.csr_matrix((vals, (rows, cols)), shape=(N_total, N_total))

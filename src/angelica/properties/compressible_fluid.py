@@ -108,3 +108,25 @@ class CompressibleFluid(FluidModel):
     def thermal_conductivity_for_link(self, link_state) -> float:
         P, T = self._pt(link_state)
         return self._thermal_conductivity_fn(P, T)
+
+    def enthalpy_j_per_kg(self, pressure_pa: float, temperature_c: float) -> float:
+        """Specific enthalpy h = Cp·T + h_departure (J/kg, reference 0 °C)."""
+        cp = self._specific_heat_fn(pressure_pa, temperature_c)
+        h_dep = self.eos.enthalpy_departure_j_per_kg(pressure_pa, temperature_c)
+        return cp * temperature_c + h_dep
+
+    def temperature_from_enthalpy(
+        self, enthalpy_j_per_kg: float, pressure_pa: float, T_guess_c: float = 20.0
+    ) -> float:
+        """Invert h(T, P) = enthalpy via Newton iteration."""
+        T = T_guess_c
+        for _ in range(30):
+            h = self.enthalpy_j_per_kg(pressure_pa, T)
+            cp = self._specific_heat_fn(pressure_pa, T)
+            if abs(cp) < 1e-30:
+                break
+            dT = (enthalpy_j_per_kg - h) / cp
+            T += dT
+            if abs(dT) < 1e-6:
+                break
+        return T
