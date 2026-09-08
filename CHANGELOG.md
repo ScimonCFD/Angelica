@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.8.1] — 2026-09-08
+
+### Bug fix: fittings and pumps invisible to the thermal energy equation
+
+`FittingState` and `PumpState` were not included in the junction mixing-equation
+loop inside `solve_energy_system`.  Any junction node whose only incoming
+connection was a fitting or pump had `total_in = 0`, causing the solver to
+assign it the fallback temperature of 20 °C regardless of the actual upstream
+fluid temperature.  In networks where a fitting sits between two junction nodes
+that are otherwise not connected by a pipe, all downstream temperatures were
+therefore wrong.
+
+Fix: fittings and pumps are now registered as zero-length adiabatic conduits in
+the mixing-equation loop — they contribute their `ṁ·Cp` weight to the downstream
+junction's inflow, exactly as a zero-length pipe would.  No FV internal nodes are
+added (they have no length) and no enthalpy source term is added (adiabatic).
+
 ## [1.8.0] — 2026-09-08
 
 ### Four new features: Re transition setting, composite U, gas transmission correlations, black-oil PVT correlations

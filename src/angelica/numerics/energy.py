@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 
 from angelica.closures.convection_scheme import ConvectionScheme
-from angelica.core.state import HeatSourceState, NetworkState, PipeState
+from angelica.core.state import FittingState, HeatSourceState, NetworkState, PipeState, PumpState
 
 
 def _load_scipy():
@@ -249,6 +249,31 @@ def solve_energy_system(
             upstream_col = offset + 0 if n_internal > 0 else junction_end_row
             inflow[junction_start_row].append((upstream_col, abs_mdot_cp))
             outflow_total[junction_end_row] += abs_mdot_cp
+
+    # ── passthrough devices (fittings, pumps): zero-length adiabatic conduits ─
+    # They carry ṁ·Cp between junction nodes but have no FV internal nodes.
+    # Without this loop, the downstream junction of a fitting gets total_in=0
+    # and defaults to T_ref regardless of the upstream temperature.
+    for ps in network_state.components:
+        if not isinstance(ps, (FittingState, PumpState)):
+            continue
+        T_repr = 0.5 * (
+            (ps.start_node.temperature_c if ps.start_node.temperature_c is not None else T_ref)
+            + (ps.end_node.temperature_c if ps.end_node.temperature_c is not None else T_ref)
+        )
+        cp = fluid_model.specific_heat_for_link(_TempCarrier(T_repr))
+        mdot = float(ps.mass_flow_kg_per_s)
+        abs_mdot_cp = abs(mdot) * cp
+        if abs_mdot_cp < 1e-30:
+            continue
+        if mdot >= 0.0:
+            inflow[node_index[ps.end_node.node_id]].append(
+                (node_index[ps.start_node.node_id], abs_mdot_cp))
+            outflow_total[node_index[ps.start_node.node_id]] += abs_mdot_cp
+        else:
+            inflow[node_index[ps.start_node.node_id]].append(
+                (node_index[ps.end_node.node_id], abs_mdot_cp))
+            outflow_total[node_index[ps.end_node.node_id]] += abs_mdot_cp
 
     thermal_inlet_map = {}
     for node in network_state.nodes.values():
