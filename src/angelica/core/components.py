@@ -58,6 +58,14 @@ class Pipe(PressureChanger):
     heat_transfer_coefficient_w_per_m2k: float = 0.0
     ambient_temperature_c: float = 20.0
     n_thermal_segments: int = 10
+    # Multi-layer composite U (resistances in series).
+    # When any layer parameter is set, these override heat_transfer_coefficient_w_per_m2k.
+    inner_film_coefficient_w_per_m2k: float = 0.0
+    wall_thickness_m: float = 0.0
+    wall_thermal_conductivity_w_per_mk: float = 0.0
+    insulation_thickness_m: float = 0.0
+    insulation_thermal_conductivity_w_per_mk: float = 0.0
+    outer_film_coefficient_w_per_m2k: float = 0.0
 
     def __post_init__(self) -> None:
         if self.length_m <= 0.0:
@@ -67,6 +75,27 @@ class Pipe(PressureChanger):
                 f"abs(height_change_m)={abs(self.height_change_m):.4f} exceeds "
                 f"length_m={self.length_m:.4f} — pipe cannot rise or fall more than its own length"
             )
+
+    @property
+    def u_overall_w_per_m2k(self) -> float:
+        """Effective overall heat-transfer coefficient (W/m²K).
+
+        Computes the composite U from inner-film + wall + insulation + outer-film
+        resistances in series (flat-wall approximation, valid for thin walls).
+        Falls back to heat_transfer_coefficient_w_per_m2k when no layer parameters are set.
+        """
+        R = 0.0
+        if self.inner_film_coefficient_w_per_m2k > 0.0:
+            R += 1.0 / self.inner_film_coefficient_w_per_m2k
+        if self.wall_thickness_m > 0.0 and self.wall_thermal_conductivity_w_per_mk > 0.0:
+            R += self.wall_thickness_m / self.wall_thermal_conductivity_w_per_mk
+        if self.insulation_thickness_m > 0.0 and self.insulation_thermal_conductivity_w_per_mk > 0.0:
+            R += self.insulation_thickness_m / self.insulation_thermal_conductivity_w_per_mk
+        if self.outer_film_coefficient_w_per_m2k > 0.0:
+            R += 1.0 / self.outer_film_coefficient_w_per_m2k
+        if R > 0.0:
+            return 1.0 / R
+        return self.heat_transfer_coefficient_w_per_m2k
 
 
 @dataclass(frozen=True)

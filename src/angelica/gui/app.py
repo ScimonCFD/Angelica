@@ -161,7 +161,16 @@ class NetSimGui:
         },
         "hazen_williams": {
             "name": "Hazen-Williams",
-        }
+        },
+        "weymouth": {
+            "name": "Weymouth (gas)",
+        },
+        "panhandle_a": {
+            "name": "Panhandle A (gas)",
+        },
+        "panhandle_b": {
+            "name": "Panhandle B (gas)",
+        },
     }
     VELOCITY_LOOP_METHOD_LIBRARY = {
         "fixed_point": {
@@ -723,6 +732,8 @@ class NetSimGui:
         self.status_var.set("Redo.")
 
     def _open_black_oil_fluid_dialog(self) -> None:
+        from angelica.properties.black_oil import SUPPORTED_BLACK_OIL_CORRELATIONS
+
         dialog = tk.Toplevel(self.root)
         dialog.title("Fluid Definition — Black-oil")
         dialog.transient(self.root)
@@ -733,8 +744,11 @@ class NetSimGui:
         frame.columnconfigure(1, weight=1)
 
         mat = dict(self.scene.material)
-        api_var = tk.StringVar(value=mat.get("api_gravity", ""))
-        gg_var = tk.StringVar(value=mat.get("gas_gravity", ""))
+        api_var  = tk.StringVar(value=mat.get("api_gravity", ""))
+        gg_var   = tk.StringVar(value=mat.get("gas_gravity", ""))
+        corr_var = tk.StringVar(value=mat.get("correlation", "STANDING"))
+        cp_gas_var = tk.StringVar(value=mat.get("gas_specific_heat_j_per_kg_k", "2200.0"))
+        k_gas_var  = tk.StringVar(value=mat.get("gas_thermal_conductivity_w_per_mk", "0.035"))
 
         ttk.Label(frame, text="API Gravity (°API)").grid(
             row=0, column=0, sticky="w", pady=4, padx=(0, 8)
@@ -749,16 +763,66 @@ class NetSimGui:
             row=1, column=1, sticky="ew", pady=4
         )
 
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=2, column=0, columnspan=2, sticky="ew", pady=(6, 2)
+        )
+        ttk.Label(frame, text="— PVT Correlation —", foreground="gray").grid(
+            row=3, column=0, columnspan=2, pady=(0, 4)
+        )
+
+        corr_keys = list(SUPPORTED_BLACK_OIL_CORRELATIONS)
+        ttk.Label(frame, text="Correlation").grid(
+            row=4, column=0, sticky="w", pady=4, padx=(0, 8)
+        )
+        corr_box = ttk.Combobox(
+            frame, textvariable=corr_var, state="readonly",
+            values=corr_keys, width=16,
+        )
+        corr_box.grid(row=4, column=1, sticky="ew", pady=4)
+
+        corr_desc_var = tk.StringVar(value=SUPPORTED_BLACK_OIL_CORRELATIONS.get(corr_var.get(), ""))
+
+        def _update_corr_desc(_event=None):
+            corr_desc_var.set(SUPPORTED_BLACK_OIL_CORRELATIONS.get(corr_var.get(), ""))
+
+        corr_box.bind("<<ComboboxSelected>>", _update_corr_desc)
+        ttk.Label(frame, textvariable=corr_desc_var, foreground="gray",
+                  wraplength=220).grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 6))
+
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=6, column=0, columnspan=2, sticky="ew", pady=(6, 2)
+        )
+        ttk.Label(frame, text="— Gas thermal properties —", foreground="gray").grid(
+            row=7, column=0, columnspan=2, pady=(0, 4)
+        )
+        ttk.Label(frame, text="Gas Cp (J/kg·K)").grid(
+            row=8, column=0, sticky="w", pady=4, padx=(0, 8)
+        )
+        ttk.Entry(frame, textvariable=cp_gas_var, width=18).grid(
+            row=8, column=1, sticky="ew", pady=4
+        )
+        ttk.Label(frame, text="Gas k (W/m·K)").grid(
+            row=9, column=0, sticky="w", pady=4, padx=(0, 8)
+        )
+        ttk.Entry(frame, textvariable=k_gas_var, width=18).grid(
+            row=9, column=1, sticky="ew", pady=4
+        )
+
         def _save() -> None:
-            new_mat = {**dict(self.scene.material),
-                       "api_gravity": api_var.get().strip(),
-                       "gas_gravity": gg_var.get().strip()}
+            new_mat = {
+                **dict(self.scene.material),
+                "api_gravity": api_var.get().strip(),
+                "gas_gravity": gg_var.get().strip(),
+                "correlation": corr_var.get().strip(),
+                "gas_specific_heat_j_per_kg_k": cp_gas_var.get().strip(),
+                "gas_thermal_conductivity_w_per_mk": k_gas_var.get().strip(),
+            }
             self.scene.update_material(new_mat)
             self._refresh_global_summaries()
             dialog.destroy()
 
         btn_row = ttk.Frame(frame)
-        btn_row.grid(row=2, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        btn_row.grid(row=10, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(btn_row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
         ttk.Button(btn_row, text="Save", command=_save).pack(side="right")
 
@@ -1225,6 +1289,7 @@ class NetSimGui:
             self.scene.solver_settings.get("turbulent_iterations", "60")
         )
         current_alpha = str(self.scene.solver_settings.get("pressure_relaxation", "1.0"))
+        current_transition_re = str(self.scene.solver_settings.get("laminar_turbulent_transition_re", "2300.0"))
         current_friction_max_iterations = str(
             self.scene.solver_settings.get("friction_factor_max_iterations", "50")
         )
@@ -1260,6 +1325,7 @@ class NetSimGui:
         temp_relax_var = tk.StringVar(master=dialog, value=current_temp_relax)
 
         alpha_var = tk.StringVar(master=dialog, value=current_alpha)
+        transition_re_var = tk.StringVar(master=dialog, value=current_transition_re)
         friction_max_iterations_var = tk.StringVar(
             master=dialog,
             value=current_friction_max_iterations,
@@ -1313,8 +1379,15 @@ class NetSimGui:
         alpha_entry = ttk.Entry(frame, textvariable=alpha_var, width=26)
         alpha_entry.grid(row=2, column=1, sticky="ew", pady=4)
 
-        ttk.Label(frame, text="Velocity Loop").grid(
+        ttk.Label(frame, text="Re Transition (lam→turb)").grid(
             row=3, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=transition_re_var, width=26).grid(
+            row=3, column=1, sticky="ew", pady=4
+        )
+
+        ttk.Label(frame, text="Velocity Loop").grid(
+            row=4, column=0, sticky="w", padx=(0, 8), pady=4
         )
         velocity_method_box = ttk.Combobox(
             frame,
@@ -1323,14 +1396,14 @@ class NetSimGui:
             values=tuple(self.VELOCITY_LOOP_METHOD_LIBRARY.keys()),
             width=24,
         )
-        velocity_method_box.grid(row=3, column=1, sticky="ew", pady=4)
+        velocity_method_box.grid(row=4, column=1, sticky="ew", pady=4)
 
         velocity_name_var = tk.StringVar(
             master=dialog,
             value=self.VELOCITY_LOOP_METHOD_LIBRARY[velocity_method_var.get()]["name"],
         )
         ttk.Label(frame, text="Selected Velocity Loop").grid(
-            row=4, column=0, sticky="w", padx=(0, 8), pady=4
+            row=5, column=0, sticky="w", padx=(0, 8), pady=4
         )
         ttk.Label(
             frame,
@@ -1338,20 +1411,20 @@ class NetSimGui:
             relief="groove",
             padding=6,
             width=24,
-        ).grid(row=4, column=1, sticky="ew", pady=4)
+        ).grid(row=5, column=1, sticky="ew", pady=4)
 
         ttk.Label(frame, text="Velocity Max Iterations").grid(
-            row=5, column=0, sticky="w", padx=(0, 8), pady=4
+            row=6, column=0, sticky="w", padx=(0, 8), pady=4
         )
         velocity_max_iterations_entry = ttk.Entry(
             frame,
             textvariable=velocity_max_iterations_var,
             width=26,
         )
-        velocity_max_iterations_entry.grid(row=5, column=1, sticky="ew", pady=4)
+        velocity_max_iterations_entry.grid(row=6, column=1, sticky="ew", pady=4)
 
         ttk.Label(frame, text="Colebrook Strategy").grid(
-            row=6, column=0, sticky="w", padx=(0, 8), pady=4
+            row=7, column=0, sticky="w", padx=(0, 8), pady=4
         )
         colebrook_strategy_box = ttk.Combobox(
             frame,
@@ -1360,14 +1433,14 @@ class NetSimGui:
             values=tuple(self.COLEBROOK_FRICTION_STRATEGY_LIBRARY.keys()),
             width=24,
         )
-        colebrook_strategy_box.grid(row=6, column=1, sticky="ew", pady=4)
+        colebrook_strategy_box.grid(row=7, column=1, sticky="ew", pady=4)
 
         colebrook_strategy_name_var = tk.StringVar(
             master=dialog,
             value=self.COLEBROOK_FRICTION_STRATEGY_LIBRARY[colebrook_strategy_var.get()]["name"],
         )
         ttk.Label(frame, text="Selected Colebrook Strategy").grid(
-            row=7, column=0, sticky="w", padx=(0, 8), pady=4
+            row=8, column=0, sticky="w", padx=(0, 8), pady=4
         )
         ttk.Label(
             frame,
@@ -1375,10 +1448,10 @@ class NetSimGui:
             relief="groove",
             padding=6,
             width=24,
-        ).grid(row=7, column=1, sticky="ew", pady=4)
+        ).grid(row=8, column=1, sticky="ew", pady=4)
 
         ttk.Label(frame, text="Friction Factor").grid(
-            row=8, column=0, sticky="w", padx=(0, 8), pady=4
+            row=9, column=0, sticky="w", padx=(0, 8), pady=4
         )
         friction_method_box = ttk.Combobox(
             frame,
@@ -1387,14 +1460,14 @@ class NetSimGui:
             values=tuple(self.FRICTION_FACTOR_METHOD_LIBRARY.keys()),
             width=24,
         )
-        friction_method_box.grid(row=8, column=1, sticky="ew", pady=4)
+        friction_method_box.grid(row=9, column=1, sticky="ew", pady=4)
 
         friction_name_var = tk.StringVar(
             master=dialog,
             value=self.FRICTION_FACTOR_METHOD_LIBRARY[friction_method_var.get()]["name"],
         )
         ttk.Label(frame, text="Selected Friction Method").grid(
-            row=9, column=0, sticky="w", padx=(0, 8), pady=4
+            row=10, column=0, sticky="w", padx=(0, 8), pady=4
         )
         ttk.Label(
             frame,
@@ -1402,62 +1475,62 @@ class NetSimGui:
             relief="groove",
             padding=6,
             width=24,
-        ).grid(row=9, column=1, sticky="ew", pady=4)
+        ).grid(row=10, column=1, sticky="ew", pady=4)
 
         ttk.Label(frame, text="Friction Max Iterations").grid(
-            row=10, column=0, sticky="w", padx=(0, 8), pady=4
+            row=11, column=0, sticky="w", padx=(0, 8), pady=4
         )
         friction_max_iterations_entry = ttk.Entry(
             frame,
             textvariable=friction_max_iterations_var,
             width=26,
         )
-        friction_max_iterations_entry.grid(row=10, column=1, sticky="ew", pady=4)
+        friction_max_iterations_entry.grid(row=11, column=1, sticky="ew", pady=4)
 
         ttk.Label(frame, text="f Loop Tolerance (−)").grid(
-            row=11, column=0, sticky="w", padx=(0, 8), pady=4
-        )
-        ttk.Entry(frame, textvariable=colebrook_tol_var, width=26).grid(
-            row=11, column=1, sticky="ew", pady=4
-        )
-
-        ttk.Label(frame, text="V* Loop Tolerance (m/s)").grid(
             row=12, column=0, sticky="w", padx=(0, 8), pady=4
         )
-        ttk.Entry(frame, textvariable=velocity_loop_tol_var, width=26).grid(
+        ttk.Entry(frame, textvariable=colebrook_tol_var, width=26).grid(
             row=12, column=1, sticky="ew", pady=4
         )
 
+        ttk.Label(frame, text="V* Loop Tolerance (m/s)").grid(
+            row=13, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=velocity_loop_tol_var, width=26).grid(
+            row=13, column=1, sticky="ew", pady=4
+        )
+
         ttk.Separator(frame, orient="horizontal").grid(
-            row=13, column=0, columnspan=2, sticky="ew", pady=(6, 2)
+            row=14, column=0, columnspan=2, sticky="ew", pady=(6, 2)
         )
         ttk.Label(frame, text="— Convergence criteria —", foreground="gray").grid(
-            row=14, column=0, columnspan=2, pady=(0, 4)
+            row=15, column=0, columnspan=2, pady=(0, 4)
         )
 
         ttk.Label(frame, text="ΔP Correction Tol (Pa)").grid(
-            row=15, column=0, sticky="w", padx=(0, 8), pady=4
-        )
-        ttk.Entry(frame, textvariable=dp_tol_var, width=26).grid(
-            row=15, column=1, sticky="ew", pady=4
-        )
-
-        ttk.Label(frame, text="Continuity Tol (−)").grid(
             row=16, column=0, sticky="w", padx=(0, 8), pady=4
         )
-        ttk.Entry(frame, textvariable=continuity_tol_var, width=26).grid(
+        ttk.Entry(frame, textvariable=dp_tol_var, width=26).grid(
             row=16, column=1, sticky="ew", pady=4
         )
 
+        ttk.Label(frame, text="Continuity Tol (−)").grid(
+            row=17, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=continuity_tol_var, width=26).grid(
+            row=17, column=1, sticky="ew", pady=4
+        )
+
         ttk.Separator(frame, orient="horizontal").grid(
-            row=17, column=0, columnspan=2, sticky="ew", pady=(6, 2)
+            row=18, column=0, columnspan=2, sticky="ew", pady=(6, 2)
         )
         ttk.Label(frame, text="— Non-isothermal energy —", foreground="gray").grid(
-            row=18, column=0, columnspan=2, pady=(0, 4)
+            row=19, column=0, columnspan=2, pady=(0, 4)
         )
 
         ttk.Label(frame, text="Convection Scheme").grid(
-            row=19, column=0, sticky="w", padx=(0, 8), pady=4
+            row=20, column=0, sticky="w", padx=(0, 8), pady=4
         )
         ttk.Combobox(
             frame,
@@ -1465,40 +1538,40 @@ class NetSimGui:
             state="readonly",
             values=("upwind", "hybrid", "power_law"),
             width=24,
-        ).grid(row=19, column=1, sticky="ew", pady=4)
+        ).grid(row=20, column=1, sticky="ew", pady=4)
 
         ttk.Label(frame, text="Max Temperature Iterations").grid(
-            row=20, column=0, sticky="w", padx=(0, 8), pady=4
+            row=21, column=0, sticky="w", padx=(0, 8), pady=4
         )
         ttk.Entry(frame, textvariable=max_temp_iter_var, width=26).grid(
             row=20, column=1, sticky="ew", pady=4
         )
 
         ttk.Label(frame, text="Temperature Tol (K)").grid(
-            row=21, column=0, sticky="w", padx=(0, 8), pady=4
-        )
-        ttk.Entry(frame, textvariable=temp_tol_var, width=26).grid(
-            row=21, column=1, sticky="ew", pady=4
-        )
-
-        ttk.Label(frame, text="Temperature Relaxation").grid(
             row=22, column=0, sticky="w", padx=(0, 8), pady=4
         )
-        ttk.Entry(frame, textvariable=temp_relax_var, width=26).grid(
+        ttk.Entry(frame, textvariable=temp_tol_var, width=26).grid(
             row=22, column=1, sticky="ew", pady=4
         )
 
+        ttk.Label(frame, text="Temperature Relaxation").grid(
+            row=23, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=temp_relax_var, width=26).grid(
+            row=23, column=1, sticky="ew", pady=4
+        )
+
         ttk.Separator(frame, orient="horizontal").grid(
-            row=23, column=0, columnspan=2, sticky="ew", pady=(6, 2)
+            row=24, column=0, columnspan=2, sticky="ew", pady=(6, 2)
         )
         ttk.Label(frame, text="— Pipe discretisation —", foreground="gray").grid(
-            row=24, column=0, columnspan=2, pady=(0, 4)
+            row=25, column=0, columnspan=2, pady=(0, 4)
         )
         ttk.Label(frame, text="Segments per pipe (default)").grid(
-            row=25, column=0, sticky="w", padx=(0, 8), pady=4
+            row=26, column=0, sticky="w", padx=(0, 8), pady=4
         )
         ttk.Entry(frame, textvariable=num_segments_var, width=26).grid(
-            row=25, column=1, sticky="ew", pady=4
+            row=26, column=1, sticky="ew", pady=4
         )
 
         def apply_velocity_method_selection(_event: tk.Event | None = None) -> None:
@@ -1521,7 +1594,7 @@ class NetSimGui:
         friction_method_box.bind("<<ComboboxSelected>>", apply_friction_method_selection)
 
         button_row = ttk.Frame(frame)
-        button_row.grid(row=26, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=27, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
         ttk.Button(
             button_row,
@@ -1531,6 +1604,7 @@ class NetSimGui:
                 laminar_iterations_var,
                 turbulent_iterations_var,
                 alpha_var,
+                transition_re_var,
                 colebrook_strategy_var,
                 friction_method_var,
                 friction_max_iterations_var,
@@ -1794,6 +1868,7 @@ class NetSimGui:
         laminar_iterations_var: tk.StringVar,
         turbulent_iterations_var: tk.StringVar,
         alpha_var: tk.StringVar,
+        transition_re_var: tk.StringVar,
         colebrook_strategy_var: tk.StringVar,
         friction_method_var: tk.StringVar,
         friction_max_iterations_var: tk.StringVar,
@@ -1862,6 +1937,23 @@ class NetSimGui:
             messagebox.showerror(
                 "Invalid numerics",
                 "Pressure relaxation must be greater than zero.",
+                parent=dialog,
+            )
+            return
+
+        try:
+            transition_re = float(transition_re_var.get().strip())
+        except ValueError:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Re Transition must be a valid number.",
+                parent=dialog,
+            )
+            return
+        if transition_re <= 0.0:
+            messagebox.showerror(
+                "Invalid numerics",
+                "Re Transition must be greater than zero.",
                 parent=dialog,
             )
             return
@@ -2083,6 +2175,7 @@ class NetSimGui:
                 "laminar_iterations": laminar_iterations,
                 "turbulent_iterations": turbulent_iterations,
                 "pressure_relaxation": alpha,
+                "laminar_turbulent_transition_re": transition_re,
                 "colebrook_friction_strategy": colebrook_strategy,
                 "friction_factor_method": friction_method,
                 "friction_factor_max_iterations": friction_max_iterations,
@@ -4512,7 +4605,7 @@ class NetSimGui:
             ).grid(row=row, column=0, columnspan=2, pady=(0, 2))
             row += 1
             thermal_fields = [
-                ("heat_transfer_coefficient_w_per_m2k", "U — Heat transfer coeff. (W/m²K)"),
+                ("heat_transfer_coefficient_w_per_m2k", "U — Overall coeff. (W/m²K)"),
                 ("ambient_temperature_c", "T_amb — Ambient temperature (°C)"),
             ]
             defaults = {
@@ -4528,6 +4621,29 @@ class NetSimGui:
                 )
                 ttk.Entry(properties_frame, textvariable=var, width=18).grid(
                     row=row, column=1, sticky="ew", pady=4
+                )
+                entries[key] = var
+                row += 1
+            # Composite U — multi-layer thermal resistance (optional; overrides U above)
+            ttk.Label(
+                properties_frame, text="— Composite U layers (optional) —", foreground="gray"
+            ).grid(row=row, column=0, columnspan=2, pady=(2, 2))
+            row += 1
+            composite_fields = [
+                ("inner_film_coefficient_w_per_m2k",        "h_i — Inner film (W/m²K)"),
+                ("wall_thickness_m",                         "t_wall — Wall thickness (m)"),
+                ("wall_thermal_conductivity_w_per_mk",       "k_wall — Wall k (W/m·K)"),
+                ("insulation_thickness_m",                   "t_ins — Insulation thick. (m)"),
+                ("insulation_thermal_conductivity_w_per_mk", "k_ins — Insulation k (W/m·K)"),
+                ("outer_film_coefficient_w_per_m2k",         "h_o — Outer film (W/m²K)"),
+            ]
+            for key, label in composite_fields:
+                ttk.Label(properties_frame, text=label).grid(
+                    row=row, column=0, sticky="w", pady=2
+                )
+                var = tk.StringVar(value=component.properties.get(key, "0.0"))
+                ttk.Entry(properties_frame, textvariable=var, width=18).grid(
+                    row=row, column=1, sticky="ew", pady=2
                 )
                 entries[key] = var
                 row += 1

@@ -4,7 +4,13 @@ import json
 import math
 from pathlib import Path
 
-from angelica.closures import ColebrookPipeCorrelation, HazenWilliamsPipeCorrelation
+from angelica.closures import (
+    ColebrookPipeCorrelation,
+    HazenWilliamsPipeCorrelation,
+    PanhandleAPipeCorrelation,
+    PanhandleBPipeCorrelation,
+    WeymouthPipeCorrelation,
+)
 from angelica.closures.convection_scheme import HybridScheme, PowerLawScheme, UpwindScheme
 from angelica.core.case import (
     FlowBoundary,
@@ -422,6 +428,12 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 ambient_temp = _optional_float(
                     component, "ambient_temperature_c", default=20.0
                 ) if _needs_heat else 20.0
+                inner_h  = _optional_float(component, "inner_film_coefficient_w_per_m2k",       default=0.0) if _needs_heat else 0.0
+                t_wall   = _optional_float(component, "wall_thickness_m",                        default=0.0) if _needs_heat else 0.0
+                k_wall   = _optional_float(component, "wall_thermal_conductivity_w_per_mk",      default=0.0) if _needs_heat else 0.0
+                t_ins    = _optional_float(component, "insulation_thickness_m",                  default=0.0) if _needs_heat else 0.0
+                k_ins    = _optional_float(component, "insulation_thermal_conductivity_w_per_mk", default=0.0) if _needs_heat else 0.0
+                outer_h  = _optional_float(component, "outer_film_coefficient_w_per_m2k",        default=0.0) if _needs_heat else 0.0
                 num_segs = max(1, int(_optional_float(component, "num_segments", default=float(default_num_segments))))
                 seg_length = length / num_segs
                 seg_height = height_change / num_segs
@@ -443,6 +455,12 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                             heat_transfer_coefficient_w_per_m2k=heat_transfer,
                             ambient_temperature_c=ambient_temp,
                             n_thermal_segments=1,
+                            inner_film_coefficient_w_per_m2k=inner_h,
+                            wall_thickness_m=t_wall,
+                            wall_thermal_conductivity_w_per_mk=k_wall,
+                            insulation_thickness_m=t_ins,
+                            insulation_thermal_conductivity_w_per_mk=k_ins,
+                            outer_film_coefficient_w_per_m2k=outer_h,
                             component_id=f"link_{link.link_id}_pipe_{component.component_id}_seg{seg_idx}",
                         )
                     )
@@ -608,11 +626,17 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 "Double-click a source node to set its production ratios."
             )
         first = inlet_fluid_bcs[0]
+        _bo_corr = str(scene.material.get("correlation", "STANDING")).strip() or "STANDING"
+        _bo_cp_gas = float(scene.material.get("gas_specific_heat_j_per_kg_k", 2200.0) or 2200.0)
+        _bo_k_gas  = float(scene.material.get("gas_thermal_conductivity_w_per_mk",  0.035) or 0.035)
         fluid_model = BlackOilFluid(
             api_gravity      = api_gravity,
             gas_gravity      = gas_gravity,
             gor_sc_m3_per_m3 = first.gor_sc_m3_per_m3,
             wor_sc_m3_per_m3 = first.wor_sc_m3_per_m3,
+            correlation      = _bo_corr,
+            gas_specific_heat_j_per_kg_k = _bo_cp_gas,
+            gas_thermal_conductivity_w_per_mk = _bo_k_gas,
         )
         thermal_inlets = tuple(
             tb
@@ -723,6 +747,12 @@ def build_solver_from_scene(scene: CanvasScene):
         turbulent_pipe_correlation = ColebrookPipeCorrelation()
     elif pressure_drop_model_key == "hazen_williams":
         turbulent_pipe_correlation = HazenWilliamsPipeCorrelation()
+    elif pressure_drop_model_key == "weymouth":
+        turbulent_pipe_correlation = WeymouthPipeCorrelation()
+    elif pressure_drop_model_key == "panhandle_a":
+        turbulent_pipe_correlation = PanhandleAPipeCorrelation()
+    elif pressure_drop_model_key == "panhandle_b":
+        turbulent_pipe_correlation = PanhandleBPipeCorrelation()
     else:
         raise ValueError(
             f"Unsupported pipe pressure-drop model '{pressure_drop_model_key}'."

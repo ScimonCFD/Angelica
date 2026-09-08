@@ -1,0 +1,217 @@
+{
+  "case_name": "Tutorial 07 — Composite U loop: insulated vs bare arm",
+  "physics_mode": "non_isothermal",
+  "material": {
+    "name": "Crude oil",
+    "density_kg_per_m3": "855.0",
+    "viscosity_pa_s": "0.006",
+    "specific_heat_j_per_kg_k": "2000.0",
+    "thermal_conductivity_w_per_m_k": "0.13"
+  },
+  "pressure_drop_model": {
+    "library_key": "colebrook_white",
+    "name": "Colebrook-White"
+  },
+  "solver_settings": {
+    "turbulent_iterations": 150,
+    "pressure_relaxation": 0.7,
+    "pressure_correction_abs_tolerance_pa": 0.01,
+    "pressure_correction_rel_tolerance": 1e-8,
+    "temperature_relaxation": 0.5,
+    "max_temperature_iterations": 60
+  },
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 80,
+      "y": 260,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "1200000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "80.0",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "junction",
+      "x": 260,
+      "y": 260,
+      "properties": {
+        "label": "Split"
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "junction",
+      "x": 460,
+      "y": 100,
+      "properties": {
+        "label": "Upper mid"
+      }
+    },
+    {
+      "node_id": 4,
+      "node_type": "junction",
+      "x": 640,
+      "y": 260,
+      "properties": {
+        "label": "Merge"
+      }
+    },
+    {
+      "node_id": 5,
+      "node_type": "sink",
+      "x": 820,
+      "y": 260,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "200000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": "A",
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "200.0",
+            "diameter_m": "0.10",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "5",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "10.0",
+            "inner_film_coefficient_w_per_m2k": "0.0",
+            "wall_thickness_m": "0.0",
+            "wall_thermal_conductivity_w_per_mk": "0.0",
+            "insulation_thickness_m": "0.0",
+            "insulation_thermal_conductivity_w_per_mk": "0.0",
+            "outer_film_coefficient_w_per_m2k": "0.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 2,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": "B",
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "800.0",
+            "diameter_m": "0.08",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "10",
+            "heat_transfer_coefficient_w_per_m2k": "0.0",
+            "ambient_temperature_c": "10.0",
+            "inner_film_coefficient_w_per_m2k": "500.0",
+            "wall_thickness_m": "0.008",
+            "wall_thermal_conductivity_w_per_mk": "50.0",
+            "insulation_thickness_m": "0.05",
+            "insulation_thermal_conductivity_w_per_mk": "0.04",
+            "outer_film_coefficient_w_per_m2k": "10.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 3,
+      "start_node_id": 3,
+      "end_node_id": 4,
+      "components": [
+        {
+          "component_id": "C",
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "800.0",
+            "diameter_m": "0.08",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "10",
+            "heat_transfer_coefficient_w_per_m2k": "0.0",
+            "ambient_temperature_c": "10.0",
+            "inner_film_coefficient_w_per_m2k": "500.0",
+            "wall_thickness_m": "0.008",
+            "wall_thermal_conductivity_w_per_mk": "50.0",
+            "insulation_thickness_m": "0.05",
+            "insulation_thermal_conductivity_w_per_mk": "0.04",
+            "outer_film_coefficient_w_per_m2k": "10.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 4,
+      "start_node_id": 2,
+      "end_node_id": 4,
+      "components": [
+        {
+          "component_id": "D",
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "1200.0",
+            "diameter_m": "0.10",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "15",
+            "heat_transfer_coefficient_w_per_m2k": "0.0",
+            "ambient_temperature_c": "10.0",
+            "inner_film_coefficient_w_per_m2k": "500.0",
+            "wall_thickness_m": "0.008",
+            "wall_thermal_conductivity_w_per_mk": "50.0",
+            "insulation_thickness_m": "0.0",
+            "insulation_thermal_conductivity_w_per_mk": "0.0",
+            "outer_film_coefficient_w_per_m2k": "15.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 5,
+      "start_node_id": 4,
+      "end_node_id": 5,
+      "components": [
+        {
+          "component_id": "E",
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "200.0",
+            "diameter_m": "0.10",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "5",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "10.0",
+            "inner_film_coefficient_w_per_m2k": "0.0",
+            "wall_thickness_m": "0.0",
+            "wall_thermal_conductivity_w_per_mk": "0.0",
+            "insulation_thickness_m": "0.0",
+            "insulation_thermal_conductivity_w_per_mk": "0.0",
+            "outer_film_coefficient_w_per_m2k": "0.0"
+          }
+        }
+      ]
+    }
+  ]
+}

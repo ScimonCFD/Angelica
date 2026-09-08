@@ -1,5 +1,99 @@
 # Changelog
 
+## [1.8.0] — 2026-09-08
+
+### Four new features: Re transition setting, composite U, gas transmission correlations, black-oil PVT correlations
+
+**1. Configurable laminar–turbulent transition Reynolds number (`SolverSettings.laminar_turbulent_transition_re`)**
+
+The transition from the Hagen-Poiseuille (laminar, f = 64/Re) to the
+Colebrook-White (turbulent) friction-factor regime was previously hard-coded at
+Re = 2300.  It is now a configurable parameter:
+
+```python
+from angelica.core.settings import SolverSettings
+settings = SolverSettings(laminar_turbulent_transition_re=4000.0)
+```
+
+The field is exposed in the GUI numerics dialog ("Re Transition" field).  The
+default of 2300 preserves backward compatibility with all existing cases.
+
+**2. Multi-layer composite overall heat-transfer coefficient (composite U)**
+
+`Pipe` now accepts six new thermal-resistance layer parameters in addition to
+the existing scalar `heat_transfer_coefficient_w_per_m2k`:
+
+| Parameter | Meaning |
+|---|---|
+| `inner_film_coefficient_w_per_m2k` | h_i — inner convective film |
+| `wall_thickness_m` | t_wall |
+| `wall_thermal_conductivity_w_per_mk` | k_wall |
+| `insulation_thickness_m` | t_ins |
+| `insulation_thermal_conductivity_w_per_mk` | k_ins |
+| `outer_film_coefficient_w_per_m2k` | h_o — outer convective film |
+
+The effective U is computed with the flat-wall series-resistance formula:
+
+    1/U = 1/h_i + t_wall/k_wall + t_ins/k_ins + 1/h_o
+
+When all six parameters are zero the property falls back to
+`heat_transfer_coefficient_w_per_m2k`, keeping full backward compatibility.
+
+The energy equation uses `pipe.u_overall_w_per_m2k` transparently.  All six
+fields are exposed in the GUI pipe properties panel and the GUI JSON schema.
+
+Tutorial 07 (`steady_non_isothermal_incompressible/07_composite_u_loop/`)
+demonstrates composite U on a looped crude-oil network where one arm is
+mineral-wool insulated (U ≈ 0.74 W/m²K) and the other is bare steel (U ≈
+14.5 W/m²K).
+
+**3. Gas transmission friction correlations: Weymouth, Panhandle A, Panhandle B**
+
+Three explicit friction correlations for gas pipelines are added to
+`angelica.closures`:
+
+| Class | Formula | Typical application |
+|---|---|---|
+| `WeymouthPipeCorrelation` | f_D = 0.025 / D^(1/3) | Short high-pressure gas lines |
+| `PanhandleAPipeCorrelation` | f_D = 0.085 / Re^0.147 | Turbulent gas pipelines |
+| `PanhandleBPipeCorrelation` | f_D = 0.015 / Re^0.039 | High-pressure large-diameter gas lines |
+
+All three subclass the new `_ExplicitFrictionCorrelation` base and integrate
+with the existing solver infrastructure without changes to the outer loop.
+They appear in the GUI pressure-drop model selector under keys `"weymouth"`,
+`"panhandle_a"`, `"panhandle_b"`.
+
+**4. Additional black-oil PVT correlations + configurable gas Cp and k**
+
+Three additional PVT correlations join the existing Standing (1947) default:
+
+| Key | Reference | Best for |
+|---|---|---|
+| `STANDING` | Standing (1947) | Default; worldwide applicability |
+| `VASQUEZ_BEGGS` | Vasquez & Beggs (1980) | API 15–60 oils |
+| `AL_MARHOUN` | Al-Marhoun (1988) | Middle-East crude oils |
+| `GLASO` | Glaso (1980) | North Sea crude oils |
+
+Each correlation covers bubble-point pressure (Pb), solution GOR (Rs), and
+oil formation volume factor (Bo).  All unit conversions are handled internally
+(SI in/out).
+
+`BlackOilFluid` gains three new fields:
+
+```python
+BlackOilFluid(
+    ...
+    correlation="AL_MARHOUN",          # default "STANDING"
+    gas_specific_heat_j_per_kg_k=2200.0,   # Cp of gas phase
+    gas_thermal_conductivity_w_per_mk=0.035,  # k of gas phase
+)
+```
+
+`gas_specific_heat_j_per_kg_k` and `gas_thermal_conductivity_w_per_mk`
+replace the previous hard-coded constants in `compute_pvt` and are now part
+of the LRU cache key so different gas compositions cache correctly.
+All three fields are exposed in the GUI black-oil fluid dialog.
+
 ## [1.7.3] — 2026-09-08
 
 ### Bug fixes: final-pass pressure re-initialisation, uninitialized variable, water transport properties

@@ -20,6 +20,7 @@ class SolverSettings:
     pressure_correction_abs_tolerance_pa: float = 1e-3
     pressure_correction_rel_tolerance: float = 1e-8
     nodal_mass_imbalance_rel_tolerance: float = 1e-3
+    laminar_turbulent_transition_re: float = 2300.0
 
     @property
     def friction_tolerance(self) -> float:

@@ -276,6 +276,7 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
                         self.settings.velocity_loop_method,
                         self.settings.velocity_loop_max_iterations,
                         self.settings.velocity_loop_tolerance,
+                        self.settings.laminar_turbulent_transition_re,
                     )
             elif isinstance(link_state, FittingState):
                 link_state.velocity_m_per_s = correlation.calculate_velocity(

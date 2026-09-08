@@ -130,6 +130,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
         velocity_loop_method: str = "fixed_point",
         velocity_loop_max_iterations: int = 50,
         velocity_loop_tolerance: float | None = None,
+        laminar_turbulent_transition_re: float = 2300.0,
     ) -> float:
         if tolerance is None:
             raise ValueError("ColebrookPipeCorrelation requires a tolerance value.")
@@ -148,6 +149,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
                 colebrook_friction_strategy,
                 friction_factor_method,
                 friction_factor_max_iterations,
+                laminar_turbulent_transition_re,
             ),
             residual_fn=lambda velocity: self._velocity_residual(
                 pipe_state,
@@ -159,6 +161,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
                 colebrook_friction_strategy,
                 friction_factor_method,
                 friction_factor_max_iterations,
+                laminar_turbulent_transition_re,
             ),
         )
         solver = build_nonlinear_solver(
@@ -175,6 +178,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
             colebrook_friction_strategy,
             friction_factor_method,
             friction_factor_max_iterations,
+            laminar_turbulent_transition_re,
         )
         return pipe_state.velocity_m_per_s
 
@@ -189,6 +193,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
         colebrook_friction_strategy: str,
         friction_factor_method: str,
         friction_factor_max_iterations: int,
+        laminar_turbulent_transition_re: float = 2300.0,
     ) -> float:
         safe_velocity = self._safe_velocity_guess(velocity)
         friction_factor, _ = self._friction_factor_for_velocity(
@@ -200,6 +205,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
             colebrook_friction_strategy,
             friction_factor_method,
             friction_factor_max_iterations,
+            laminar_turbulent_transition_re,
         )
         driving_term = delta_p - elevation_pressure_term(
             density,
@@ -228,6 +234,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
         colebrook_friction_strategy: str,
         friction_factor_method: str,
         friction_factor_max_iterations: int,
+        laminar_turbulent_transition_re: float = 2300.0,
     ) -> float:
         safe_velocity = self._safe_velocity_guess(velocity)
         friction_factor, _ = self._friction_factor_for_velocity(
@@ -239,6 +246,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
             colebrook_friction_strategy,
             friction_factor_method,
             friction_factor_max_iterations,
+            laminar_turbulent_transition_re,
         )
 
         driving_term = delta_p - elevation_pressure_term(
@@ -265,10 +273,11 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
         colebrook_friction_strategy: str,
         friction_factor_method: str,
         friction_factor_max_iterations: int,
+        laminar_turbulent_transition_re: float = 2300.0,
     ) -> tuple[float, float]:
         reynolds = density * abs(velocity) * pipe_state.component.diameter_m / viscosity
         pipe_state.reynolds = reynolds
-        if reynolds < 2300.0:
+        if reynolds < laminar_turbulent_transition_re:
             return 64.0 / max(reynolds, 1e-12), reynolds
         initial_guess = max(64.0 / max(reynolds, 1e-12), 1e-6)
         friction_factor = self.solve_colebrook(
@@ -291,6 +300,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
         colebrook_friction_strategy: str,
         friction_factor_method: str,
         friction_factor_max_iterations: int,
+        laminar_turbulent_transition_re: float = 2300.0,
     ) -> None:
         safe_velocity = self._safe_velocity_guess(velocity)
         friction_factor, reynolds = self._friction_factor_for_velocity(
@@ -302,6 +312,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
             colebrook_friction_strategy,
             friction_factor_method,
             friction_factor_max_iterations,
+            laminar_turbulent_transition_re,
         )
         pipe_state.velocity_m_per_s = safe_velocity
         pipe_state.reynolds = reynolds
@@ -388,6 +399,7 @@ class HazenWilliamsPipeCorrelation(PressureDropCorrelation):
         velocity_loop_method: str = "fixed_point",
         velocity_loop_max_iterations: int = 50,
         velocity_loop_tolerance: float | None = None,
+        laminar_turbulent_transition_re: float = 2300.0,
     ) -> float:
         del (
             viscosity,
@@ -398,6 +410,7 @@ class HazenWilliamsPipeCorrelation(PressureDropCorrelation):
             velocity_loop_method,
             velocity_loop_max_iterations,
             velocity_loop_tolerance,
+            laminar_turbulent_transition_re,
         )
         driving_term_pa = delta_p - elevation_pressure_term(
             density,
@@ -441,3 +454,63 @@ class HazenWilliamsPipeCorrelation(PressureDropCorrelation):
         )
 
 
+class _ExplicitFrictionCorrelation(ColebrookPipeCorrelation):
+    """Base for pipe correlations with an explicit f expression — no Colebrook iteration."""
+
+    def _compute_friction_factor(self, pipe_state, reynolds: float) -> float:
+        raise NotImplementedError
+
+    def _friction_factor_for_velocity(
+        self,
+        pipe_state,
+        velocity: float,
+        density: float,
+        viscosity: float,
+        tolerance: float,
+        colebrook_friction_strategy: str,
+        friction_factor_method: str,
+        friction_factor_max_iterations: int,
+        laminar_turbulent_transition_re: float = 2300.0,
+    ) -> tuple[float, float]:
+        reynolds = density * abs(velocity) * pipe_state.component.diameter_m / viscosity
+        pipe_state.reynolds = max(reynolds, 1e-12)
+        return max(self._compute_friction_factor(pipe_state, pipe_state.reynolds), 1e-8), reynolds
+
+
+class WeymouthPipeCorrelation(_ExplicitFrictionCorrelation):
+    """Gas transmission correlation (Weymouth, 1912).
+
+    Friction factor depends only on pipe diameter (fully turbulent assumption).
+    Suitable for short, high-capacity gas lines where roughness dominates.
+
+    f_Darcy = 0.025 / D^(1/3)  (D in metres)
+    """
+
+    def _compute_friction_factor(self, pipe_state, reynolds: float) -> float:
+        D = max(pipe_state.component.diameter_m, 1e-6)
+        return 0.025 / D ** (1.0 / 3.0)
+
+
+class PanhandleAPipeCorrelation(_ExplicitFrictionCorrelation):
+    """Panhandle A gas pipeline correlation (1940 / AGA revised 1962).
+
+    Empirical for Re ≈ 5 × 10⁶ – 11 × 10⁶; efficiency factor E = 1 assumed.
+
+    f_Darcy ≈ 0.085 / Re^0.147
+    """
+
+    def _compute_friction_factor(self, pipe_state, reynolds: float) -> float:
+        return 0.085 / max(reynolds, 1.0) ** 0.147
+
+
+class PanhandleBPipeCorrelation(_ExplicitFrictionCorrelation):
+    """Panhandle B (Modified Panhandle) gas pipeline correlation (1942).
+
+    More accurate than Panhandle A for large-diameter high-pressure lines.
+    Efficiency factor E = 1 assumed.
+
+    f_Darcy ≈ 0.015 / Re^0.039
+    """
+
+    def _compute_friction_factor(self, pipe_state, reynolds: float) -> float:
+        return 0.015 / max(reynolds, 1.0) ** 0.039

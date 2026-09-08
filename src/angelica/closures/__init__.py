@@ -3,6 +3,9 @@ from .friction import (
     ColebrookPipeCorrelation,
     HazenWilliamsPipeCorrelation,
     LaminarPipeCorrelation,
+    PanhandleAPipeCorrelation,
+    PanhandleBPipeCorrelation,
+    WeymouthPipeCorrelation,
 )
 from .gravity import elevation_pressure_term
 from .heat_source import HeatSourceModel
@@ -18,9 +21,12 @@ __all__ = [
     "HybridScheme",
     "LaminarPipeCorrelation",
     "MinorLossModel",
+    "PanhandleAPipeCorrelation",
+    "PanhandleBPipeCorrelation",
     "PowerLawScheme",
     "PumpCurveModel",
     "PressureDropCorrelation",
     "UpwindScheme",
+    "WeymouthPipeCorrelation",
     "elevation_pressure_term",
 ]

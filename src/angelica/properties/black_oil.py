@@ -122,19 +122,12 @@ def bubble_point_pa(
     api_gravity: float,
     temperature_c: float,
 ) -> float:
-    """Bubble point pressure (Pa) via Standing (1947).
-
-    Args:
-        gor_sc_m3_per_m3: Producing GOR at standard conditions (m³/m³).
-        gas_gravity: Gas specific gravity (air = 1).
-        api_gravity: Stock-tank oil API gravity (°API).
-        temperature_c: Temperature (°C).
-    """
+    """Bubble point pressure (Pa) via Standing (1947)."""
     if gor_sc_m3_per_m3 <= 0.0:
         return 0.0
-    T_F          = _c_to_f(temperature_c)
-    Rs_scf_STB   = gor_sc_m3_per_m3 * _M3M3_TO_SCFSTB
-    Pb_psia      = 18.2 * (
+    T_F        = _c_to_f(temperature_c)
+    Rs_scf_STB = gor_sc_m3_per_m3 * _M3M3_TO_SCFSTB
+    Pb_psia    = 18.2 * (
         (Rs_scf_STB / gas_gravity) ** 0.83
         * 10.0 ** (0.00091 * T_F - 0.0125 * api_gravity)
         - 1.4
@@ -151,11 +144,7 @@ def solution_gor_m3_per_m3(
     api_gravity: float,
     gor_sc_m3_per_m3: float,
 ) -> float:
-    """Solution GOR (m³_gas_sc / m³_oil_sc) via Standing (1947).
-
-    Returns GOR dissolved in oil at (P, T).  Clamped to [0, gor_sc]:
-    above the bubble point Rs = gor_sc (all gas dissolved).
-    """
+    """Solution GOR (m³/m³) via Standing (1947). Clamped to [0, gor_sc]."""
     if gor_sc_m3_per_m3 <= 0.0:
         return 0.0
     T_F        = _c_to_f(temperature_c)
@@ -165,8 +154,7 @@ def solution_gor_m3_per_m3(
         * (P_psia / 18.2 + 1.4) ** 1.205
         * 10.0 ** (0.0125 * api_gravity - 0.00091 * T_F)
     )
-    Rs_m3_per_m3 = Rs_scf_STB / _M3M3_TO_SCFSTB
-    return min(max(Rs_m3_per_m3, 0.0), gor_sc_m3_per_m3)
+    return min(max(Rs_scf_STB / _M3M3_TO_SCFSTB, 0.0), gor_sc_m3_per_m3)
 
 
 # ── Oil FVF — Standing (1947) ─────────────────────────────────────────────────
@@ -177,19 +165,220 @@ def oil_fvf(
     gas_gravity: float,
     api_gravity: float,
 ) -> float:
-    """Oil formation volume factor Bo (m³_res / m³_sc) via Standing (1947).
-
-    Args:
-        rs_m3_per_m3: Solution GOR at current conditions (m³/m³).
-        temperature_c: Temperature (°C).
-        gas_gravity: Gas specific gravity (air = 1).
-        api_gravity: Stock-tank oil API gravity (°API).
-    """
+    """Oil FVF Bo (m³_res/m³_sc) via Standing (1947)."""
     T_F         = _c_to_f(temperature_c)
     Rs_scf_STB  = rs_m3_per_m3 * _M3M3_TO_SCFSTB
     oil_gravity = 141.5 / (api_gravity + 131.5)
     F = Rs_scf_STB * (gas_gravity / oil_gravity) ** 0.5 + 1.25 * T_F
     return 0.972 + 0.000147 * F ** 1.175
+
+
+# ── Bubble point — Vasquez & Beggs (1980) ────────────────────────────────────
+
+def bubble_point_pa_vasquez_beggs(
+    gor_sc_m3_per_m3: float,
+    gas_gravity: float,
+    api_gravity: float,
+    temperature_c: float,
+) -> float:
+    """Bubble point pressure (Pa) via Vasquez & Beggs (1980)."""
+    if gor_sc_m3_per_m3 <= 0.0:
+        return 0.0
+    T_F        = _c_to_f(temperature_c)
+    Rs_scf_STB = gor_sc_m3_per_m3 * _M3M3_TO_SCFSTB
+    # Gravity correction to separator conditions (100 psia separator)
+    gg_norm = gas_gravity * (1.0 + 5.912e-5 * api_gravity * T_F * math.log10(100.0 / 114.7))
+    if api_gravity <= 30.0:
+        C1, C2, C3 = 0.0362, 1.0937, 25.7240
+    else:
+        C1, C2, C3 = 0.0178, 1.1870, 23.9310
+    Pb_psia = (Rs_scf_STB / (C1 * gg_norm * math.exp(C3 * api_gravity / (T_F + 459.67)))) ** (1.0 / C2)
+    return max(Pb_psia, 0.0) * _PSIA_TO_PA
+
+
+def solution_gor_m3_per_m3_vasquez_beggs(
+    pressure_pa: float,
+    temperature_c: float,
+    gas_gravity: float,
+    api_gravity: float,
+    gor_sc_m3_per_m3: float,
+) -> float:
+    """Solution GOR (m³/m³) via Vasquez & Beggs (1980). Clamped to [0, gor_sc]."""
+    if gor_sc_m3_per_m3 <= 0.0:
+        return 0.0
+    T_F    = _c_to_f(temperature_c)
+    P_psia = pressure_pa * _PA_TO_PSIA
+    T_R    = T_F + 459.67
+    gg_norm = gas_gravity * (1.0 + 5.912e-5 * api_gravity * T_F * math.log10(100.0 / 114.7))
+    if api_gravity <= 30.0:
+        C1, C2, C3 = 0.0362, 1.0937, 25.7240
+    else:
+        C1, C2, C3 = 0.0178, 1.1870, 23.9310
+    Rs_scf_STB = C1 * gg_norm * P_psia ** C2 * math.exp(C3 * api_gravity / T_R)
+    return min(max(Rs_scf_STB / _M3M3_TO_SCFSTB, 0.0), gor_sc_m3_per_m3)
+
+
+def oil_fvf_vasquez_beggs(
+    rs_m3_per_m3: float,
+    temperature_c: float,
+    gas_gravity: float,
+    api_gravity: float,
+) -> float:
+    """Oil FVF Bo (m³_res/m³_sc) via Vasquez & Beggs (1980)."""
+    T_F        = _c_to_f(temperature_c)
+    Rs_scf_STB = rs_m3_per_m3 * _M3M3_TO_SCFSTB
+    if api_gravity <= 30.0:
+        C1, C2, C3 = 4.677e-4, 1.751e-5, -1.811e-8
+    else:
+        C1, C2, C3 = 4.670e-4, 1.100e-5,  1.337e-9
+    return 1.0 + C1 * Rs_scf_STB + (T_F - 60.0) * (api_gravity / gas_gravity) * (C2 + C3 * Rs_scf_STB)
+
+
+# ── Bubble point — Al-Marhoun (1988) ─────────────────────────────────────────
+
+def bubble_point_pa_al_marhoun(
+    gor_sc_m3_per_m3: float,
+    gas_gravity: float,
+    api_gravity: float,
+    temperature_c: float,
+) -> float:
+    """Bubble point pressure (Pa) via Al-Marhoun (1988)."""
+    if gor_sc_m3_per_m3 <= 0.0:
+        return 0.0
+    T_R        = _c_to_r(temperature_c)
+    Rs_scf_STB = gor_sc_m3_per_m3 * _M3M3_TO_SCFSTB
+    oil_gravity = 141.5 / (api_gravity + 131.5)
+    Pb_psia = 5.38088e-3 * Rs_scf_STB ** 0.715082 * gas_gravity ** (-1.87784) * oil_gravity ** 3.1437 * T_R ** 1.32657
+    return max(Pb_psia, 0.0) * _PSIA_TO_PA
+
+
+def solution_gor_m3_per_m3_al_marhoun(
+    pressure_pa: float,
+    temperature_c: float,
+    gas_gravity: float,
+    api_gravity: float,
+    gor_sc_m3_per_m3: float,
+) -> float:
+    """Solution GOR (m³/m³) via Al-Marhoun (1988). Clamped to [0, gor_sc]."""
+    if gor_sc_m3_per_m3 <= 0.0:
+        return 0.0
+    T_R         = _c_to_r(temperature_c)
+    P_psia      = pressure_pa * _PA_TO_PSIA
+    oil_gravity = 141.5 / (api_gravity + 131.5)
+    # Invert the Al-Marhoun Pb equation for Rs
+    Rs_scf_STB = (
+        P_psia / (5.38088e-3 * gas_gravity ** (-1.87784) * oil_gravity ** 3.1437 * T_R ** 1.32657)
+    ) ** (1.0 / 0.715082)
+    return min(max(Rs_scf_STB / _M3M3_TO_SCFSTB, 0.0), gor_sc_m3_per_m3)
+
+
+def oil_fvf_al_marhoun(
+    rs_m3_per_m3: float,
+    temperature_c: float,
+    gas_gravity: float,
+    api_gravity: float,
+) -> float:
+    """Oil FVF Bo (m³_res/m³_sc) via Al-Marhoun (1988)."""
+    T_R        = _c_to_r(temperature_c)
+    Rs_scf_STB = rs_m3_per_m3 * _M3M3_TO_SCFSTB
+    oil_gravity = 141.5 / (api_gravity + 131.5)
+    F = Rs_scf_STB ** 0.74239 * gas_gravity ** 0.323294 * oil_gravity ** (-1.20204)
+    return 0.497069 + 8.62963e-4 * T_R + 1.82594e-3 * F + 3.18099e-6 * F ** 2
+
+
+# ── Bubble point — Glaso (1980) ───────────────────────────────────────────────
+
+def bubble_point_pa_glaso(
+    gor_sc_m3_per_m3: float,
+    gas_gravity: float,
+    api_gravity: float,
+    temperature_c: float,
+) -> float:
+    """Bubble point pressure (Pa) via Glaso (1980)."""
+    if gor_sc_m3_per_m3 <= 0.0:
+        return 0.0
+    T_F        = _c_to_f(temperature_c)
+    Rs_scf_STB = gor_sc_m3_per_m3 * _M3M3_TO_SCFSTB
+    X = (Rs_scf_STB / gas_gravity) ** 0.816 * T_F ** 0.172 / api_gravity ** 0.989
+    log_X = math.log10(max(X, 1e-30))
+    Pb_psia = 10.0 ** (1.7669 + 1.7447 * log_X - 0.30218 * log_X ** 2)
+    return max(Pb_psia, 0.0) * _PSIA_TO_PA
+
+
+def solution_gor_m3_per_m3_glaso(
+    pressure_pa: float,
+    temperature_c: float,
+    gas_gravity: float,
+    api_gravity: float,
+    gor_sc_m3_per_m3: float,
+) -> float:
+    """Solution GOR (m³/m³) via Glaso (1980). Clamped to [0, gor_sc]."""
+    if gor_sc_m3_per_m3 <= 0.0:
+        return 0.0
+    T_F    = _c_to_f(temperature_c)
+    P_psia = pressure_pa * _PA_TO_PSIA
+    # Solve Glaso Pb equation for Rs: Pb = 10^(A + B*logX - C*logX²), X = (Rs/gg)^0.816 * T_F^0.172 / API^0.989
+    # Given P_psia, invert for X then for Rs.
+    log_P = math.log10(max(P_psia, 1e-6))
+    # Quadratic in log_X: 0.30218 logX² - 1.7447 logX + (1.7669 - log_P) = 0
+    a_q, b_q, c_q = 0.30218, -1.7447, 1.7669 - log_P
+    discriminant = b_q ** 2 - 4.0 * a_q * c_q
+    if discriminant < 0.0:
+        log_X = -b_q / (2.0 * a_q)
+    else:
+        log_X = (-b_q - math.sqrt(discriminant)) / (2.0 * a_q)
+    X = 10.0 ** log_X
+    Rs_scf_STB = gas_gravity * (X * api_gravity ** 0.989 / T_F ** 0.172) ** (1.0 / 0.816)
+    return min(max(Rs_scf_STB / _M3M3_TO_SCFSTB, 0.0), gor_sc_m3_per_m3)
+
+
+def oil_fvf_glaso(
+    rs_m3_per_m3: float,
+    temperature_c: float,
+    gas_gravity: float,
+    api_gravity: float,
+) -> float:
+    """Oil FVF Bo (m³_res/m³_sc) via Glaso (1980)."""
+    T_F         = _c_to_f(temperature_c)
+    Rs_scf_STB  = rs_m3_per_m3 * _M3M3_TO_SCFSTB
+    oil_gravity = 141.5 / (api_gravity + 131.5)
+    F = Rs_scf_STB * (gas_gravity / oil_gravity) ** 0.526 + 0.968 * T_F
+    log_F = math.log10(max(F, 1e-30))
+    Bo_star = 10.0 ** (-6.58511 + 2.91329 * log_F - 0.27683 * log_F ** 2)
+    return 1.0 + Bo_star
+
+
+# ── PVT correlation dispatcher ────────────────────────────────────────────────
+
+_CORRELATIONS: dict[str, dict] = {
+    "STANDING": {
+        "pb":  bubble_point_pa,
+        "rs":  solution_gor_m3_per_m3,
+        "bo":  oil_fvf,
+    },
+    "VASQUEZ_BEGGS": {
+        "pb":  bubble_point_pa_vasquez_beggs,
+        "rs":  solution_gor_m3_per_m3_vasquez_beggs,
+        "bo":  oil_fvf_vasquez_beggs,
+    },
+    "AL_MARHOUN": {
+        "pb":  bubble_point_pa_al_marhoun,
+        "rs":  solution_gor_m3_per_m3_al_marhoun,
+        "bo":  oil_fvf_al_marhoun,
+    },
+    "GLASO": {
+        "pb":  bubble_point_pa_glaso,
+        "rs":  solution_gor_m3_per_m3_glaso,
+        "bo":  oil_fvf_glaso,
+    },
+}
+
+SUPPORTED_BLACK_OIL_CORRELATIONS: dict[str, str] = {
+    "STANDING":      "Standing (1947) — default, valid worldwide",
+    "VASQUEZ_BEGGS": "Vasquez & Beggs (1980) — good for API 15–60",
+    "AL_MARHOUN":    "Al-Marhoun (1988) — Middle-East oils",
+    "GLASO":         "Glaso (1980) — North Sea oils",
+}
 
 
 # ── Gas FVF ───────────────────────────────────────────────────────────────────
@@ -325,13 +514,16 @@ def compute_pvt(
     gas_gravity: float,
     gor_sc_m3_per_m3: float,
     wor_sc_m3_per_m3: float,
+    correlation: str = "STANDING",
+    gas_specific_heat_j_per_kg_k: float = 2_200.0,
+    gas_thermal_conductivity_w_per_mk: float = 0.035,
 ) -> "BlackOilPVTState":
     """Compute the full black-oil PVT state for an explicit fluid composition.
 
-    This is the functional core used by :class:`BlackOilFluid` and by the
-    solver's per-pipe composition propagation.  All parameters are explicit so
-    the function can be called with any composition, not just the one stored
-    in a ``BlackOilFluid`` instance.
+    All parameters are explicit so the function can be called with any
+    composition, not just the one stored in a ``BlackOilFluid`` instance.
+    The ``correlation`` key selects which Pb/Rs/Bo correlation set to use
+    (see :data:`SUPPORTED_BLACK_OIL_CORRELATIONS`).
     """
     from .dead_oil import (
         dead_oil_density_kg_per_m3,
@@ -340,12 +532,14 @@ def compute_pvt(
         dead_oil_viscosity_pa_s,
     )
 
+    corr = _CORRELATIONS.get(correlation, _CORRELATIONS["STANDING"])
+
     P = max(pressure_pa, 1.0)
     T = temperature_c
 
-    Pb = bubble_point_pa(gor_sc_m3_per_m3, gas_gravity, api_gravity, T)
-    Rs = solution_gor_m3_per_m3(P, T, gas_gravity, api_gravity, gor_sc_m3_per_m3)
-    Bo = oil_fvf(Rs, T, gas_gravity, api_gravity)
+    Pb = corr["pb"](gor_sc_m3_per_m3, gas_gravity, api_gravity, T)
+    Rs = corr["rs"](P, T, gas_gravity, api_gravity, gor_sc_m3_per_m3)
+    Bo = corr["bo"](Rs, T, gas_gravity, api_gravity)
 
     has_gas = gor_sc_m3_per_m3 > 0.0
     if has_gas:
@@ -383,11 +577,11 @@ def compute_pvt(
     mu_m   = alpha_oil * mu_oil + alpha_gas * mu_gas + alpha_wtr * mu_wtr
 
     cp_oil = dead_oil_specific_heat_j_per_kg_k(api_gravity, T)
-    cp_gas = 2_200.0
+    cp_gas = gas_specific_heat_j_per_kg_k
     cp_wtr = 4_182.0
 
     k_oil = dead_oil_thermal_conductivity_w_per_m_k(api_gravity, T)
-    k_gas = 0.035
+    k_gas = gas_thermal_conductivity_w_per_mk
     k_wtr = 0.62
 
     w_oil = alpha_oil * rho_oil / rho_m
@@ -496,6 +690,9 @@ class BlackOilFluid(FluidModel):
     wor_sc_m3_per_m3: float
     reference_pressure_pa: float = 101_325.0
     reference_temperature_c: float = 20.0
+    correlation: str = "STANDING"
+    gas_specific_heat_j_per_kg_k: float = 2_200.0
+    gas_thermal_conductivity_w_per_mk: float = 0.035
 
     def __post_init__(self) -> None:
         if self.api_gravity <= -131.5:
@@ -506,6 +703,11 @@ class BlackOilFluid(FluidModel):
             raise ValueError(f"gor_sc_m3_per_m3 must be >= 0; got {self.gor_sc_m3_per_m3}")
         if self.wor_sc_m3_per_m3 < 0.0:
             raise ValueError(f"wor_sc_m3_per_m3 must be >= 0; got {self.wor_sc_m3_per_m3}")
+        if self.correlation not in SUPPORTED_BLACK_OIL_CORRELATIONS:
+            raise ValueError(
+                f"Unknown black-oil correlation '{self.correlation}'. "
+                f"Valid options: {list(SUPPORTED_BLACK_OIL_CORRELATIONS)}"
+            )
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
@@ -533,6 +735,9 @@ class BlackOilFluid(FluidModel):
             self.gas_gravity,
             self.gor_sc_m3_per_m3,
             self.wor_sc_m3_per_m3,
+            self.correlation,
+            self.gas_specific_heat_j_per_kg_k,
+            self.gas_thermal_conductivity_w_per_mk,
         )
 
     # ── FluidModel interface ───────────────────────────────────────────────────

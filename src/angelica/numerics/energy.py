@@ -128,7 +128,7 @@ def solve_energy_system(
             T_amb = T_ref  # U=0 so this is unused; kept for structural symmetry with pipe branch
         else:
             assert isinstance(ps, PipeState)
-            U = ps.component.heat_transfer_coefficient_w_per_m2k
+            U = ps.component.u_overall_w_per_m2k
             T_amb = ps.component.ambient_temperature_c
 
         T_repr = ps.temperature_c if ps.temperature_c is not None else T_ref
