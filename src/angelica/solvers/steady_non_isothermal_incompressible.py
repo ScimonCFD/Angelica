@@ -171,7 +171,9 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
 
         # Final synchronous pass — always runs (converged or not) so that the
         # reported flow field and temperature field come from the same solve.
-        self._hydraulic_solver._initialise_pressure_field(network_state, case)
+        # Note: pressure field is NOT re-initialised here; the converged (or
+        # best-so-far) pressure state is used as the starting point so that the
+        # final hydraulic solve needs only 1–2 iterations to tighten residuals.
         lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
             network_state,
             fluid_model,

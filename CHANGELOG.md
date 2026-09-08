@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.7.3] — 2026-09-08
+
+### Bug fixes: final-pass pressure re-initialisation, uninitialized variable, water transport properties
+
+**1. Pressure field re-initialisation before final synchronous pass (non-isothermal, compressible, black-oil)**
+All three outer-loop solvers called `_initialise_pressure_field()` a second time
+just before the final synchronous hydraulic pass, discarding the converged
+pressure solution and restarting from the initial linear guess.  The final pass
+now starts from the converged state, reaching the same residual tolerance in
+1–2 iterations instead of the full iteration budget.
+
+**2. Uninitialized `effective_fluid` in black-oil solver**
+`effective_fluid` was assigned only inside the outer iteration loop.  If
+`settings.max_outer_iterations == 0`, the variable was never assigned and the
+final synchronous pass would raise `UnboundLocalError`.  It is now initialised
+to `fluid_model` before the loop.
+
+**3. Free-water μ, Cp, k not blended in compositional three-phase model**
+When free liquid water was present, the returned viscosity, specific heat, and
+thermal conductivity used only the HC-flash result — the water phase was
+invisible to transport-property calculations (only density got the three-phase
+volumetric average).  These are now volume-fraction-weighted blends:
+`φ_HC·prop_HC + φ_water·prop_water`.  Effect is significant at high water
+cuts (water μ ≈ 1×10⁻³ Pa·s vs gas μ ≈ 2×10⁻⁵ Pa·s; water k = 0.60 W/m·K
+vs gas k ≈ 0.03 W/m·K).
+
 ## [1.7.2] — 2026-09-07
 
 ### Five equations of state now available for compositional simulations

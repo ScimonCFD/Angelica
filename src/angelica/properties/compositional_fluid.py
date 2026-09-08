@@ -222,11 +222,24 @@ def _flash_properties(
         # Overall vapour fraction: HC vapour + water vapour (moles per mole of feed)
         bulk_VF = VF_hc * sum_hc + n_wv
 
+        # Volume-fraction-weighted μ, Cp, k blending with free liquid water.
+        # When n_wl ≈ 0 the correction vanishes; when WC is significant it
+        # matters (water μ ≈ 1e-3 Pa·s >> gas μ ≈ 2e-5 Pa·s).
+        if V_tot > 1e-30 and V_wat > 1e-30:
+            mu_wl  = water_liquid_viscosity_pa_s(T_K)
+            phi_hc = (V_gas + V_liq) / V_tot
+            phi_w  = V_wat / V_tot
+            bulk_mu = phi_hc * hc_mu + phi_w * mu_wl
+            bulk_Cp = phi_hc * hc_Cp + phi_w * 4182.0
+            bulk_k  = phi_hc * hc_k  + phi_w * 0.60
+        else:
+            bulk_mu, bulk_Cp, bulk_k = hc_mu, hc_Cp, hc_k
+
         return (
             max(bulk_rho, 0.001),
-            max(hc_mu, 1e-10),
-            max(hc_Cp, 1.0),
-            max(hc_k, 1e-6),
+            max(bulk_mu, 1e-10),
+            max(bulk_Cp, 1.0),
+            max(bulk_k, 1e-6),
             bulk_VF,
             n_wl,
         )

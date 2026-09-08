@@ -10,6 +10,7 @@ from angelica.core.network import build_network_state
 from angelica.core.results import ComponentFlowResult, SolveResult
 from angelica.core.settings import SolverSettings
 from angelica.core.state import HeatSourceState, NetworkState, PipeState
+from angelica.properties.base import FluidModel
 from angelica.properties.black_oil import BlackOilComposition
 
 from .base import BaseSolver
@@ -353,6 +354,7 @@ class SteadyBlackOilSolver(BaseSolver):
         # pipe_comps: per-pipe composition (None → use global fluid_model)
         pipe_comps: dict[int, BlackOilComposition] | None = None
         node_comp_prev: dict[int, BlackOilComposition] | None = None
+        effective_fluid: FluidModel = fluid_model  # default; updated inside loop when use_per_inlet
 
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
         for _outer in range(settings.max_outer_iterations):
@@ -428,7 +430,7 @@ class SteadyBlackOilSolver(BaseSolver):
         # ── final synchronous pass ────────────────────────────────────────────
         # Always runs so that the reported flow field and temperature field
         # come from the same solve with the final compositions and PVT.
-        self._hydraulic_solver._initialise_pressure_field(network_state, case)
+        # Pressure field is kept as-is (converged state) — no re-initialisation.
         lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
             network_state, effective_fluid, progress_callback=progress_callback
         )

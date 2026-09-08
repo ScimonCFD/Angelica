@@ -179,7 +179,6 @@ class SteadyCompressibleSolver(BaseSolver):
             if temperature_converged and density_converged:
                 break
 
-        self._hydraulic_solver._initialise_pressure_field(network_state, case)
         lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
             network_state, fluid_model, progress_callback=progress_callback
         )
