@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.8.4] — 2026-09-09
+
+### Tutorial 05 (compressible) — valve with Joule-Thomson cooling
+
+New tutorial `steady_compressible/05_valve_jt_effect` demonstrates isenthalpic
+expansion through a valve in a compressible gas network.  A methane pipeline
+at 70 bar / 40 °C flows through a valve (K = 50) down to 50 bar.  The tutorial
+compares Peng-Robinson EOS (real gas, JT cooling ≈ −2.6 °C) against ideal gas
+(ΔT ≈ 0) to illustrate the physical difference.  Includes GUI JSON with
+`definition_mode: "gas_pr"` for use in the graphical interface.
+
+### Fix: Tutorial 07 GUI JSON used string component IDs
+
+`07_composite_u_loop.gui.json` had string component IDs (`"A"` – `"E"`) instead
+of integers, causing `io.py` to raise `ValueError` when loading the scene.
+IDs corrected to integers 1–5.
+
 ## [1.8.3] — 2026-09-08
 
 ### Isenthalpic fitting treatment for compressible flow

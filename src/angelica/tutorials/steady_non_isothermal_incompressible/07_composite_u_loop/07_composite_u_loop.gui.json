@@ -84,7 +84,7 @@
       "end_node_id": 2,
       "components": [
         {
-          "component_id": "A",
+          "component_id": 1,
           "component_type": "pipe",
           "properties": {
             "length_m": "200.0",
@@ -111,7 +111,7 @@
       "end_node_id": 3,
       "components": [
         {
-          "component_id": "B",
+          "component_id": 2,
           "component_type": "pipe",
           "properties": {
             "length_m": "800.0",
@@ -138,7 +138,7 @@
       "end_node_id": 4,
       "components": [
         {
-          "component_id": "C",
+          "component_id": 3,
           "component_type": "pipe",
           "properties": {
             "length_m": "800.0",
@@ -165,7 +165,7 @@
       "end_node_id": 4,
       "components": [
         {
-          "component_id": "D",
+          "component_id": 4,
           "component_type": "pipe",
           "properties": {
             "length_m": "1200.0",
@@ -192,7 +192,7 @@
       "end_node_id": 5,
       "components": [
         {
-          "component_id": "E",
+          "component_id": 5,
           "component_type": "pipe",
           "properties": {
             "length_m": "200.0",
