@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.8.5] — 2026-09-09
+
+### Pump shaft-work heating in thermal solvers
+
+Pumps now correctly raise the fluid temperature in the energy equation.
+Previously pumps were treated like fittings (T_out = T_in), which violated
+the first law of thermodynamics.
+
+The shaft work per unit mass is w = ΔP / ρ (J/kg), where ΔP = P_out − P_in
+is taken from the converged hydraulic solution.
+
+- **Incompressible** (`ThermalFluid`): T_out = T_in + ΔP / (ρ · Cp).
+  For crude oil (ρ = 870 kg/m³, Cp = 2000 J/(kg·K)) at ΔP = 5 bar:
+  ΔT ≈ 0.29 °C.
+- **Compressible** (`CompressibleFluid`): h_out = h(T_in, P_in) + w,
+  then T_out is resolved by Newton inversion of h(T, P_out) = h_out.
+
+In both cases T_out is injected as an explicit RHS term in the downstream
+junction mixing equation, consistent with the fitting implementation
+introduced in v1.8.1–v1.8.3.
+
 ## [1.8.4] — 2026-09-09
 
 ### Tutorial 05 (compressible) — valve with Joule-Thomson cooling

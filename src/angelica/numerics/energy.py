@@ -259,12 +259,14 @@ def solve_energy_system(
             outflow_total[junction_end_row] += abs_mdot_cp
 
     # ── passthrough devices (fittings, pumps) ────────────────────────────
-    # Incompressible (ThermalFluid): T_out = T_in — added implicitly to the
-    # mixing matrix so the downstream junction is not degenerate.
-    # Compressible (CompressibleFluid with enthalpy_j_per_kg): isenthalpic
-    # expansion means T_out ≠ T_in.  T_out is computed from h(T_in, P_in) =
-    # h(T_out, P_out) and injected as an explicit RHS term so that at
-    # convergence the isenthalpic condition is satisfied exactly.
+    # Fittings — adiabatic, no shaft work:
+    #   Incompressible: T_out = T_in (implicit matrix term).
+    #   Compressible:   isenthalpic, h(T_in,P_in) = h(T_out,P_out).
+    # Pumps — shaft work w = ΔP/ρ (J/kg) added to the fluid:
+    #   Incompressible: T_out = T_in + ΔP/(ρ·Cp).
+    #   Compressible:   h_out = h(T_in,P_in) + ΔP/ρ, then invert for T_out.
+    # In all cases where T_out ≠ T_in the downstream contribution is injected
+    # as an explicit RHS term so the mixing equation remains valid.
     for ps in network_state.components:
         if not isinstance(ps, (FittingState, PumpState)):
             continue
@@ -281,23 +283,37 @@ def solve_energy_system(
         cp   = fluid_model.specific_heat_for_link(_TempCarrier(T_up))
         abs_mdot_cp = abs(mdot) * cp
 
-        if _fluid_has_enthalpy:
-            # Isenthalpic: resolve T_out from h(T_in, P_in) = h(T_out, P_out)
-            P_up   = getattr(up_node,   "pressure_pa", None) or fluid_model.reference_pressure_pa
-            P_down = getattr(down_node, "pressure_pa", None) or fluid_model.reference_pressure_pa
+        P_up   = getattr(up_node,   "pressure_pa", None) or fluid_model.reference_pressure_pa
+        P_down = getattr(down_node, "pressure_pa", None) or fluid_model.reference_pressure_pa
+
+        if isinstance(ps, PumpState):
+            # Shaft work per unit mass: w = ΔP / ρ (J/kg)
+            rho = fluid_model.density_for_link(ps)
+            w_shaft = (P_down - P_up) / rho
+            if _fluid_has_enthalpy:
+                h_out = fluid_model.enthalpy_j_per_kg(P_up, T_up) + w_shaft
+                T_out = fluid_model.temperature_from_enthalpy(h_out, P_down, T_guess_c=T_up)
+                cp_out = fluid_model._specific_heat_fn(P_down, T_out)
+            else:
+                T_out = T_up + w_shaft / cp
+                cp_out = cp
+            abs_mdot_cp_out = abs(mdot) * cp_out
+            outflow_total[up_idx]           += abs_mdot_cp
+            explicit_inflow_total[down_idx] += abs_mdot_cp_out
+            explicit_rhs[down_idx]          -= abs_mdot_cp_out * T_out
+
+        elif _fluid_has_enthalpy:
+            # Compressible fitting: isenthalpic
             h_in   = fluid_model.enthalpy_j_per_kg(P_up, T_up)
             T_out  = fluid_model.temperature_from_enthalpy(h_in, P_down, T_guess_c=T_up)
             cp_out = fluid_model._specific_heat_fn(P_down, T_out)
             abs_mdot_cp_out = abs(mdot) * cp_out
-            # Upstream node loses ṁ·Cp (thermal drain)
-            outflow_total[up_idx] += abs_mdot_cp
-            # Downstream node receives ṁ·Cp·T_out as an explicit RHS term.
-            # The mixing equation at down_idx becomes:
-            #   -denom·T_down + Σ(implicit inflows) = -ṁ·Cp·T_out
+            outflow_total[up_idx]           += abs_mdot_cp
             explicit_inflow_total[down_idx] += abs_mdot_cp_out
             explicit_rhs[down_idx]          -= abs_mdot_cp_out * T_out
+
         else:
-            # Incompressible: T_out = T_in — add as implicit matrix term
+            # Incompressible fitting: T_out = T_in (implicit matrix term)
             inflow[down_idx].append((up_idx, abs_mdot_cp))
             outflow_total[up_idx] += abs_mdot_cp
 
