@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.8.6] — 2026-09-23
+
+### Unit tests for device thermal physics (fittings and pumps)
+
+Added three regression tests that lock in the physics corrections from
+v1.8.1–v1.8.5.  Without these, a future edit to `energy.py` could silently
+revert the correct behaviour.
+
+- `test_fitting_is_adiabatic_incompressible` — fitting must not change fluid
+  temperature (T_out = T_in) in the non-isothermal incompressible solver.
+- `test_pump_heating_matches_shaft_work_incompressible` — pump must raise
+  temperature by exactly ΔT = ΔP / (ρ · Cp).
+- `test_fitting_isenthalpic_enthalpy_conserved` — fitting must conserve
+  enthalpy h(T_in, P_in) ≈ h(T_out, P_out) in the compressible solver
+  (Peng-Robinson EOS, methane at 70 bar).
+
+Test count: 257 → 260.
+
 ## [1.8.5] — 2026-09-09
 
 ### Pump shaft-work heating in thermal solvers

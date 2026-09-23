@@ -17,11 +17,13 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from angelica import (
+    Fitting,
     FlowBoundary,
     NetworkCase,
     NonIsothermalSolverSettings,
     Pipe,
     PressureBoundary,
+    Pump,
     SteadyNonIsothermalIncompressibleSolver,
     ThermalBoundary,
     ThermalFluid,
@@ -664,4 +666,108 @@ def test_cengel_example_8_3_oil_pipeline_through_lake():
     T_out = result.node_temperatures_c[2]
     assert abs(T_out - 19.74) < 0.05, (
         f"Cengel Ex. 8-3: T_out = {T_out:.4f} °C, expected 19.74 °C"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Device thermal physics: fittings and pumps
+# ---------------------------------------------------------------------------
+
+_RHO_OIL = 870.0
+_CP_OIL  = 2000.0
+
+_OIL_FLUID = ThermalFluid.from_constants(
+    density_kg_per_m3=_RHO_OIL,
+    viscosity_pa_s=5e-3,
+    specific_heat_j_per_kg_k=_CP_OIL,
+    thermal_conductivity_w_per_m_k=0.14,
+)
+
+def _adiabatic_pipe(start, end, *, cid):
+    return Pipe(
+        start_node=start, end_node=end,
+        diameter_m=0.10, length_m=100.0,
+        absolute_roughness_m=4.6e-5,
+        heat_transfer_coefficient_w_per_m2k=0.0,
+        ambient_temperature_c=20.0,
+        n_thermal_segments=3,
+        component_id=cid,
+    )
+
+
+def test_fitting_is_adiabatic_incompressible():
+    """Fitting must not change fluid temperature (T_out = T_in).
+
+    Source → adiabatic pipe → Fitting(K=5) → adiabatic pipe → Sink.
+    Both pipes have U = 0, so the only device between the two junction
+    nodes is the fitting.  At convergence T[node2] must equal T[node3].
+    """
+    case = NetworkCase(
+        name="fitting_adiabatic",
+        fluid_model=_OIL_FLUID,
+        node_ids=(1, 2, 3, 4),
+        pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=10e5),),
+        pressure_outlets=(PressureBoundary(node_id=4, pressure_pa=1e5),),
+        thermal_inlets=(
+            ThermalBoundary(node_id=1, bc_type="fixed_temperature", temperature_c=80.0),
+            ThermalBoundary(node_id=4, bc_type="zero_gradient"),
+        ),
+        components=(
+            _adiabatic_pipe(1, 2, cid="P1"),
+            Fitting(start_node=2, end_node=3, diameter_m=0.10,
+                    loss_coefficient=5.0, component_id="V"),
+            _adiabatic_pipe(3, 4, cid="P2"),
+        ),
+    )
+    result = SteadyNonIsothermalIncompressibleSolver().solve(case)
+
+    assert result.converged
+    T2 = result.node_temperatures_c[2]
+    T3 = result.node_temperatures_c[3]
+    assert abs(T3 - T2) < 1e-4, (
+        f"Fitting changed temperature: T_in={T2:.6f} °C, T_out={T3:.6f} °C, ΔT={T3-T2:.2e} °C"
+    )
+
+
+def test_pump_heating_matches_shaft_work_incompressible():
+    """Pump must raise fluid temperature by ΔT = ΔP / (ρ · Cp).
+
+    Source → adiabatic pipe → Pump → adiabatic pipe → Sink (higher pressure).
+    Both pipes have U = 0 so the only temperature change is from the pump's
+    shaft work.  At convergence: T[node3] - T[node2] = (P3 - P2) / (ρ · Cp).
+    """
+    case = NetworkCase(
+        name="pump_heating",
+        fluid_model=_OIL_FLUID,
+        node_ids=(1, 2, 3, 4),
+        pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=1e5),),
+        pressure_outlets=(PressureBoundary(node_id=4, pressure_pa=6e5),),
+        thermal_inlets=(
+            ThermalBoundary(node_id=1, bc_type="fixed_temperature", temperature_c=80.0),
+            ThermalBoundary(node_id=4, bc_type="zero_gradient"),
+        ),
+        components=(
+            _adiabatic_pipe(1, 2, cid="P1"),
+            Pump(
+                start_node=2, end_node=3, diameter_m=0.10,
+                curve_points_q_head=((0.0, 60.0), (0.05, 55.0), (0.15, 40.0), (0.3, 0.0)),
+                component_id="B",
+            ),
+            _adiabatic_pipe(3, 4, cid="P2"),
+        ),
+    )
+    result = SteadyNonIsothermalIncompressibleSolver().solve(case)
+
+    assert result.converged
+    P2 = result.node_pressures_pa[2]
+    P3 = result.node_pressures_pa[3]
+    T2 = result.node_temperatures_c[2]
+    T3 = result.node_temperatures_c[3]
+
+    dT_actual   = T3 - T2
+    dT_expected = (P3 - P2) / (_RHO_OIL * _CP_OIL)
+
+    assert abs(dT_actual - dT_expected) < 1e-4, (
+        f"Pump ΔT = {dT_actual:.6f} °C, expected {dT_expected:.6f} °C "
+        f"(ΔP = {(P3-P2)/1e5:.3f} bar)"
     )

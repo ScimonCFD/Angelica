@@ -12,6 +12,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from angelica import (
     CompressibleFluid,
+    Fitting,
     IdealGasEOS,
     NetworkCase,
     PengRobinsonEOS,
@@ -436,6 +437,71 @@ class QuantitativeBenchmarks(unittest.TestCase):
         p_mid_solver = result.node_pressures_pa[2]
         p_mid_ref = math.sqrt(0.5 * (p1 ** 2 + p2 ** 2))
         self.assertAlmostEqual(p_mid_solver, p_mid_ref, delta=500.0)
+
+    def test_fitting_isenthalpic_enthalpy_conserved(self):
+        """Fitting must conserve enthalpy: h(T_in, P_in) ≈ h(T_out, P_out).
+
+        Methane (PR EOS) at 70 bar / 40 °C flows through a valve with K=50.
+        The solver computes T_out from the isenthalpic condition; at convergence
+        h_in and h_out must agree to within a small residual from the outer loop
+        tolerance (temperature tolerance = 0.01 K → Δh < ~30 J/kg).
+        """
+        eos = PengRobinsonEOS(
+            molecular_weight_kg_per_mol=0.016043,
+            critical_temperature_k=190.564,
+            critical_pressure_pa=4_599_200.0,
+            acentric_factor=0.01141,
+        )
+        fluid = CompressibleFluid.from_constants(
+            eos=eos,
+            viscosity_pa_s=1.1e-5,
+            specific_heat_j_per_kg_k=2220.0,
+            thermal_conductivity_w_per_m_k=0.033,
+            reference_pressure_pa=60e5,
+            reference_temperature_c=40.0,
+        )
+        case = NetworkCase(
+            name="fitting_isenthalpic",
+            fluid_model=fluid,
+            node_ids=(1, 2, 3, 4),
+            pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=70e5),),
+            pressure_outlets=(PressureBoundary(node_id=4, pressure_pa=50e5),),
+            thermal_inlets=(
+                ThermalBoundary(node_id=1, bc_type="fixed_temperature", temperature_c=40.0),
+                ThermalBoundary(node_id=4, bc_type="zero_gradient"),
+            ),
+            components=(
+                Pipe(start_node=1, end_node=2, diameter_m=0.15, length_m=500.0,
+                     absolute_roughness_m=4.6e-5,
+                     heat_transfer_coefficient_w_per_m2k=5.0,
+                     ambient_temperature_c=10.0, n_thermal_segments=5,
+                     component_id="P1"),
+                Fitting(start_node=2, end_node=3, diameter_m=0.15,
+                        loss_coefficient=50.0, component_id="V"),
+                Pipe(start_node=3, end_node=4, diameter_m=0.15, length_m=500.0,
+                     absolute_roughness_m=4.6e-5,
+                     heat_transfer_coefficient_w_per_m2k=5.0,
+                     ambient_temperature_c=10.0, n_thermal_segments=5,
+                     component_id="P2"),
+            ),
+        )
+        result = SteadyCompressibleSolver().solve(case)
+        self.assertTrue(result.converged)
+
+        P2 = result.node_pressures_pa[2]
+        P3 = result.node_pressures_pa[3]
+        T2 = result.node_temperatures_c[2]
+        T3 = result.node_temperatures_c[3]
+
+        h_in  = fluid.enthalpy_j_per_kg(P2, T2)
+        h_out = fluid.enthalpy_j_per_kg(P3, T3)
+
+        # Relative error must be below 0.1 % (outer loop tolerance = 0.01 K,
+        # Cp = 2220 J/(kg·K) → max residual ~22 J/kg → rel ~ 1e-3 on h ~ 21000 J/kg)
+        rel_err = abs(h_out - h_in) / max(abs(h_in), 1.0)
+        self.assertLess(rel_err, 1e-3,
+            f"Fitting enthalpy not conserved: h_in={h_in:.4f}, h_out={h_out:.4f}, "
+            f"rel_err={rel_err:.2e}")
 
     def test_single_pipe_heat_loss_ntu(self):
         """Outlet temperature must equal T_amb+(T_in-T_amb)·exp(-NTU) to machine precision.
