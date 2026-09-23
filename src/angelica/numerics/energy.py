@@ -267,15 +267,15 @@ def solve_energy_system(
     #   Compressible:   h_out = h(T_in,P_in) + ΔP/ρ, then invert for T_out.
     # In all cases where T_out ≠ T_in the downstream contribution is injected
     # as an explicit RHS term so the mixing equation remains valid.
-    for ps in network_state.components:
-        if not isinstance(ps, (FittingState, PumpState)):
+    for dev in network_state.components:
+        if not isinstance(dev, (FittingState, PumpState)):
             continue
-        mdot = float(ps.mass_flow_kg_per_s)
+        mdot = float(dev.mass_flow_kg_per_s)
         if abs(mdot) < 1e-30:
             continue
 
-        up_node   = ps.start_node if mdot >= 0.0 else ps.end_node
-        down_node = ps.end_node   if mdot >= 0.0 else ps.start_node
+        up_node   = dev.start_node if mdot >= 0.0 else dev.end_node
+        down_node = dev.end_node   if mdot >= 0.0 else dev.start_node
         up_idx    = node_index[up_node.node_id]
         down_idx  = node_index[down_node.node_id]
 
@@ -286,9 +286,9 @@ def solve_energy_system(
         P_up   = getattr(up_node,   "pressure_pa", None) or fluid_model.reference_pressure_pa
         P_down = getattr(down_node, "pressure_pa", None) or fluid_model.reference_pressure_pa
 
-        if isinstance(ps, PumpState):
+        if isinstance(dev, PumpState):
             # Shaft work per unit mass: w = ΔP / ρ (J/kg)
-            rho = fluid_model.density_for_link(ps)
+            rho = fluid_model.density_for_link(dev)
             w_shaft = (P_down - P_up) / rho
             if _fluid_has_enthalpy:
                 h_out = fluid_model.enthalpy_j_per_kg(P_up, T_up) + w_shaft
