@@ -65,7 +65,7 @@ select = ["E4", "E7", "E9", "F", "I", "C4"]
 ignore = []
 
 [tool.ruff.lint.per-file-ignores]
-"src/angelica/tutorials/**" = ["E402", "F841"]
+"src/angelica/tutorials/**" = ["E402", "E701", "F841"]
 "tests/**" = ["E402", "F841"]
 
 [tool.mypy]
