@@ -46,27 +46,27 @@ T_AMB   = 10.0   # °C — cold ambient (buried / exposed)
 # ── Composite layer parameters ────────────────────────────────────────────────
 # Insulated: carbon-steel pipe + 50 mm mineral wool + cladding
 # R = 1/500 + 0.008/50 + 0.05/0.04 + 1/10 ≈ 1.352 m²K/W  → U ≈ 0.74 W/m²K
-_INSULATED = dict(
-    inner_film_coefficient_w_per_m2k=500.0,
-    wall_thickness_m=0.008,
-    wall_thermal_conductivity_w_per_mk=50.0,
-    insulation_thickness_m=0.050,
-    insulation_thermal_conductivity_w_per_mk=0.04,
-    outer_film_coefficient_w_per_m2k=10.0,
-    ambient_temperature_c=T_AMB,
-)
+_INSULATED = {
+    "inner_film_coefficient_w_per_m2k": 500.0,
+    "wall_thickness_m": 0.008,
+    "wall_thermal_conductivity_w_per_mk": 50.0,
+    "insulation_thickness_m": 0.050,
+    "insulation_thermal_conductivity_w_per_mk": 0.04,
+    "outer_film_coefficient_w_per_m2k": 10.0,
+    "ambient_temperature_c": T_AMB,
+}
 
 # Bare: carbon-steel pipe with outer wind-exposed film only
 # R = 1/500 + 0.008/50 + 1/15 ≈ 0.069 m²K/W  → U ≈ 14.5 W/m²K
-_BARE = dict(
-    inner_film_coefficient_w_per_m2k=500.0,
-    wall_thickness_m=0.008,
-    wall_thermal_conductivity_w_per_mk=50.0,
-    insulation_thickness_m=0.0,
-    insulation_thermal_conductivity_w_per_mk=0.0,
-    outer_film_coefficient_w_per_m2k=15.0,
-    ambient_temperature_c=T_AMB,
-)
+_BARE = {
+    "inner_film_coefficient_w_per_m2k": 500.0,
+    "wall_thickness_m": 0.008,
+    "wall_thermal_conductivity_w_per_mk": 50.0,
+    "insulation_thickness_m": 0.0,
+    "insulation_thermal_conductivity_w_per_mk": 0.0,
+    "outer_film_coefficient_w_per_m2k": 15.0,
+    "ambient_temperature_c": T_AMB,
+}
 
 
 def build_case() -> NetworkCase:
