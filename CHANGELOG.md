@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.8.7] — 2026-09-24
+
+### Tutorial 08 — Pump shaft-work heating in a crude oil pipeline
+
+New tutorial demonstrating that a centrifugal pump raises the fluid
+temperature by ΔT = ΔP / (ρ · Cp) in a non-isothermal incompressible
+network.
+
+Network: Source (2 bar, 70 °C) → Pipe 1 (500 m, U = 3 W/m²K) → Pump
+(high-head curve) → Pipe 2 (1000 m, U = 3 W/m²K) → Sink (12 bar).
+Fluid: medium crude oil (ρ = 870 kg/m³, Cp = 2000 J/(kg·K)).
+
+The solver result matches the analytical shaft-work formula to within
+6 × 10⁻¹¹ °C.  Both `run.py` and `08_pump_heating.gui.json` are included.
+
+Tutorial count: 35 → 36.
+
 ## [1.8.6] — 2026-09-23
 
 ### Unit tests for device thermal physics (fittings and pumps)
