@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.8.9] — 2026-09-25
+
+### Regression test: compressor heating in compressible PR solver
+
+Added `test_pump_heating_compressible_pr` to `QuantitativeBenchmarks`.
+Verifies that a `Pump` component in the compressible solver (PR EOS) heats
+methane by at least 30 °C (distinguishing shaft-work heating from the
+previous isenthalpic treatment) and that the enthalpy rise Δh falls within
+the physically expected bounds ΔP/ρ_outlet ≤ Δh ≤ ΔP/ρ_inlet.
+
+Test count: 260 → 261.
+
 ## [1.8.8] — 2026-09-25
 
 ### Tutorial 06 (compressible) — Gas compressor station: shaft-work heating

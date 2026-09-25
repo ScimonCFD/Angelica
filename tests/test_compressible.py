@@ -18,6 +18,7 @@ from angelica import (
     PengRobinsonEOS,
     Pipe,
     PressureBoundary,
+    Pump,
     SolverSettings,
     SteadyCompressibleSolver,
     ThermalBoundary,
@@ -520,6 +521,93 @@ class QuantitativeBenchmarks(unittest.TestCase):
         ntu = U * math.pi * D * L / (mdot * Cp)
         T_out_ref = T_amb + (T_in - T_amb) * math.exp(-ntu)
         self.assertAlmostEqual(T_out_solver, T_out_ref, delta=1e-6)
+
+
+    def test_pump_heating_compressible_pr(self):
+        """Gas compressor must add shaft work h_out = h_in + ΔP/ρ_avg (PR EOS).
+
+        Methane (PR) at 30 bar / 20 °C is compressed to 60 bar.  The solver
+        must heat the gas — not treat the compressor isenthalpically — and the
+        enthalpy rise must fall between ΔP/ρ_outlet and ΔP/ρ_inlet (i.e. the
+        actual shaft work, which uses average density, is bounded by the two
+        single-point estimates).
+        """
+        eos = PengRobinsonEOS(
+            molecular_weight_kg_per_mol=0.016043,
+            critical_temperature_k=190.564,
+            critical_pressure_pa=4_599_200.0,
+            acentric_factor=0.01141,
+        )
+        fluid = CompressibleFluid.from_constants(
+            eos=eos,
+            viscosity_pa_s=1.1e-5,
+            specific_heat_j_per_kg_k=2220.0,
+            thermal_conductivity_w_per_m_k=0.033,
+            reference_pressure_pa=30e5,
+            reference_temperature_c=20.0,
+        )
+        # Multi-point Q-H curve (Q in m³/h, H in m) from Tutorial 06.
+        _curve = (
+            (    0.0, 16000.0),
+            (  400.0, 15500.0),
+            (  800.0, 14500.0),
+            ( 1200.0, 13000.0),
+            ( 1600.0, 10000.0),
+            ( 2000.0,  5000.0),
+            ( 2200.0,     0.0),
+        )
+        case = NetworkCase(
+            name="compressor_heating_pr",
+            fluid_model=fluid,
+            node_ids=(1, 2, 3, 4),
+            pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=30e5),),
+            pressure_outlets=(PressureBoundary(node_id=4, pressure_pa=60e5),),
+            thermal_inlets=(
+                ThermalBoundary(node_id=1, bc_type="fixed_temperature", temperature_c=20.0),
+                ThermalBoundary(node_id=4, bc_type="zero_gradient"),
+            ),
+            components=(
+                Pipe(start_node=1, end_node=2, diameter_m=0.30, length_m=100.0,
+                     absolute_roughness_m=4.6e-5,
+                     heat_transfer_coefficient_w_per_m2k=2.0,
+                     ambient_temperature_c=10.0, n_thermal_segments=2,
+                     component_id="P1"),
+                Pump(start_node=2, end_node=3, diameter_m=0.30,
+                     curve_points_q_head=_curve, component_id="C"),
+                Pipe(start_node=3, end_node=4, diameter_m=0.30, length_m=100.0,
+                     absolute_roughness_m=4.6e-5,
+                     heat_transfer_coefficient_w_per_m2k=2.0,
+                     ambient_temperature_c=10.0, n_thermal_segments=2,
+                     component_id="P2"),
+            ),
+        )
+        result = SteadyCompressibleSolver().solve(case)
+        self.assertTrue(result.converged)
+
+        P2 = result.node_pressures_pa[2]
+        P3 = result.node_pressures_pa[3]
+        T2 = result.node_temperatures_c[2]
+        T3 = result.node_temperatures_c[3]
+        dP = P3 - P2
+
+        # Heating must be significant (distinguishes shaft work from isenthalpic).
+        self.assertGreater(T3 - T2, 30.0,
+            f"Compressor did not heat gas: T2={T2:.2f} °C, T3={T3:.2f} °C")
+
+        h_in  = fluid.enthalpy_j_per_kg(P2, T2)
+        h_out = fluid.enthalpy_j_per_kg(P3, T3)
+        dh    = h_out - h_in
+
+        # dh must equal ΔP/ρ_avg; bound it by inlet (low ρ) and outlet (high ρ).
+        rho_in  = fluid.eos.density(P2, T2)
+        rho_out = fluid.eos.density(P3, T3)
+        w_max = dP / rho_in    # inlet density → upper bound on shaft work
+        w_min = dP / rho_out   # outlet density → lower bound on shaft work
+
+        self.assertGreater(dh, w_min * 0.90,
+            f"Δh={dh:.0f} J/kg below lower bound w_min={w_min:.0f} J/kg")
+        self.assertLess(dh, w_max * 1.10,
+            f"Δh={dh:.0f} J/kg above upper bound w_max={w_max:.0f} J/kg")
 
 
 if __name__ == "__main__":
