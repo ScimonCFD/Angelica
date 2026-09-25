@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.8.8] — 2026-09-25
+
+### Tutorial 06 (compressible) — Gas compressor station: shaft-work heating
+
+New compressible tutorial demonstrating that a gas compressor raises the
+fluid temperature by ΔT ≈ ΔP / (ρ · Cp).  Because gas density is ~100×
+lower than liquid, compression heating is far larger than for liquid pumps
+(≈50 °C vs ≈0.6 °C for the same 30 bar pressure rise).
+
+Compares Peng-Robinson EOS vs ideal gas and shows that the real gas heats
+up slightly more (+3.5 °C): despite receiving less shaft work per unit mass
+(Z < 1 → denser → smaller w = ΔP/ρ), the departure enthalpy at high
+pressure is more negative and requires a larger temperature rise to absorb
+the shaft work.  This is the compression counterpart of the Joule-Thomson
+cooling in Tutorial 05.
+
+Verification: Δh = h_out − h_in matches w = ΔP/ρ_avg to within 70 J/kg
+(Newton-iteration residual).  Both `run.py` and GUI JSON are included.
+
+Tutorial count: 36 → 37.
+
 ## [1.8.7] — 2026-09-24
 
 ### Tutorial 08 — Pump shaft-work heating in a crude oil pipeline
