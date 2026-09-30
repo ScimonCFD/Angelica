@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.8.11] — 2026-09-30
+
+### Tutorial 07 (black-oil) — Non-isothermal hot-oil pipeline
+
+New tutorial demonstrating that the black-oil solver already couples the
+energy equation with temperature-dependent PVT (Beggs-Robinson viscosity,
+Standing bubble point, Hall-Yarborough z-factor) in every outer iteration.
+
+Case: 20 km pipeline, D=0.25 m, T_in=80 °C, ambient=10 °C, U=2 W/m²·K,
+ΔP=6 MPa (8→2 MPa).  Key results:
+
+  - Temperature profile matches the NTU analytical formula within 0.27 °C
+    (T_out = 74.9 °C vs analytical 74.6 °C).
+  - Hot oil (80 °C, μ=1.1 mPa·s) delivers 35 % more flow than cold
+    (10 °C, μ=80 mPa·s) for the same pressure drop — a viscosity ratio
+    of 70×, the defining effect of non-isothermal black-oil simulation.
+  - At the 2 MPa outlet the fluid is well below bubble point: 74 % of
+    the inlet GOR liberates as free gas (Rs drops 25→6 m³/m³).
+
+Added three quantitative benchmark tests (NonIsothermalBlackOilBenchmarks):
+  - test_temperature_profile_matches_analytical (tolerance ±2 °C)
+  - test_hot_oil_flows_more_than_cold (ratio > 1.20; actual ≈1.35)
+  - test_viscosity_decreases_with_temperature (ratio > 10×; actual ≈70×)
+
+Tutorial count: 37 → 38.  Test count: 262 → 265.
+
 ## [1.8.10] — 2026-09-30
 
 ### Benchmark test: pure methane saturation pressure vs NIST REFPROP

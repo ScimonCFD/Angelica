@@ -654,3 +654,109 @@ class HanoiBenchmarkTests(unittest.TestCase):
                 cf.volumetric_flow_m3_per_h, expected, delta=1.0,
                 msg=f"Link {link_id}: flow {cf.volumetric_flow_m3_per_h:.2f} m³/h ≠ expected {expected:.2f} m³/h",
             )
+
+
+# ── Non-isothermal black-oil benchmark ────────────────────────────────────────
+
+_NI_BO_FLUID = BlackOilFluid(
+    api_gravity=32.0, gas_gravity=0.65,
+    gor_sc_m3_per_m3=25.0, wor_sc_m3_per_m3=0.5,
+    reference_pressure_pa=5e6, reference_temperature_c=80.0,
+)
+_NI_BO_D   = 0.25    # m
+_NI_BO_L   = 20_000.0  # m
+_NI_BO_U   = 2.0     # W/m²·K
+_NI_BO_AMB = 10.0    # °C
+
+
+def _ni_bo_case(T_in: float, fluid: "BlackOilFluid") -> NetworkCase:
+    return NetworkCase(
+        name=f"ni-bo-T{int(T_in)}",
+        fluid_model=fluid,
+        pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=8e6),),
+        pressure_outlets=(PressureBoundary(node_id=2, pressure_pa=2e6),),
+        components=(Pipe(
+            start_node=1, end_node=2,
+            diameter_m=_NI_BO_D, length_m=_NI_BO_L,
+            absolute_roughness_m=46e-6,
+            heat_transfer_coefficient_w_per_m2k=_NI_BO_U,
+            ambient_temperature_c=_NI_BO_AMB,
+            n_thermal_segments=20,
+        ),),
+        thermal_inlets=(ThermalBoundary(node_id=1, temperature_c=T_in,
+                                        bc_type="fixed_temperature"),),
+    )
+
+
+class NonIsothermalBlackOilBenchmarks(unittest.TestCase):
+    """Quantitative verification of temperature-dependent PVT in the black-oil solver.
+
+    Reference: analytical single-pipe temperature profile
+        T(L) = T_amb + (T_in − T_amb) · exp(−U·π·D·L / (ṁ·Cp))
+    and qualitative flow-rate comparison between hot and cold cases.
+    Published in Tutorial 07 (steady_black_oil/07_hot_oil_pipeline).
+    """
+
+    def _solve_hot(self):
+        return SteadyBlackOilSolver().solve(_ni_bo_case(80.0, _NI_BO_FLUID))
+
+    def _solve_cold(self):
+        fluid_cold = BlackOilFluid(
+            api_gravity=32.0, gas_gravity=0.65,
+            gor_sc_m3_per_m3=25.0, wor_sc_m3_per_m3=0.5,
+            reference_pressure_pa=5e6, reference_temperature_c=10.0,
+        )
+        return SteadyBlackOilSolver().solve(_ni_bo_case(10.0, fluid_cold))
+
+    def test_temperature_profile_matches_analytical(self):
+        """T_out from solver matches the NTU analytical formula within 2 °C.
+
+        T(L) = T_amb + (T_in − T_amb) · exp(−π·D·U·L / (ṁ·Cp))
+        Actual error is ~0.27 °C; 2 °C tolerance covers variable-Cp effects.
+        """
+        import math
+        res = self._solve_hot()
+        self.assertTrue(res.converged)
+        T_out = res.node_temperatures_c[2]
+        mdot = res.component_flows[0].mass_flow_kg_per_s
+        pvt_mean = _NI_BO_FLUID.pvt(5e6, 0.5 * (80.0 + T_out))
+        Cp = pvt_mean.mixture_specific_heat_j_per_kg_k
+        T_ana = _NI_BO_AMB + (80.0 - _NI_BO_AMB) * math.exp(
+            -math.pi * _NI_BO_D * _NI_BO_U * _NI_BO_L / (mdot * Cp)
+        )
+        self.assertAlmostEqual(
+            T_out, T_ana, delta=2.0,
+            msg=f"T_out={T_out:.2f}°C, analytical={T_ana:.2f}°C, diff={abs(T_out-T_ana):.2f}°C",
+        )
+
+    def test_hot_oil_flows_more_than_cold(self):
+        """Hot oil (80 °C) must flow at least 20 % more than cold (10 °C).
+
+        Driving mechanism: viscosity ratio is ~70× (1.1 mPa·s at 80 °C
+        vs 80 mPa·s at 10 °C).  Actual flow ratio is ~1.35; 1.20 threshold
+        is conservative to allow for different operating conditions.
+        """
+        res_hot  = self._solve_hot()
+        res_cold = self._solve_cold()
+        self.assertTrue(res_hot.converged)
+        self.assertTrue(res_cold.converged)
+        mdot_hot  = res_hot.component_flows[0].mass_flow_kg_per_s
+        mdot_cold = res_cold.component_flows[0].mass_flow_kg_per_s
+        ratio = mdot_hot / mdot_cold
+        self.assertGreater(
+            ratio, 1.20,
+            msg=f"Flow ratio hot/cold = {ratio:.3f}, expected > 1.20 (viscosity effect)",
+        )
+
+    def test_viscosity_decreases_with_temperature(self):
+        """Mixture viscosity at 80 °C must be at least 10× lower than at 10 °C.
+
+        Beggs-Robinson dead-oil viscosity is highly temperature-sensitive for
+        32 °API crude; the factor is ~70× at 5 MPa.
+        """
+        mu_hot  = _NI_BO_FLUID.pvt(5e6, 80.0).mixture_viscosity_pa_s
+        mu_cold = _NI_BO_FLUID.pvt(5e6, 10.0).mixture_viscosity_pa_s
+        self.assertGreater(
+            mu_cold / mu_hot, 10.0,
+            msg=f"μ(10°C)/μ(80°C) = {mu_cold/mu_hot:.1f}, expected > 10",
+        )
