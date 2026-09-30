@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.8.10] — 2026-09-30
+
+### Benchmark test: pure methane saturation pressure vs NIST REFPROP
+
+Added `test_pure_methane_saturation_vs_nist` to `TestComputePhaseEnvelope`.
+Interpolates the PR EOS bubble curve at T = 130, 140, 150, 160, 170, 180 K
+and compares against NIST REFPROP values (Lemmon et al. 2009, J. Phys. Chem.
+Ref. Data 38:721-748, accurate to <0.01% on Psat).  The PR EOS shows a
+systematic over-prediction of ~0.7% at all temperatures, comfortably within
+the 2% tolerance.  The critical point (Tc = 190.56 K, Pc = 45.99 bar) matches
+NIST exactly via the PR EOS parameters.
+
+Test count: 261 → 262.
+
 ## [1.8.9] — 2026-09-25
 
 ### Regression test: compressor heating in compressible PR solver

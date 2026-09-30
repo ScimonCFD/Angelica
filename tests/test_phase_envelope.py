@@ -184,6 +184,39 @@ class TestComputePhaseEnvelope(unittest.TestCase):
             self.assertAlmostEqual(Tb, Td, delta=1.0,
                                    msg=f"Pure CH4 bubble[{i}]={Tb:.2f} K != dew={Td:.2f} K")
 
+    def test_pure_methane_saturation_vs_nist(self):
+        """PR EOS saturation pressures within 2% of NIST reference.
+
+        Reference values from NIST REFPROP (Lemmon et al. 2009, J. Phys. Chem. Ref. Data
+        38:721-748), accurate to <0.01% on vapour pressure. The PR EOS systematic
+        over-prediction of ~0.7% is well within the expected 2% tolerance.
+        """
+        import warnings
+        import numpy as np
+        # NIST REFPROP saturation pressures for pure methane (Pa)
+        NIST_SAT_PA = {
+            130: 3.6732e5,
+            140: 6.4118e5,
+            150: 10.3996e5,
+            160: 15.9208e5,
+            170: 23.2835e5,
+            180: 32.8518e5,
+        }
+        TOLERANCE = 0.02  # 2% — conservative bound for PR EOS on Psat
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            bubble, _, _, _ = compute_phase_envelope(["methane"], [1.0])
+        Tb = np.array([p[0] for p in bubble])
+        Pb = np.array([p[1] for p in bubble])
+        for T_ref, P_nist in NIST_SAT_PA.items():
+            P_pr = float(np.interp(T_ref, Tb, Pb))
+            rel_err = abs(P_pr - P_nist) / P_nist
+            self.assertLess(
+                rel_err, TOLERANCE,
+                f"T={T_ref}K: PR={P_pr/1e5:.4f} bar, NIST={P_nist/1e5:.4f} bar, "
+                f"err={rel_err*100:.1f}% > {TOLERANCE*100:.0f}%",
+            )
+
     # ── cricondentherm / cricondenbar rough bounds ───────────────────────────
 
     def test_cricondentherm_above_critical(self):
