@@ -2683,7 +2683,7 @@ class NetSimGui:
                 "turbulent": list(result.turbulent_metrics),
             }
             self.temperature_history = list(result.temperature_history)
-            self.density_history = list(result.density_history)
+            self.density_history = list(result.density_rel_change_history)
             self.mass_balance_history = list(result.mass_balance_history)
             self.energy_balance_history = list(result.energy_balance_history)
             self.outer_turbulent_final_metrics = list(result.outer_turbulent_final_metrics)

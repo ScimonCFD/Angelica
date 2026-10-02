@@ -322,11 +322,11 @@ class SteadyCompressibleSolverTests(unittest.TestCase):
 
     def test_density_history_recorded(self):
         result = _solver().solve(_single_pipe_case(200_000.0, 100_000.0))
-        self.assertGreater(len(result.density_history), 0)
+        self.assertGreater(len(result.density_rel_change_history), 0)
 
     def test_density_history_converges(self):
         result = _solver().solve(_single_pipe_case(200_000.0, 100_000.0))
-        self.assertLess(result.density_history[-1], 1e-4)
+        self.assertLess(result.density_rel_change_history[-1], 1e-4)
 
 
 # ── quantitative benchmark helpers ───────────────────────────────────────────

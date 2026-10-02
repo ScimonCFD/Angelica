@@ -297,8 +297,14 @@ def _trace_arc(
         else:
             if tangent[N] > 0:
                 tangent = -tangent
-    except Exception:
-        pass
+    except Exception as exc:
+        import warnings as _w
+        _w.warn(
+            f"Arc-length tangent initialisation failed at T={T_start:.1f} K, "
+            f"P={P_start:.0f} Pa — using default tangent direction. "
+            f"The traced curve may be inaccurate. ({exc})",
+            stacklevel=4,
+        )
 
     pts: list[tuple[float, float]] = [(T_start, P_start)]
     ds = ds0
@@ -556,6 +562,21 @@ def compute_phase_envelope(
 
     bubble_pts = _bubble_trace(gas_phase, liq_phase, flash_obj, constants, z, fracs, T_lo, T_hi)
     dew_pts = _dew_trace(gas_phase, liq_phase, flash_obj, constants, z, fracs, T_lo, T_hi)
+
+    _MIN_CURVE_PTS = 3
+    if len(bubble_pts) < _MIN_CURVE_PTS:
+        warnings.warn(
+            f"Bubble-point curve has only {len(bubble_pts)} point(s) — "
+            "phase envelope computation may have failed for this mixture. "
+            "Check component names, compositions, and that the mixture has a two-phase region.",
+            stacklevel=2,
+        )
+    if len(dew_pts) < _MIN_CURVE_PTS:
+        warnings.warn(
+            f"Dew-point curve has only {len(dew_pts)} point(s) — "
+            "phase envelope computation may have failed for this mixture.",
+            stacklevel=2,
+        )
 
     if bubble_pts and dew_pts:
         T_bc, P_bc = bubble_pts[-1]

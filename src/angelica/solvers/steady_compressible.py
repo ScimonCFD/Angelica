@@ -234,7 +234,7 @@ class SteadyCompressibleSolver(BaseSolver):
             turbulent_history=all_turb_hist,
             turbulent_metrics=all_turb_metrics,
             temperature_history=temperature_history,
-            density_history=density_history,
+            density_rel_change_history=density_history,
             outer_turbulent_final_metrics=tuple(outer_turb_final),
             outer_iteration_boundaries=tuple(outer_boundaries),
             global_balance=self._compute_global_balance(network_state),

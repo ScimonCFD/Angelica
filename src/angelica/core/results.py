@@ -79,7 +79,12 @@ class SolveResult:
     turbulent_metrics: list[IterationMetrics]
     node_temperatures_c: dict[int, float] = field(default_factory=dict)
     temperature_history: list[float] = field(default_factory=list)
-    density_history: list[float] = field(default_factory=list)
+    density_rel_change_history: list[float] = field(default_factory=list)
+
+    @property
+    def density_history(self) -> "list[float]":
+        """Backward-compatible alias for density_rel_change_history."""
+        return self.density_rel_change_history
     outer_turbulent_final_metrics: tuple[IterationMetrics, ...] = field(default_factory=tuple)
     outer_iteration_boundaries: tuple[int, ...] = field(default_factory=tuple)
     global_balance: GlobalBalance | None = None

@@ -1,3 +1,4 @@
+from .beggs_brill import BeggsBrillCorrelation
 from .convection_scheme import ConvectionScheme, HybridScheme, PowerLawScheme, UpwindScheme
 from .friction import (
     ColebrookPipeCorrelation,
@@ -14,6 +15,7 @@ from .pressure_drop import PressureDropCorrelation
 from .pump import PumpCurveModel
 
 __all__ = [
+    "BeggsBrillCorrelation",
     "ConvectionScheme",
     "ColebrookPipeCorrelation",
     "HazenWilliamsPipeCorrelation",

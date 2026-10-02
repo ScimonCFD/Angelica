@@ -1,5 +1,59 @@
 # Changelog
 
+## [1.9.0] — 2026-10-02
+
+### New: Beggs-Brill (1973) two-phase pipe-flow correlation
+
+Added `BeggsBrillCorrelation` in `angelica.closures.beggs_brill`, a complete
+implementation of the Beggs-Brill (1973) two-phase pressure-drop correlation
+for gas-liquid pipelines.  Drop-in replacement for `ColebrookPipeCorrelation`
+when used with `SteadyBlackOilSolver`.
+
+Reference: Beggs, H.D. and Brill, J.P. (1973). A Study of Two-Phase Flow in
+Inclined Pipes. JPT, May, 607-617.  Inclination correction from Payne et al.
+(1979), JPT, Sept., 1198-1208.
+
+**Physics covered:**
+- Flow regime map: segregated / intermittent / distributed / transition
+  (Froude-number boundaries L1–L4 as a function of no-slip liquid content C_L)
+- Liquid holdup H_L(θ=0) per regime (empirical correlations)
+- Payne et al. simplified inclination correction (k-factor × sin weighting)
+- Two-phase friction factor: f_tp = f_n · exp(s), where y = C_L / H_L²
+- Gravity term uses in-situ (slip) density ρ_s = H_L·ρ_l + (1-H_L)·ρ_g
+- Friction term uses no-slip density ρ_ns = C_L·ρ_l + (1-C_L)·ρ_g
+
+**Phase properties** are read from `BlackOilFluid.pvt(P_avg, T_avg)` at the
+pipe midpoint; `SteadyBlackOilSolver` calls `set_fluid()` automatically before
+each outer iteration.
+
+**Tutorial 08** (steady_black_oil/08_beggs_brill): horizontal 10 km, 4-inch
+pipeline with GOR=80 m³/m³.  Key results at ΔP=4 MPa:
+  - Flow regime: intermittent; H_L = 0.517 vs C_L = 0.425 (22% slip)
+  - f_tp / f_n = 1.46× (two-phase friction enhancement)
+  - Beggs-Brill predicts 22.7% less flow than the no-slip Colebrook model
+
+### Bug fixes
+
+**`energy.py` pressure fallback** (lines 286-287): replaced the `or` operator
+with an explicit `is not None` check.  The old code treated `P = 0.0 Pa` as
+"missing" and fell back to `fluid_model.reference_pressure_pa`; it also raised
+`AttributeError` for `ThermalFluid` and `SingleComponentFluid` fluids (which
+have no `reference_pressure_pa`).  Both are now fixed.
+
+**`SolveResult.density_history` misleading name**: renamed field to
+`density_rel_change_history` — the list stores max |Δρ/ρ| residuals, not
+density values.  A backward-compatible `@property density_history` is
+provided.  Updated `SteadyBlackOilSolver`, `SteadyCompressibleSolver`,
+`SteadyCompositionalSolver`, `gui/app.py`, and two tests in
+`test_compressible.py`.
+
+**`phase_envelope.py` silent exceptions**: the arc-length tangent
+initialisation `except Exception: pass` now emits a `warnings.warn` with the
+failure message and starting point.  `compute_phase_envelope` also warns when
+a traced curve has fewer than 3 points (previously returned silently).
+
+Tutorial count: 38 → 39.  Test count: 265 → 288.
+
 ## [1.8.11] — 2026-09-30
 
 ### Tutorial 07 (black-oil) — Non-isothermal hot-oil pipeline

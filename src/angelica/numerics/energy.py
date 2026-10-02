@@ -283,8 +283,11 @@ def solve_energy_system(
         cp   = fluid_model.specific_heat_for_link(_TempCarrier(T_up))
         abs_mdot_cp = abs(mdot) * cp
 
-        P_up   = getattr(up_node,   "pressure_pa", None) or fluid_model.reference_pressure_pa
-        P_down = getattr(down_node, "pressure_pa", None) or fluid_model.reference_pressure_pa
+        _p_up   = getattr(up_node,   "pressure_pa", None)
+        _p_down = getattr(down_node, "pressure_pa", None)
+        _p_ref  = getattr(fluid_model, "reference_pressure_pa", 101_325.0)
+        P_up   = _p_up   if _p_up   is not None else _p_ref
+        P_down = _p_down if _p_down is not None else _p_ref
 
         if isinstance(dev, PumpState):
             # Shaft work per unit mass: w = ΔP / ρ (J/kg)

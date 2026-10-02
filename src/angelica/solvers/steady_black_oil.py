@@ -377,6 +377,11 @@ class SteadyBlackOilSolver(BaseSolver):
                 for link in network_state.components
             ]
 
+            # Give fluid-aware correlations (e.g. Beggs-Brill) the current fluid.
+            _turb_corr = self._hydraulic_solver.turbulent_pipe_correlation
+            if hasattr(_turb_corr, "set_fluid"):
+                _turb_corr.set_fluid(effective_fluid)
+
             lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
                 network_state, effective_fluid, progress_callback=progress_callback
             )
@@ -431,6 +436,8 @@ class SteadyBlackOilSolver(BaseSolver):
         # Always runs so that the reported flow field and temperature field
         # come from the same solve with the final compositions and PVT.
         # Pressure field is kept as-is (converged state) — no re-initialisation.
+        if hasattr(_turb_corr, "set_fluid"):
+            _turb_corr.set_fluid(effective_fluid)
         lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
             network_state, effective_fluid, progress_callback=progress_callback
         )
@@ -492,7 +499,7 @@ class SteadyBlackOilSolver(BaseSolver):
             turbulent_history=all_turb_hist,
             turbulent_metrics=all_turb_metrics,
             temperature_history=temperature_history,
-            density_history=density_history,
+            density_rel_change_history=density_history,
             outer_turbulent_final_metrics=tuple(outer_turb_final),
             outer_iteration_boundaries=tuple(outer_boundaries),
             global_balance=self._compute_global_balance(network_state),
