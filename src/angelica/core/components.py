@@ -112,6 +112,57 @@ class Fitting(PressureChanger):
 
 
 @dataclass(frozen=True)
+class Choke(Fitting):
+    """Production choke (bean) modeled as a sharp-edged orifice.
+
+    The hydraulic resistance is derived from the standard orifice equation:
+
+        ṁ = Cd · A_orifice · √(2·ρ·ΔP)
+
+    which maps to a loss coefficient:
+
+        K = (A_pipe / (Cd · A_orifice))²  =  (D_pipe / D_orifice)⁴ / Cd²
+
+    so that the pressure drop is ΔP = K · ρ · v² / 2, exactly like a Fitting.
+
+    Parameters
+    ----------
+    start_node, end_node, diameter_m : inherited (pipe cross-section)
+    orifice_diameter_m : inner diameter of the choke bean/nozzle (m)
+    discharge_coefficient : orifice discharge coefficient Cd (default 0.62,
+        appropriate for a sharp-edged orifice plate per ISO 5167)
+
+    Typical oilfield usage
+    ----------------------
+    In the US oilfield, choke size is quoted in 64ths of an inch ("beans").
+    A 16/64" bean is orifice_diameter_m ≈ 0.00635 m.
+    A 32/64" (½") bean is orifice_diameter_m ≈ 0.0127 m.
+    """
+
+    orifice_diameter_m: float = float("nan")
+    discharge_coefficient: float = 0.62
+
+    def __post_init__(self) -> None:
+        if math.isnan(self.orifice_diameter_m):
+            raise ValueError("Choke requires orifice_diameter_m (inner diameter of the nozzle/bean).")
+        if self.orifice_diameter_m <= 0.0:
+            raise ValueError(
+                f"Choke orifice_diameter_m must be positive (got {self.orifice_diameter_m})"
+            )
+        if self.orifice_diameter_m >= self.diameter_m:
+            raise ValueError(
+                f"Choke orifice_diameter_m ({self.orifice_diameter_m:.4f} m) must be "
+                f"less than pipe diameter_m ({self.diameter_m:.4f} m)"
+            )
+        if not (0.0 < self.discharge_coefficient <= 1.0):
+            raise ValueError(
+                f"discharge_coefficient must be in (0, 1] (got {self.discharge_coefficient})"
+            )
+        K = (self.diameter_m / self.orifice_diameter_m) ** 4 / self.discharge_coefficient ** 2
+        object.__setattr__(self, "loss_coefficient", K)
+
+
+@dataclass(frozen=True)
 class Pump(PressureChanger):
     curve_points_q_head: tuple[tuple[float, float], ...] = ()
 

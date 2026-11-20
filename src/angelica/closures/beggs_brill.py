@@ -38,7 +38,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from .gravity import GRAVITY_M_PER_S2, elevation_pressure_term
+from .gravity import GRAVITY_M_PER_S2
 from .pressure_drop import PressureDropCorrelation
 
 # ── Constants ──────────────────────────────────────────────────────────────────

@@ -113,7 +113,7 @@ def run():
     print("Tutorial 08 — Beggs-Brill two-phase flow")
     print("=" * 60)
     print(f"\nPipe: D={D*1000:.0f} mm, L={L/1e3:.0f} km, horizontal")
-    print(f"P_in = 6.0 MPa  →  P_out = 2.0 MPa  (ΔP = 4.0 MPa)")
+    print("P_in = 6.0 MPa  →  P_out = 2.0 MPa  (ΔP = 4.0 MPa)")
     print(f"\nFluid at avg conditions ({P_avg/1e6:.1f} MPa, {T_avg:.0f} °C):")
     print(f"  No-slip liquid content  C_L = {C_L:.3f}")
     print(f"  No-slip gas content     C_G = {1-C_L:.3f}")

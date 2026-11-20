@@ -1,5 +1,45 @@
 # Changelog
 
+## [1.9.1] — 2026-10-04
+
+### New: Choke valve component
+
+Added `Choke` in `angelica.core.components` — a sharp-edged orifice model for
+production wellhead chokes (beans).  The hydraulic loss coefficient is derived
+directly from the orifice equation:
+
+    K = (D_pipe / D_orifice)⁴ / Cd²
+
+so that `Choke` inherits from `Fitting` with **zero solver changes**: the
+existing `isinstance(component, Fitting)` dispatch in `network.py` handles it
+automatically.
+
+**Parameters:** `orifice_diameter_m` (bean inner diameter, m), optional
+`discharge_coefficient` (default 0.62, ISO 5167 sharp-edged plate).
+Validation raises `ValueError` for missing, zero, or oversized orifice, and
+for `Cd` outside (0, 1].
+
+**Tutorial 09** (steady_black_oil/09_bb_gathering_network): three wells with
+different API/GOR/WOR characteristics converge at a manifold via Beggs-Brill
+gathering lines.  Key result: BB raises manifold pressure 0.39 MPa above the
+Colebrook baseline, pushing it above Well-3's bottom-hole pressure and causing
+backflow — physically correct and worth noting in production engineering.
+
+**Tutorial 10** (steady_black_oil/10_choke_valve): bean-size sweep from 8/64"
+to 48/64" with a Beggs-Brill flowline.  Key results:
+  - K ranges from 2,727,825 (8/64") to 2,105 (48/64")
+  - Flow rate spans 4.1 m³/h to 92.1 m³/h (all cases converge)
+  - At large bean size the flowline friction dominates (> 50 % of total ΔP)
+
+### New tests (304 total, +16)
+
+`tests/test_choke.py` — 16 tests covering:
+  - Unit: K-formula, isinstance-Fitting, validation errors (9 cases)
+  - Integration: convergence, monotone bean-size sensitivity, ΔP fraction
+    (4 cases), manifold pressure BB > Colebrook, GOR slip ordering (3 cases)
+
+---
+
 ## [1.9.0] — 2026-10-02
 
 ### New: Beggs-Brill (1973) two-phase pipe-flow correlation

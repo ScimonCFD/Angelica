@@ -40,7 +40,6 @@ from angelica.core.components import Pipe
 from angelica.properties.black_oil import BlackOilFluid
 from angelica.solvers import SteadyBlackOilSolver
 
-
 # ── Shared test fluid ──────────────────────────────────────────────────────
 
 _FLUID_BB = BlackOilFluid(
