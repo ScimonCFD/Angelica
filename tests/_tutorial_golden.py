@@ -134,6 +134,13 @@ def _parse(text: str):
     return out
 
 
+# Convergence residuals (pressure corrections, nodal mass imbalances) sit at
+# round-off level and differ between CPUs; for these lines only require that
+# the residual has not grown by more than a factor of 10.
+_RESIDUAL_LINE = re.compile(r"pressure correction|imbalance|abs_dp|rel_dp", re.IGNORECASE)
+_RESIDUAL_GROWTH = 10.0
+
+
 def compare_output(actual: str, reference: str) -> list[str]:
     """Return a list of human-readable differences (empty when they agree)."""
     act, ref = _parse(actual), _parse(reference)
@@ -144,9 +151,15 @@ def compare_output(actual: str, reference: str) -> list[str]:
         if sa != sr or len(na) != len(nr):
             problems.append(f"line {i} text changed:\n    ref: {lr}\n    now: {la}")
         else:
+            residual = bool(_RESIDUAL_LINE.search(lr))
             for ta, tr in zip(na, nr):
                 a, r = float(ta), float(tr)
-                if abs(a - r) > 1.01 * max(_tolerance(tr), _tolerance(ta)):
+                tol = 1.01 * max(_tolerance(tr), _tolerance(ta))
+                if residual:
+                    if abs(a) > _RESIDUAL_GROWTH * abs(r) + tol:
+                        problems.append(f"line {i}: residual grew {tr} -> {ta}\n    ref: {lr}\n    now: {la}")
+                        break
+                elif abs(a - r) > tol:
                     problems.append(f"line {i}: {tr} -> {ta}\n    ref: {lr}\n    now: {la}")
                     break
         if len(problems) >= 8:

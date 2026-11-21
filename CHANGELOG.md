@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.10.7] — 2026-11-21
+
+### Tutorial tests: convergence residuals compared by magnitude
+
+Printed convergence residuals (pressure corrections ~10⁻⁶ Pa, nodal mass
+imbalances ~10⁻⁹) sit at round-off level and differ between CPUs: the same
+commit passed on one CI runner and failed on another
+(`abs_dp=1.345412e-06` vs `1.345295e-06` in isothermal tutorial 08).  Lines
+reporting pressure corrections, imbalances or `abs_dp`/`rel_dp` now only
+require that the residual has not grown by more than 10×; every physical
+result is still compared to the last printed digit.
+
 ## [1.10.6] — 2026-11-21
 
 ### Automated regression tests for every tutorial
