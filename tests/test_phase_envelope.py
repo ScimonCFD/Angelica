@@ -398,5 +398,72 @@ class TestAbsentComponents(unittest.TestCase):
             compute_phase_envelope(self.H[:2], [0.0, 0.0])
 
 
+
+class TestQualityLineContinuation(unittest.TestCase):
+    """Quality lines are traced by arc-length continuation and must end at the
+    critical point.  Before v1.10.4 a temperature scan of T–VF flashes jumped
+    to the wrong root near the critical point (kink, then a tail beyond Tc)."""
+
+    NAMES = ["methane", "ethane", "propane"]
+    ZS = [0.70, 0.20, 0.10]
+
+    @classmethod
+    def setUpClass(cls):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            cls.env = compute_phase_envelope(cls.NAMES, cls.ZS)
+            cls.lines = {vf: compute_quality_line(cls.NAMES, cls.ZS, vf) for vf in (0.1, 0.3, 0.9)}
+
+    def test_lines_end_at_critical_point(self):
+        _, _, Tc, Pc = self.env
+        for vf, pts in self.lines.items():
+            T_end, P_end = pts[-1]
+            self.assertAlmostEqual(T_end, Tc, delta=0.5, msg=f"VF={vf}")
+            self.assertAlmostEqual(P_end, Pc, delta=0.005 * Pc, msg=f"VF={vf}")
+
+    def test_points_have_requested_vapour_fraction(self):
+        """Check with independent TP flashes, away from the critical point."""
+        import warnings
+
+        from thermo import ChemicalConstantsPackage
+        from thermo.eos_mix import PRMIX
+        from thermo.flash import FlashVL
+        from thermo.phases import CEOSGas, CEOSLiquid
+
+        _, _, Tc, _ = self.env
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            c, props = ChemicalConstantsPackage.from_IDs(self.NAMES)
+            kw = {"Tcs": c.Tcs, "Pcs": c.Pcs, "omegas": c.omegas, "kijs": _build_kij_matrix(c)}
+            flash = FlashVL(c, props,
+                            liquid=CEOSLiquid(PRMIX, kw, HeatCapacityGases=props.HeatCapacityGases),
+                            gas=CEOSGas(PRMIX, kw, HeatCapacityGases=props.HeatCapacityGases))
+            for vf, pts in self.lines.items():
+                checked = 0
+                for T, P in pts[::4]:
+                    if abs(T - Tc) < 5.0 or P < 1e4:
+                        continue
+                    res = flash.flash(zs=self.ZS, T=T, P=P)
+                    self.assertEqual(res.phase_count, 2, f"VF={vf} at T={T:.1f} K")
+                    # thermo can swap the gas/liquid labels near the critical
+                    # point: identify the vapour as the lighter phase.
+                    beta_gas = min(zip(res.betas, res.phases), key=lambda bp: bp[1].rho_mass())[0]
+                    self.assertAlmostEqual(beta_gas, vf, delta=2e-3, msg=f"T={T:.1f} K, P={P:.0f} Pa")
+                    checked += 1
+                self.assertGreater(checked, 5)
+
+    def test_lines_ordered_between_bubble_and_dew(self):
+        """At fixed T, a higher vapour fraction means a lower pressure."""
+        def p_at(pts, T):
+            for (T1, P1), (T2, P2) in zip(pts, pts[1:]):
+                if min(T1, T2) <= T <= max(T1, T2) and T1 != T2:
+                    return P1 + (P2 - P1) * (T - T1) / (T2 - T1)
+            return None
+        T = 200.0
+        p01, p03, p09 = (p_at(self.lines[v], T) for v in (0.1, 0.3, 0.9))
+        self.assertTrue(p01 > p03 > p09, (p01, p03, p09))
+
+
 if __name__ == "__main__":
     unittest.main()

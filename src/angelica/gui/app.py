@@ -4304,7 +4304,7 @@ class NetSimGui:
                 note_y += 14
 
         # Composition subtitle (top of plot)
-        comp_parts = [f"{n} ({z:.2f})" for n, z in zip(component_names, zs)]
+        comp_parts = [f"{n} ({z:.2f})" for n, z in zip(component_names, zs) if z > 1e-10]
         comp_str = ", ".join(comp_parts)
         if len(comp_str) > 78:
             comp_str = comp_str[:76] + "…"

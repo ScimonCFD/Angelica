@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.10.4] — 2026-11-21
+
+### Fix: constant vapour-fraction (quality) lines wrong near the critical point
+
+Quality lines were built by scanning temperature in 2 K steps with T–VF
+flashes.  Near the critical point the line can turn back in temperature and
+the flash jumped to a wrong root: the VF = 0.3 line of a C1/C2/C3 mixture had
+a kink at −30 °C and then a tail past Tc (an independent TP flash at its end
+gave VF = 0.000), instead of ending at the critical point.
+
+Quality lines are now traced with the same arc-length continuation as the
+envelope, with the Rachford-Rice residual Σ(yᵢ − xᵢ) replacing the bubble/dew
+closure (x = z/(1+β(K−1)), y = Kx, analytic Jacobian verified against finite
+differences to 2·10⁻⁹).  The line is anchored at a low-pressure P–VF flash.
+
+  - Every line now ends at the critical point (within 0.2 K).
+  - Points match independent TP flashes to 2·10⁻³ in vapour fraction.
+  - 0.1–0.3 s per line (was 2.5–3.8 s).
+  - The temperature scan remains as a fallback.
+
+Note: near the critical point thermo can swap the gas/liquid labels of a TP
+flash and report `VF = 0` for a genuine 30/70 split — this is what misled the
+old scan.
+
+### GUI
+
+  - Components with zero mole fraction are no longer listed in the envelope
+    plot title.
+
+### Tests
+
+  - 3 quality-line tests: lines end at the critical point, points have the
+    requested vapour fraction (independent flash), lines are ordered in
+    pressure at fixed temperature.
+
 ## [1.10.3] — 2026-11-21
 
 ### Fix: no phase envelope for compositions with absent components

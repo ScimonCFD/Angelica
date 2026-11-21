@@ -150,7 +150,7 @@ def _eval_FJ(
     P: float,
     K: "np.ndarray",
     z: "np.ndarray",
-    VF: int,
+    VF: float,
 ) -> "tuple[np.ndarray, np.ndarray]":
     """Michelsen equilibrium equations F and their Jacobian J.
 
@@ -160,8 +160,12 @@ def _eval_FJ(
 
     For bubble (VF=0): x=z, y=Kz/S_, S_=Σ K_i z_i
     For dew   (VF=1): y=z, x=z/(K S_), S_=Σ z_i/K_i
+    Quality line (0<VF<1, β=VF): x=z/(1+β(K−1)), y=Kx, last equation is the
+    Rachford-Rice residual Σ(y_i − x_i).
     """
     N = len(z)
+    if 0.0 < VF < 1.0:
+        return _eval_FJ_quality(gas_phase, liq_phase, T, P, K, z, float(VF))
     if VF == 0:
         S_ = float(np.dot(K, z))
         x, y = z, K * z / S_
@@ -201,6 +205,41 @@ def _eval_FJ(
     return F, J
 
 
+def _eval_FJ_quality(
+    gas_phase: Any,
+    liq_phase: Any,
+    T: float,
+    P: float,
+    K: "np.ndarray",
+    z: "np.ndarray",
+    beta: float,
+) -> "tuple[np.ndarray, np.ndarray]":
+    """Equations and Jacobian for a constant vapour fraction β (0 < β < 1)."""
+    N = len(z)
+    den = 1.0 + beta * (K - 1.0)
+    x = z / den
+    y = K * x
+
+    liq_obj = liq_phase.to(T=T, P=P, zs=list(x))
+    gas_obj = gas_phase.to(T=T, P=P, zs=list(y))
+
+    F = np.empty(N + 1)
+    F[:N] = np.log(K) - (np.array(liq_obj.lnphis()) - np.array(gas_obj.lnphis()))
+    F[N] = float(np.sum(y - x))
+
+    dx = -x * beta * K / den          # dx_j / dlnK_j
+    dy = y * (1.0 - beta) / den       # dy_j / dlnK_j
+    DL = np.array(liq_obj.dlnphis_dzs())
+    DV = np.array(gas_obj.dlnphis_dzs())
+
+    J = np.zeros((N + 1, N + 2))
+    J[:N, :N] = np.eye(N) - DL * dx[np.newaxis, :] + DV * dy[np.newaxis, :]
+    J[:N, N] = -T * (np.array(liq_obj.dlnphis_dT()) - np.array(gas_obj.dlnphis_dT()))
+    J[:N, N + 1] = -P * (np.array(liq_obj.dlnphis_dP()) - np.array(gas_obj.dlnphis_dP()))
+    J[N, :N] = dy - dx
+    return F, J
+
+
 def _null(J: "np.ndarray", prev_t: "np.ndarray") -> "np.ndarray":
     """Return the right null vector of J consistent with prev_t."""
     _, _, Vt = np.linalg.svd(J, full_matrices=True)
@@ -224,7 +263,7 @@ def _correct(
     liq_phase: object,
     S0: "np.ndarray",
     z: "np.ndarray",
-    VF: int,
+    VF: float,
     spec_idx: int,
     spec_val: float,
     tol: float = 1e-8,
@@ -293,7 +332,7 @@ def _trace_arc(
     gas_phase: object,
     liq_phase: object,
     z: "np.ndarray",
-    VF: int,
+    VF: float,
     T_start: float,
     P_start: float,
     K_start: "np.ndarray",
@@ -671,9 +710,15 @@ def compute_quality_line(
 ) -> "list[tuple[float, float]]":
     """Compute a constant-vapor-fraction (quality) line inside the phase envelope.
 
-    Returns [(T_K, P_Pa)] ordered from low to high temperature, covering the
-    two-phase region at the given vapor fraction (0 < vf < 1).
+    Returns [(T_K, P_Pa)] ordered along the line from low pressure to the
+    critical point, where every quality line ends (0 < vf < 1).
     eos_name: ``"PR"`` (Peng-Robinson, default) or ``"SRK"``.
+
+    The line is anchored at a low-pressure point (direct P–VF flash) and traced
+    by arc-length continuation with the Rachford-Rice equation in place of the
+    bubble/dew closure.  A temperature scan of T–VF flashes cannot do this: near
+    the critical point the line can turn back in temperature, and the flash then
+    converges to the wrong root.
     """
     import warnings
 
@@ -700,6 +745,28 @@ def compute_quality_line(
     Tc_mix = sum(zi * tc for zi, tc in zip(fracs, Tcs_list))
     T_lo = max(min(Tbs) * 0.55, 75.0)
     T_hi = Tc_mix * 1.5
+
+    z = np.asarray(fracs, float)
+    N = len(fracs)
+    for P0 in (1.0e5, 5.0e5, 0.5e5, 2.0e5, 10.0e5):
+        try:
+            res0 = flash_obj.flash(zs=fracs, P=P0, VF=vf)
+            if res0 is None or res0.phase_count != 2 or not res0.T:
+                continue
+            K0 = np.array([res0.gas.zs[i] / res0.liquid0.zs[i] for i in range(N)])
+            if not np.all(np.isfinite(K0)) or not np.all(K0 > 0):
+                continue
+            T0 = float(res0.T)
+            up = _trace_arc(gas_phase, liq_phase, z, vf, T0, P0, K0, ascend=True)
+            down = _trace_arc(gas_phase, liq_phase, z, vf, T0, P0, K0,
+                              ascend=False, T_min=T_lo, P_min=5.0e3)
+            line = list(reversed(down)) + up[1:]
+            if len(line) >= 3:
+                return line
+        except Exception:
+            pass
+
+    # ── Fallback: temperature scan of T–VF flashes ───────────────────────
 
     # Use Wilson to estimate a good starting temperature: the quality line
     # starts near the bubble curve (for low vf) or dew curve (for high vf).
