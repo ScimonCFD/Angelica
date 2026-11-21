@@ -1,9 +1,9 @@
 {
-  "case_name": "06 — Two-source compositional loop",
+  "case_name": "06 — Compositional ring main",
   "physics_mode": "compositional",
   "material": {
     "definition_mode": "compositional",
-    "name": "rich condensate + lean gas blend",
+    "name": "rich condensate + lean gas",
     "component_names": "methane, ethane, propane, n-butane, n-pentane, n-hexane, water",
     "default_zs": "0.70, 0.08, 0.07, 0.05, 0.03, 0.03, 0.04"
   },
@@ -17,8 +17,8 @@
     {
       "node_id": 1,
       "node_type": "source",
-      "x": 80.0,
-      "y": 200.0,
+      "x": 80,
+      "y": 160,
       "properties": {
         "condition_type": "pressure",
         "pressure": "8000000.0",
@@ -30,10 +30,42 @@
       }
     },
     {
+      "node_id": 2,
+      "node_type": "junction",
+      "x": 300,
+      "y": 160,
+      "properties": {
+        "label": "A entry"
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "junction",
+      "x": 640,
+      "y": 160,
+      "properties": {
+        "label": "Plant tap"
+      }
+    },
+    {
+      "node_id": 6,
+      "node_type": "sink",
+      "x": 860,
+      "y": 160,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "3000000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    },
+    {
       "node_id": 7,
       "node_type": "source",
-      "x": 80.0,
-      "y": 420.0,
+      "x": 860,
+      "y": 420,
       "properties": {
         "condition_type": "pressure",
         "pressure": "7500000.0",
@@ -45,49 +77,31 @@
       }
     },
     {
-      "node_id": 2,
-      "node_type": "junction",
-      "x": 280.0,
-      "y": 300.0,
-      "properties": {
-        "label": "Mixer"
-      }
-    },
-    {
-      "node_id": 3,
-      "node_type": "junction",
-      "x": 460.0,
-      "y": 300.0,
-      "properties": {
-        "label": "Split"
-      }
-    },
-    {
       "node_id": 4,
       "node_type": "junction",
-      "x": 590.0,
-      "y": 460.0,
+      "x": 640,
+      "y": 420,
       "properties": {
-        "label": "Lower"
+        "label": "B entry"
       }
     },
     {
       "node_id": 5,
       "node_type": "junction",
-      "x": 710.0,
-      "y": 300.0,
+      "x": 300,
+      "y": 420,
       "properties": {
-        "label": "Merge"
+        "label": "Power tap"
       }
     },
     {
-      "node_id": 6,
+      "node_id": 8,
       "node_type": "sink",
-      "x": 880.0,
-      "y": 300.0,
+      "x": 80,
+      "y": 420,
       "properties": {
         "condition_type": "pressure",
-        "pressure": "3000000.0",
+        "pressure": "4000000.0",
         "flow": "",
         "thermal_bc_type": "zero_gradient",
         "inlet_temperature_c": "",
@@ -118,36 +132,15 @@
       ]
     },
     {
-      "link_id": 7,
-      "start_node_id": 7,
-      "end_node_id": 2,
-      "components": [
-        {
-          "component_id": 7,
-          "component_type": "pipe",
-          "properties": {
-            "length_m": "15000.0",
-            "diameter_m": "0.20",
-            "height_change_m": "0.0",
-            "roughness_m": "0.000046",
-            "hazen_williams_c": "130.0",
-            "num_segments": "5",
-            "heat_transfer_coefficient_w_per_m2k": "3.0",
-            "ambient_temperature_c": "15.0"
-          }
-        }
-      ]
-    },
-    {
       "link_id": 2,
-      "start_node_id": 2,
-      "end_node_id": 3,
+      "start_node_id": 7,
+      "end_node_id": 4,
       "components": [
         {
           "component_id": 2,
           "component_type": "pipe",
           "properties": {
-            "length_m": "20000.0",
+            "length_m": "15000.0",
             "diameter_m": "0.25",
             "height_change_m": "0.0",
             "roughness_m": "0.000046",
@@ -161,15 +154,15 @@
     },
     {
       "link_id": 3,
-      "start_node_id": 3,
-      "end_node_id": 5,
+      "start_node_id": 2,
+      "end_node_id": 3,
       "components": [
         {
           "component_id": 3,
           "component_type": "pipe",
           "properties": {
-            "length_m": "60000.0",
-            "diameter_m": "0.20",
+            "length_m": "25000.0",
+            "diameter_m": "0.25",
             "height_change_m": "0.0",
             "roughness_m": "0.000046",
             "hazen_williams_c": "130.0",
@@ -182,15 +175,15 @@
     },
     {
       "link_id": 4,
-      "start_node_id": 3,
-      "end_node_id": 4,
+      "start_node_id": 4,
+      "end_node_id": 3,
       "components": [
         {
           "component_id": 4,
           "component_type": "pipe",
           "properties": {
-            "length_m": "30000.0",
-            "diameter_m": "0.25",
+            "length_m": "25000.0",
+            "diameter_m": "0.20",
             "height_change_m": "0.0",
             "roughness_m": "0.000046",
             "hazen_williams_c": "130.0",
@@ -203,15 +196,15 @@
     },
     {
       "link_id": 5,
-      "start_node_id": 4,
+      "start_node_id": 2,
       "end_node_id": 5,
       "components": [
         {
           "component_id": 5,
           "component_type": "pipe",
           "properties": {
-            "length_m": "30000.0",
-            "diameter_m": "0.25",
+            "length_m": "25000.0",
+            "diameter_m": "0.20",
             "height_change_m": "0.0",
             "roughness_m": "0.000046",
             "hazen_williams_c": "130.0",
@@ -224,15 +217,57 @@
     },
     {
       "link_id": 6,
-      "start_node_id": 5,
-      "end_node_id": 6,
+      "start_node_id": 4,
+      "end_node_id": 5,
       "components": [
         {
           "component_id": 6,
           "component_type": "pipe",
           "properties": {
-            "length_m": "20000.0",
+            "length_m": "25000.0",
             "diameter_m": "0.25",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "5",
+            "heat_transfer_coefficient_w_per_m2k": "3.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 7,
+      "start_node_id": 3,
+      "end_node_id": 6,
+      "components": [
+        {
+          "component_id": 7,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "5000.0",
+            "diameter_m": "0.25",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "5",
+            "heat_transfer_coefficient_w_per_m2k": "3.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 8,
+      "start_node_id": 5,
+      "end_node_id": 8,
+      "components": [
+        {
+          "component_id": 8,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "5000.0",
+            "diameter_m": "0.20",
             "height_change_m": "0.0",
             "roughness_m": "0.000046",
             "hazen_williams_c": "130.0",

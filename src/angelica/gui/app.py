@@ -4182,18 +4182,9 @@ class NetSimGui:
                 canvas.create_line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1],
                                    fill=dew_color, width=2, dash=(6, 3))
 
-        # X markers on flash-computed data points only.
-        # The retrograde bubble branch (after the cricondenbar) is a synthetic
-        # square-root extrapolation, not real flash points — skip its markers so
-        # the clustered X's don't create a visual spike at the nose.
+        # X markers on the traced (arc-length) points.
         r_x = 4
-        peak_b = (
-            max(range(len(bubble_pts) - 1), key=lambda i: bubble_pts[i][1])
-            if len(bubble_pts) > 1 else 0
-        )
-        for j, (t, p) in enumerate(bubble_pts):
-            if j > peak_b:
-                break  # retrograde section: no X markers
+        for t, p in bubble_pts:
             mx, my = _cx(_to_C(t)), _cy(_to_bar(p))
             canvas.create_line(mx - r_x, my - r_x, mx + r_x, my + r_x,
                                 fill=bubble_color, width=1.5)
@@ -4218,18 +4209,13 @@ class NetSimGui:
             r_cp = 8
             canvas.create_oval(cp_x - r_cp, cp_y - r_cp, cp_x + r_cp, cp_y + r_cp,
                                 fill=crit_color, outline="#b08800", width=2)
+            canvas.create_text(cp_x, cp_y - r_cp - 4, anchor="s",
+                                text=f"Tc={_to_C(T_cp):.1f}°C  Pc={_to_bar(P_cp):.1f} bar",
+                                font=("TkDefaultFont", 8), fill=self._t["plot_text"])
 
-        # Pseudo-critical point marker
-        Tc_C = _to_C(Tc_K)
-        Pc_b = _to_bar(Pc_Pa)
-        if _in_bounds(Tc_C, Pc_b):
-            cx, cy = _cx(Tc_C), _cy(Pc_b)
-            r = 5
-            canvas.create_oval(cx - r, cy - r, cx + r, cy + r,
-                                fill="#9b59b6", outline=self._t["plot_axis"])
-            canvas.create_text(cx + 8, cy - 10, anchor="w",
-                                text=f"Tc≈{Tc_C:.0f}°C  Pc≈{Pc_b:.0f} bar",
-                                font=("TkDefaultFont", 8), fill="#9b59b6")
+        # Cricondentherm / cricondenbar of the traced envelope
+        T_cct = max(env_T)
+        P_ccb = max(env_P)
 
         # Operating condition points — split into in-bounds (dots) and out-of-bounds (text)
         op_color = "#e69c00"
@@ -4251,15 +4237,13 @@ class NetSimGui:
                     canvas.create_text(xp + 7, yp, anchor="w",
                                        text=lbl.lower(), font=("TkDefaultFont", 8), fill=op_color)
                 else:
-                    # Determine region for annotation
-                    if T_op > T_max_d and P_op > Pc_b:
-                        region = "supercritical"
-                    elif T_op > T_max_d:
-                        region = "above Tc (vapor)"
-                    elif P_op > P_max_d:
-                        region = "high-P region"
+                    # Out-of-range points lie outside the two-phase region
+                    if T_op > T_cct:
+                        region = f"single phase (above cricondentherm {T_cct:.0f} °C)"
+                    elif P_op > P_ccb:
+                        region = f"single phase (above cricondenbar {P_ccb:.0f} bar)"
                     else:
-                        region = "outside envelope"
+                        region = "outside plot range"
                     out_of_bounds_notes.append(f"{lbl}: {T_op:.1f} °C, {P_op:.1f} bar — {region}")
 
         # Quality lines (constant vapor fraction)

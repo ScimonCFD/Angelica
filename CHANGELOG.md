@@ -1,5 +1,57 @@
 # Changelog
 
+## [1.10.2] — 2026-11-21
+
+### Fix: phase envelope left open for mixtures with heavy ends
+
+The dew curve was started from a Wilson estimate at a fixed fraction of the
+molar-average critical temperature (0.5·Tc_mix).  For mixtures with C₅/C₆
+that temperature lies far below the dew curve, every attempt failed and the
+dew curve came back empty.  The plot then showed only the bubble curve and
+labelled the Kay pseudo-critical point (≈ 1 °C, 44 bar for the tutorial 06
+condensate) as "Tc/Pc", which is not on the envelope at all.
+
+  - The dew curve is now anchored at a low-pressure dew point (1 bar, direct
+    P–VF=1 flash) and traced by arc-length up through the cricondentherm to
+    the critical point and down to low pressure.  The old Wilson start remains
+    as a fallback.
+  - The tutorial 06 condensate now closes at its real critical point
+    (67.5 °C, 133 bar) with a cricondentherm of 106 °C, consistent with flash
+    calculations on either side.
+  - Arc-length tracing stops on stagnation (the corrector could pin at the
+    pressure clip and repeat the same point hundreds of times).
+  - GUI: the critical point is labelled on the closed envelope; the Kay
+    pseudo-critical marker is removed.  Operating points outside the plot are
+    described as "single phase (above cricondentherm / cricondenbar)" instead
+    of the misleading "supercritical".
+
+### Fix: compositional outer loop could lock into a limit cycle
+
+Flash results are memoised on rounded (P, T, z).  T was rounded to 0.1 K,
+which moves a two-phase density by ~4·10⁻⁴ — four times the default density
+tolerance — so the outer loop could flip between two states forever.  The
+GUI version of tutorial 06 never converged (50 iterations, residual stuck at
+5.3·10⁻⁴).  Rounding is now 0.001 K, 10 Pa and 10⁻⁶ in mole fraction; the
+case converges in 6 outer iterations for any number of pipe segments.
+
+### Tutorial 06 (compositional) redesigned as a ring main
+
+The old loop split one stream into two parallel paths that rejoined at the
+same node, which has no engineering purpose.  The new network is a ring main:
+the rich condensate and the lean gas enter at opposite corners and a gas
+plant (30 bar) and a power station (40 bar) draw from the other two corners.
+Each customer is fed by both sources, and the hydraulics decide the blend:
+the plant receives the richer, wetter gas (65.8 % CH₄, 4.8 % water) and the
+power station a leaner, drier one (75.7 % CH₄, 2.9 % water).  Script and
+GUI file updated.
+
+### Tests
+
+  - 5 phase-envelope tests for the rich condensate (dew curve traced, envelope
+    closed, critical point not the Kay estimate, cricondentherm consistent
+    with flash).
+  - 1 test that a flash-cache rounding step moves density by < 10⁻⁵.
+
 ## [1.10.1] — 2026-11-21
 
 Bug-fix release from a full audit of all 41 tutorials.

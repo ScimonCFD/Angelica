@@ -367,3 +367,23 @@ class TestSteadyCompositionalSolver:
         for nid, T in result.node_temperatures_c.items():
             assert T is not None, f"node {nid} has no temperature"
             assert 0.0 < T < 200.0, f"node {nid} temperature {T} looks wrong"
+
+
+class TestFlashCacheResolution:
+    """The flash memo rounds (P, T, z).  One rounding step must move a two-phase
+    density far less than the outer-loop density tolerance (1e-4); with the
+    old 0.1 K step it moved ~5e-4 and the GUI version of tutorial 06 locked
+    into a two-state limit cycle and never converged."""
+
+    def test_rounding_step_below_density_tolerance(self):
+        from angelica.properties import compositional_fluid as cfm
+
+        names = ("methane", "ethane", "propane", "n-butane", "n-pentane", "n-hexane", "water")
+        zs = (0.658, 0.088, 0.078, 0.058, 0.035, 0.035, 0.048)
+        P, T = 42.5e5, 26.15
+        step_T = 10.0 ** (-cfm._T_DIGITS)
+        rho0 = cfm._flash_properties(names, *cfm._cache_key_pt(P, T), zs, "PR")[0]
+        rho1 = cfm._flash_properties(names, *cfm._cache_key_pt(P, T + step_T), zs, "PR")[0]
+        rho2 = cfm._flash_properties(names, *cfm._cache_key_pt(P + cfm._P_STEP_PA, T), zs, "PR")[0]
+        assert abs(rho1 - rho0) / rho0 < 1e-5
+        assert abs(rho2 - rho0) / rho0 < 1e-5

@@ -272,13 +272,14 @@ def _trace_arc(
     ascend: bool = True,
     T_min: float = 50.0,
     P_max: float = 1e8,
+    P_min: float = 0.0,
 ) -> "list[tuple[float, float]]":
     """Arc-length continuation from (T_start, P_start, K_start).
 
     ascend=True  traces toward higher T (toward the critical point).
     ascend=False traces toward lower T (away from the critical point,
                  toward the left leg of the envelope).  Stops when
-                 T < T_min or P > P_max.
+                 T < T_min, P > P_max or P < P_min.
     """
     N = len(z)
     S = np.concatenate(
@@ -348,6 +349,11 @@ def _trace_arc(
         except Exception:
             pass
 
+        # Stagnation guard: the T/P clips can pin the corrector in place.
+        T_prev, P_prev = pts[-1]
+        if abs(T_new - T_prev) < 1e-6 * T_prev and abs(P_new - P_prev) < 1e-6 * P_prev:
+            break
+
         S = S_new
         pts.append((T_new, P_new))
 
@@ -359,7 +365,7 @@ def _trace_arc(
             break
 
         # Descent: stop when we exit the practical T/P range.
-        if not ascend and (T_new < T_min or P_new > P_max):
+        if not ascend and (T_new < T_min or P_new > P_max or P_new < P_min):
             break
 
     return pts
@@ -442,8 +448,38 @@ def _dew_trace(
     T_lo: float,
     T_hi: float,
 ) -> "list[tuple[float, float]]":
-    """Dew-point curve: Wilson bootstrap → bidirectional arc-length."""
+    """Dew-point curve: low-pressure dew point → bidirectional arc-length.
+
+    The dew curve is anchored at a low-pressure dew point (1 bar) obtained
+    from a direct P–VF=1 flash.  This works for lean gases and for rich
+    condensates alike: for mixtures with heavy ends the Wilson temperature
+    guess (a fixed fraction of the molar-average Tc) lands far below the dew
+    curve and fails, leaving the envelope open.  From the anchor, arc-length
+    continuation climbs through the cricondentherm to the critical point and
+    descends towards low pressure.
+    """
     N = len(z)
+
+    # ── Low-pressure anchor ───────────────────────────────────────────────
+    for P0 in (1.0e5, 5.0e5, 0.5e5, 2.0e5, 10.0e5):
+        try:
+            res = flash_obj.flash(zs=fracs, P=P0, VF=1)
+            if res is None or res.phase_count != 2 or not res.T:
+                continue
+            K0 = np.array([res.gas.zs[i] / res.liquid0.zs[i] for i in range(N)])
+            if not np.all(np.isfinite(K0)) or not np.all(K0 > 0):
+                continue
+            if float(np.max(np.abs(np.log(K0)))) <= 0.3:
+                continue
+            T0 = float(res.T)
+            pts_up = _trace_arc(gas_phase, liq_phase, z, 1, T0, P0, K0, ascend=True)
+            pts_down = _trace_arc(gas_phase, liq_phase, z, 1, T0, P0, K0,
+                                  ascend=False, T_min=T_lo, P_min=5.0e3)
+            anchored = list(reversed(pts_down)) + pts_up[1:]
+            if len(anchored) >= 3:
+                return anchored
+        except Exception:
+            pass
 
     # ── Wilson bootstrap ──────────────────────────────────────────────────
     ws = _wilson_start(flash_obj, constants, z, fracs, T_lo, T_hi, VF=1)
@@ -523,8 +559,9 @@ def compute_phase_envelope(
     Returns:
         (bubble_pts, dew_pts, Tc_K, Pc_Pa) ordered low→high temperature.
         Both curves share the same last point (the critical point) so the
-        envelope is closed.  Tc_K / Pc_Pa are mole-fraction-weighted
-        pseudo-critical coordinates used only for the plot marker.
+        envelope is closed, and Tc_K / Pc_Pa are that critical point.  Only
+        if the two curves fail to meet do Tc_K / Pc_Pa fall back to the
+        mole-fraction-weighted (Kay) pseudo-critical estimate.
         n_T is accepted for API compatibility but ignored (arc-length is used).
         eos_name: ``"PR"`` (Peng-Robinson, default) or ``"SRK"``.
     """

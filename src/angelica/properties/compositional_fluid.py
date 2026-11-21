@@ -58,6 +58,19 @@ def _get_flash_obj(component_names: tuple[str, ...], eos_name: str):
     return _FLASH_OBJS[key]
 
 
+# Flash results are memoised on rounded (P, T, z).  The rounding must be far
+# finer than the outer-loop tolerances: with T rounded to 0.1 K a two-phase
+# density moves by ~5e-4 per rounding step (5x the default density tolerance),
+# and the outer loop can lock into a two-state limit cycle.
+_P_STEP_PA = 10.0
+_T_DIGITS = 3
+_ZS_DIGITS = 6
+
+
+def _cache_key_pt(P: float, T: float) -> tuple[float, float]:
+    return float(round(P / _P_STEP_PA) * _P_STEP_PA), round(T, _T_DIGITS)
+
+
 def _wilson_psat(Tc: float, Pc: float, omega: float, T_K: float) -> float:
     """Wilson K-value estimate for saturation pressure (Pa) of a single component."""
     if T_K >= Tc:
@@ -381,9 +394,8 @@ class CompositionalFluid(FluidModel):
         zs = self._get_zs(link_state)
         P  = self._get_pressure_pa(link_state)
         T  = self._get_temperature_c(link_state)
-        P_r  = float(round(P / 100.0) * 100.0)
-        T_r  = round(T, 1)
-        zs_r = tuple(round(z, 4) for z in zs)
+        P_r, T_r = _cache_key_pt(P, T)
+        zs_r = tuple(round(z, _ZS_DIGITS) for z in zs)
         return _flash_properties(self.component_names, P_r, T_r, zs_r, self.eos_name)
 
     # ── FluidModel interface ──────────────────────────────────────────────────
@@ -441,8 +453,7 @@ class CompositionalFluid(FluidModel):
             zs = self._get_zs(link_state)
             P  = self._get_pressure_pa(link_state)
             T  = self._get_temperature_c(link_state)
-            P_r  = float(round(P / 100.0) * 100.0)
-            T_r  = round(T, 1)
+            P_r, T_r = _cache_key_pt(P, T)
 
             water_idx = find_water_index(self.component_names)
             if water_idx is not None:
@@ -451,13 +462,13 @@ class CompositionalFluid(FluidModel):
                 sum_hc     = sum(hc_zs_raw)
                 if sum_hc < 1e-10 or not hc_names:
                     return (None, (), ())
-                hc_zs_norm = tuple(round(z / sum_hc, 4) for z in hc_zs_raw)
+                hc_zs_norm = tuple(round(z / sum_hc, _ZS_DIGITS) for z in hc_zs_raw)
                 gas_zs, liquid_zs, VF_hc = _hc_phase_compositions(
                     hc_names, P_r, T_r, hc_zs_norm, self.eos_name
                 )
                 liq_frac = (1.0 - VF_hc) * sum_hc
             else:
-                zs_r = tuple(round(z, 4) for z in zs)
+                zs_r = tuple(round(z, _ZS_DIGITS) for z in zs)
                 gas_zs, liquid_zs, VF_hc = _hc_phase_compositions(
                     self.component_names, P_r, T_r, zs_r, self.eos_name
                 )

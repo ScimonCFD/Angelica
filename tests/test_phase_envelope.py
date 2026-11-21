@@ -309,5 +309,63 @@ class TestComputeQualityLine(unittest.TestCase):
         self.assertGreater(checks, 3, "Too few interior quality-line points checked")
 
 
+
+class TestRichCondensateEnvelope(unittest.TestCase):
+    """Rich mixture with C5/C6 heavy ends (compositional tutorial 06, dry basis).
+
+    Before v1.10.2 the Wilson start for the dew curve sat at 0.5·Tc_mix, far
+    below the dew curve of a mixture with heavy ends: the dew curve came back
+    empty, the envelope was open and the plot showed the Kay pseudo-critical
+    point (≈1 °C, 44 bar) instead of the real critical point.
+    """
+
+    NAMES = ["methane", "ethane", "propane", "n-butane", "n-pentane", "n-hexane"]
+    ZS = [v / 0.93 for v in (0.55, 0.10, 0.10, 0.08, 0.05, 0.05)]
+
+    @classmethod
+    def setUpClass(cls):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            cls.bubble, cls.dew, cls.Tc, cls.Pc = compute_phase_envelope(cls.NAMES, cls.ZS)
+
+    def test_dew_curve_traced(self):
+        self.assertGreater(len(self.dew), 20)
+
+    def test_envelope_closes_at_critical_point(self):
+        self.assertEqual(self.bubble[-1], self.dew[-1])
+        self.assertEqual((self.Tc, self.Pc), self.bubble[-1])
+
+    def test_critical_point_is_not_kay_estimate(self):
+        Tc_C, Pc_bar = self.Tc - 273.15, self.Pc / 1e5
+        self.assertGreater(Tc_C, 40.0, f"Tc={Tc_C:.1f} °C")
+        self.assertGreater(Pc_bar, 100.0, f"Pc={Pc_bar:.1f} bar")
+
+    def test_cricondentherm_matches_flash(self):
+        """Above the cricondentherm the flash is single phase, just below it two-phase."""
+        import warnings
+
+        from thermo import ChemicalConstantsPackage
+        from thermo.eos_mix import PRMIX
+        from thermo.flash import FlashVL
+        from thermo.phases import CEOSGas, CEOSLiquid
+
+        T_cct, P_cct = max(self.dew, key=lambda tp: tp[0])
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            c, props = ChemicalConstantsPackage.from_IDs(self.NAMES)
+            kw = {"Tcs": c.Tcs, "Pcs": c.Pcs, "omegas": c.omegas, "kijs": _build_kij_matrix(c)}
+            flash = FlashVL(c, props,
+                            liquid=CEOSLiquid(PRMIX, kw, HeatCapacityGases=props.HeatCapacityGases),
+                            gas=CEOSGas(PRMIX, kw, HeatCapacityGases=props.HeatCapacityGases))
+            above = flash.flash(zs=self.ZS, T=T_cct + 2.0, P=P_cct)
+            below = flash.flash(zs=self.ZS, T=T_cct - 2.0, P=P_cct)
+        self.assertEqual(above.phase_count, 1)
+        self.assertEqual(below.phase_count, 2)
+
+    def test_dew_curve_reaches_low_pressure(self):
+        self.assertLess(min(p for _, p in self.dew), 1.0e5)
+
+
 if __name__ == "__main__":
     unittest.main()
