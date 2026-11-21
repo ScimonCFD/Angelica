@@ -25,14 +25,19 @@ for a gas well above its dew point.
 
 ## EOS flash preview
 
+Flash at 60 °C.  Reference values in brackets: CoolProp (GERG-2008 type
+Helmholtz mixture model with its reference viscosity correlations).
+
 | Property | Inlet (100 bar) | Outlet (20 bar) |
 |---|---|---|
-| ρ (kg/m³) | ≈ 68 | ≈ 14 |
-| μ (Pa·s × 10⁻⁵) | ≈ 1.18 | ≈ 1.18 |
-| Cp (J/(kg·K)) | ≈ 2180 | ≈ 2180 |
+| ρ (kg/m³) | 81.9 (80.1) | 14.2 (14.1) |
+| μ (Pa·s × 10⁻⁵) | 1.46 (1.48) | 1.22 (1.22) |
+| Cp (J/(kg·K)) | 2869 (2880) | 2294 (2290) |
 
-Density follows the pressure ratio (~5:1) as expected for a real gas.
-Viscosity and Cp are nearly pressure-independent at these conditions.
+Density follows the pressure ratio (~5:1) as expected for a real gas.  Gas
+viscosity rises by ~20 % between 20 and 100 bar: Angelica adds a dense-gas
+(Jossi-Stiel-Thodos) term to the low-pressure mixture viscosity.  Cp also
+rises with pressure, as the gas departs from ideal behaviour.
 
 ## Run
 

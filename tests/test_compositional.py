@@ -387,3 +387,61 @@ class TestFlashCacheResolution:
         rho2 = cfm._flash_properties(names, *cfm._cache_key_pt(P + cfm._P_STEP_PA, T), zs, "PR")[0]
         assert abs(rho1 - rho0) / rho0 < 1e-5
         assert abs(rho2 - rho0) / rho0 < 1e-5
+
+
+class TestGasViscosityPressureDependence:
+    """Gas viscosity must include the dense-gas contribution.
+
+    Reference values: CoolProp 6.6 reference correlations (methane: Quiñones-
+    Cisneros & Huber; ethane: Friend et al.).  Before v1.10.5 the compositional
+    model used thermo's low-pressure mixing rule only (methane at 300 K stayed at
+    11.1 μPa·s up to 150 bar, −31 %), and a dense supercritical phase labelled
+    "liquid" got a 1e-5 Pa·s placeholder (ethane at 350 K, 100 bar: −59 %).
+    """
+
+    @staticmethod
+    def _mu(names, zs, P_pa, T_K):
+        from angelica.properties import compositional_fluid as cfm
+        return cfm._flash_properties(tuple(names), P_pa, T_K - 273.15, tuple(zs), "PR")[1]
+
+    @pytest.mark.parametrize("P_bar, ref_upas, tol", [
+        (1, 11.255, 0.02), (50, 12.173, 0.02), (100, 13.815, 0.02), (150, 16.163, 0.04),
+    ])
+    def test_methane_300K_vs_reference(self, P_bar, ref_upas, tol):
+        mu = self._mu(["methane"], [1.0], P_bar * 1e5, 300.0) * 1e6
+        assert abs(mu - ref_upas) / ref_upas < tol, f"{mu:.3f} vs {ref_upas}"
+
+    def test_methane_ethane_mixture_100bar(self):
+        mu = self._mu(["methane", "ethane"], [0.9, 0.1], 100e5, 300.0) * 1e6
+        assert abs(mu - 14.225) / 14.225 < 0.02
+
+    def test_dense_supercritical_ethane_not_placeholder(self):
+        mu = self._mu(["ethane"], [1.0], 100e5, 350.0) * 1e6
+        assert abs(mu - 24.42) / 24.42 < 0.05, mu
+
+    def test_viscosity_increases_with_pressure(self):
+        mus = [self._mu(["methane", "ethane"], [0.8, 0.2], P, 333.15) for P in (10e5, 40e5, 70e5, 100e5)]
+        assert all(b > a for a, b in zip(mus, mus[1:]))
+
+    def test_liquid_viscosity_unchanged(self):
+        """Pure HC liquids keep thermo's (DIPPR-based) value: n-hexane, 25 °C."""
+        mu = self._mu(["n-hexane"], [1.0], 5e5, 298.15) * 1e3
+        assert abs(mu - 0.2993) / 0.2993 < 0.02
+
+    def test_two_phase_mcadams_uses_gas_mass_fraction(self):
+        """thermo's own blend took phase 0 (here the liquid) as the gas quality."""
+        from angelica.properties import compositional_fluid as cfm
+        names = ("methane", "ethane", "propane", "n-butane", "n-pentane", "n-hexane")
+        zs = [v / 0.93 for v in (0.55, 0.10, 0.10, 0.08, 0.05, 0.05)]
+        fo = cfm._get_flash_obj(names, "PR")
+        res = fo.flash(T=303.15, P=50e5, zs=zs)
+        assert res.phase_count == 2
+        i_gas = min(range(2), key=lambda i: res.phases[i].rho_mass())
+        gas, liq = res.phases[i_gas], res.phases[1 - i_gas]
+        x_g = res.betas_mass[i_gas]
+        mu_g = cfm._phase_viscosity(gas, 303.15, 50e5, fo.constants, fo.correlations, True)
+        mu_l = cfm._phase_viscosity(liq, 303.15, 50e5, fo.constants, fo.correlations, False)
+        expected = 1.0 / (x_g / mu_g + (1.0 - x_g) / mu_l)
+        mu = cfm._flash_properties(names, 50e5, 30.0, tuple(zs), "PR")[1]
+        assert abs(mu - expected) / expected < 1e-9
+        assert mu_g < mu < mu_l

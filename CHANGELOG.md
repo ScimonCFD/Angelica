@@ -1,5 +1,58 @@
 # Changelog
 
+## [1.10.5] — 2026-11-21
+
+### Fix: compositional gas viscosity had no pressure dependence
+
+`thermo` evaluates gas viscosity with low-pressure mixing rules only.  Methane
+at 300 K stayed at 11.1 μPa·s from 1 to 150 bar (reference 16.2 μPa·s, −31 %).
+Gas-like phases now use the thermo low-pressure mixture value plus the
+Jossi-Stiel-Thodos dense-fluid residual (the pressure term of Lohrenz-Bray-
+Clark) on the EOS reduced density ρ_r = V_pc/V.
+
+Against CoolProp reference correlations:
+
+| Fluid | Condition | Before | Now |
+|---|---|---|---|
+| Methane | 300 K, 50 bar | −8.5 % | −0.6 % |
+| Methane | 300 K, 100 bar | −19.4 % | +0.1 % |
+| Methane | 300 K, 150 bar | −31.1 % | +3.1 % |
+| CH₄/C₂H₆ 90/10 | 300 K, 100 bar | −23.1 % | −0.3 % |
+| Ethane (dense, supercritical) | 350 K, 100 bar | −59 % | −2.7 % |
+
+### Fix: dense supercritical phase labelled "liquid" got a placeholder viscosity
+
+When thermo labelled a dense supercritical phase as liquid, its liquid
+correlations were out of range and returned 1·10⁻⁵ Pa·s.  Any phase above its
+pseudo-critical temperature is now treated as gas-like.
+
+### Fix: two-phase McAdams blend used the wrong phase fraction
+
+thermo's McAdams blend, 1/μ = x/μ_g + (1−x)/μ_l, takes the mass fraction of
+phase 0 as the gas quality x, but phase 0 is often the liquid: for the
+tutorial 06 condensate at 30 °C, 50 bar it returned 19.8 instead of
+17.8 μPa·s.  The blend is now computed with the gas mass fraction (the gas is
+the lighter phase if thermo labels both alike).
+
+### Impact
+
+Pressure drop changes little (friction depends weakly on viscosity): tutorial
+flows move by < 0.1 %.  Compositional tutorial 01 README updated (it stated
+that viscosity was pressure-independent) with CoolProp reference values.
+
+### Known limitation
+
+Liquid viscosity is still thermo's DIPPR-based mixing, which is accurate for
+pure and heavy liquids but low for light liquids with dissolved methane
+(−25 % to −70 % vs CoolProp for C₁/C₃–C₆ liquids).  In homogeneous
+gas-condensate flow this moves the mixture viscosity by a few percent.  A
+corresponding-states liquid model (Pedersen) is the planned fix.
+
+### Tests
+
+  - 9 viscosity tests (methane 1–150 bar, CH₄/C₂H₆ mixture, dense ethane,
+    monotonic in pressure, liquid unchanged, McAdams with gas mass fraction).
+
 ## [1.10.4] — 2026-11-21
 
 ### Fix: constant vapour-fraction (quality) lines wrong near the critical point

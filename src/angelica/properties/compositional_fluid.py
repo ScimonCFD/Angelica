@@ -71,6 +71,77 @@ def _cache_key_pt(P: float, T: float) -> tuple[float, float]:
     return float(round(P / _P_STEP_PA) * _P_STEP_PA), round(T, _T_DIGITS)
 
 
+# ── Viscosity ─────────────────────────────────────────────────────────────────
+# thermo evaluates gas viscosity with low-pressure mixing rules only (no
+# pressure dependence), returns a 1e-5 Pa·s placeholder when a dense
+# supercritical phase is labelled "liquid", and its McAdams two-phase blend
+# takes the mass fraction of phase 0 as the gas quality even when phase 0 is
+# the liquid.  Viscosity is therefore assembled here:
+#   gas-like phase : thermo low-pressure mixture value + Jossi-Stiel-Thodos
+#                    dense-gas residual on the EOS reduced density
+#   liquid phase   : thermo liquid mixture value (DIPPR-based, accurate)
+#   two-phase      : McAdams, 1/μ = x_g/μ_g + (1 − x_g)/μ_l, x_g = gas mass fraction
+
+_ATM_PA = 101_325.0
+
+
+def _jst_residual_pa_s(rho_r: float, Tpc: float, Ppc: float, MW: float) -> float:
+    """Jossi-Stiel-Thodos (1962) dense-fluid residual viscosity μ − μ⁰ [Pa·s].
+
+    ρ_r = V_pc / V (Kay pseudo-critical volume over EOS molar volume).  This is
+    the pressure term of the Lohrenz-Bray-Clark (1964) correlation, valid for
+    gases and dense supercritical fluids up to ρ_r ≈ 3.
+    """
+    poly = 0.1023 + rho_r * (0.023364 + rho_r * (0.058533 + rho_r * (-0.040758 + rho_r * 0.0093724)))
+    xi = Tpc ** (1.0 / 6.0) * MW ** -0.5 * (Ppc / _ATM_PA) ** (-2.0 / 3.0)
+    return max(poly ** 4 - 1.0e-4, 0.0) / xi * 1.0e-3   # cP → Pa·s
+
+
+def _gas_like(phase, T_K: float, constants) -> bool:
+    """Gas-labelled phases, and any phase above its pseudo-critical temperature."""
+    from thermo.phases import CEOSGas
+    if isinstance(phase, CEOSGas):
+        return True
+    Tpc = sum(z * tc for z, tc in zip(phase.zs, constants.Tcs))
+    return T_K >= Tpc
+
+
+def _phase_viscosity(phase, T_K: float, P_pa: float, constants, correlations,
+                     gas_like: bool | None = None) -> float:
+    """Viscosity of one EOS phase [Pa·s] (see module notes above)."""
+    zs = list(phase.zs)
+    if gas_like is None:
+        gas_like = _gas_like(phase, T_K, constants)
+    if not gas_like:
+        return float(phase.mu())
+    ws = phase.ws() if hasattr(phase, "ws") else None
+    mu0 = float(correlations.ViscosityGasMixture.mixture_property(T_K, P_pa, zs, ws))
+    Tpc = sum(z * v for z, v in zip(zs, constants.Tcs))
+    Ppc = sum(z * v for z, v in zip(zs, constants.Pcs))
+    Vpc = sum(z * v for z, v in zip(zs, constants.Vcs))
+    MW = sum(z * v for z, v in zip(zs, constants.MWs))
+    rho_r = Vpc / float(phase.V())
+    return mu0 + _jst_residual_pa_s(rho_r, Tpc, Ppc, MW)
+
+
+def _result_viscosity(res, T_K: float, P_pa: float, constants, correlations) -> float:
+    """Bulk viscosity of a flash result: single phase, or McAdams blend."""
+    phases = list(res.phases)
+    if len(phases) == 1:
+        return _phase_viscosity(phases[0], T_K, P_pa, constants, correlations)
+    gas_like = [_gas_like(ph, T_K, constants) for ph in phases]
+    if all(gas_like) or not any(gas_like):
+        # thermo can label both phases alike near the critical point:
+        # treat the lighter one as the vapour.
+        i_gas = min(range(len(phases)), key=lambda i: phases[i].rho_mass())
+        gas_like = [i == i_gas for i in range(len(phases))]
+    mus = [_phase_viscosity(ph, T_K, P_pa, constants, correlations, g)
+           for ph, g in zip(phases, gas_like)]
+    betas_mass = list(res.betas_mass)
+    inv = sum(b / mu for b, mu in zip(betas_mass, mus))
+    return 1.0 / inv if inv > 0 else float(res.mu())
+
+
 def _wilson_psat(Tc: float, Pc: float, omega: float, T_K: float) -> float:
     """Wilson K-value estimate for saturation pressure (Pa) of a single component."""
     if T_K >= Tc:
@@ -275,7 +346,7 @@ def _flash_properties(
         phase.constants    = parent.constants
         phase.correlations = parent.correlations
         rho = max(float(phase.rho_mass()), 0.001)
-        mu  = max(float(phase.mu()),        1e-10)
+        mu  = max(_phase_viscosity(phase, T_K, pressure_pa, const, parent.correlations), 1e-10)
         Cp  = max(float(phase.Cp_mass()),   1.0)
         k   = max(float(phase.k()),         1e-6)
         return (rho, mu, Cp, k, VF_sc, 0.0)
@@ -289,7 +360,7 @@ def _flash_properties(
         ) from _exc
 
     rho = float(res.rho_mass())
-    mu  = float(res.mu())
+    mu  = _result_viscosity(res, T_K, pressure_pa, flash_obj.constants, flash_obj.correlations)
     Cp  = float(res.Cp_mass())
     k   = float(res.k())
     VF  = float(res.VF) if res.VF is not None else 0.0
