@@ -1,4 +1,5 @@
 from .beggs_brill import BeggsBrillCorrelation
+from .choke import ChokeFlowModel, ChokeOperatingPoint, choke_flow, choke_operating_point
 from .convection_scheme import ConvectionScheme, HybridScheme, PowerLawScheme, UpwindScheme
 from .friction import (
     ColebrookPipeCorrelation,
@@ -16,6 +17,8 @@ from .pump import PumpCurveModel
 
 __all__ = [
     "BeggsBrillCorrelation",
+    "ChokeFlowModel",
+    "ChokeOperatingPoint",
     "ConvectionScheme",
     "ColebrookPipeCorrelation",
     "HazenWilliamsPipeCorrelation",
@@ -30,5 +33,7 @@ __all__ = [
     "PressureDropCorrelation",
     "UpwindScheme",
     "WeymouthPipeCorrelation",
+    "choke_flow",
+    "choke_operating_point",
     "elevation_pressure_term",
 ]

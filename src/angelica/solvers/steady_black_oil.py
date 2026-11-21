@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 
+from angelica.closures.choke import ChokeFlowModel
 from angelica.closures.convection_scheme import ConvectionScheme, HybridScheme
 from angelica.closures.pressure_drop import PressureDropCorrelation
 from angelica.core.case import NetworkCase
@@ -90,7 +91,17 @@ class SteadyBlackOilSolver(BaseSolver):
         self._hydraulic_solver = SteadyIsothermalIncompressibleSolver(
             settings=self.hydraulic_settings,
             turbulent_pipe_correlation=turbulent_pipe_correlation,
+            fitting_correlation=ChokeFlowModel(),
         )
+
+    def _set_correlation_fluid(self, fluid) -> None:
+        """Pass the current (possibly per-pipe) fluid to fluid-aware correlations."""
+        for corr in (
+            self._hydraulic_solver.turbulent_pipe_correlation,
+            self._hydraulic_solver.fitting_correlation,
+        ):
+            if hasattr(corr, "set_fluid"):
+                corr.set_fluid(fluid)
 
     # ── Composition helpers ───────────────────────────────────────────────────
 
@@ -269,6 +280,10 @@ class SteadyBlackOilSolver(BaseSolver):
                     )
                 return self._cache[key]
 
+            def fluid_for_link(self, link_state) -> BlackOilFluid:
+                """Per-link BlackOilFluid (used by fluid-aware correlations)."""
+                return self._fluid_for(link_state)
+
             def density_for_link(self, link_state) -> float:
                 return self._fluid_for(link_state).density_for_link(link_state)
 
@@ -377,10 +392,8 @@ class SteadyBlackOilSolver(BaseSolver):
                 for link in network_state.components
             ]
 
-            # Give fluid-aware correlations (e.g. Beggs-Brill) the current fluid.
-            _turb_corr = self._hydraulic_solver.turbulent_pipe_correlation
-            if hasattr(_turb_corr, "set_fluid"):
-                _turb_corr.set_fluid(effective_fluid)
+            # Give fluid-aware correlations (Beggs-Brill, choke) the current fluid.
+            self._set_correlation_fluid(effective_fluid)
 
             lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
                 network_state, effective_fluid, progress_callback=progress_callback
@@ -436,8 +449,7 @@ class SteadyBlackOilSolver(BaseSolver):
         # Always runs so that the reported flow field and temperature field
         # come from the same solve with the final compositions and PVT.
         # Pressure field is kept as-is (converged state) — no re-initialisation.
-        if hasattr(_turb_corr, "set_fluid"):
-            _turb_corr.set_fluid(effective_fluid)
+        self._set_correlation_fluid(effective_fluid)
         lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
             network_state, effective_fluid, progress_callback=progress_callback
         )

@@ -76,6 +76,23 @@ PIPES = (
 )
 
 
+def _well_fluid(api: float, sg: float, gor: float, wor: float) -> BlackOilFluid:
+    return BlackOilFluid(api_gravity=api, gas_gravity=sg, gor_sc_m3_per_m3=gor,
+                         wor_sc_m3_per_m3=wor, reference_pressure_pa=6e6,
+                         reference_temperature_c=65.0)
+
+
+# Fluids used for the per-pipe Beggs-Brill diagnostics printed below.  The
+# solver blends the per-inlet compositions itself; for the manifold line the
+# reference fluid is used as an approximation of the blend.
+PIPE_FLUIDS = (
+    _well_fluid(40.0, 0.70, 150.0, 0.1),
+    _well_fluid(32.0, 0.65, 40.0, 0.3),
+    _well_fluid(25.0, 0.60, 15.0, 0.8),
+    BASE_FLUID,
+)
+
+
 def build_case() -> NetworkCase:
     return NetworkCase(
         name="BB gathering network — Tutorial 09",
@@ -153,7 +170,7 @@ def run():
         T_end   = res_bb.node_temperatures_c.get(pipe.end_node, 40.0)
         T_avg   = 0.5 * (T_start + T_end)
 
-        pvt   = BASE_FLUID.pvt(P_avg, T_avg)
+        pvt   = PIPE_FLUIDS[idx].pvt(P_avg, T_avg)
         alpha_l = pvt.holdup_oil + pvt.holdup_water
         alpha_g = pvt.holdup_gas
         C_L = alpha_l / max(alpha_l + alpha_g, 1e-9)
@@ -178,10 +195,16 @@ def run():
     print(f"\n  BB total to separator: {res_bb.component_flows[3].volumetric_flow_m3_per_h:.1f} m³/h")
     print(f"  CK total to separator: {res_ck.component_flows[3].volumetric_flow_m3_per_h:.1f} m³/h")
     print()
-    print("  Note: negative flow on Pipe-C means manifold pressure exceeds Well-3 bhp.")
-    print("  With BB the manifold is 0.28 MPa *above* Well 3 — fluid flows back into")
-    print("  the well, which would trip a check valve in reality. Colebrook gives a")
-    print("  smaller manifold pressure and Well-3 produces 0.6 m³/h into the system.")
+    P_well3 = case.pressure_inlets[2].pressure_pa
+    q3_ck = res_ck.component_flows[2].volumetric_flow_m3_per_h
+    q3_bb = res_bb.component_flows[2].volumetric_flow_m3_per_h
+    print("  Note: negative flow on Pipe-C means the manifold pressure exceeds the")
+    print(f"  Well-3 pressure ({P_well3/1e6:.1f} MPa).  With Beggs-Brill the manifold sits")
+    print(f"  {(P_manifold_bb - P_well3)/1e6:+.2f} MPa relative to Well 3 (q = {q3_bb:+.2f} m³/h);")
+    print(f"  with Colebrook it sits {(P_manifold_ck - P_well3)/1e6:+.2f} MPa (q = {q3_ck:+.2f} m³/h).")
+    print("  Backflow into a well would close a check valve in a real field —")
+    print("  slip-aware pressure drop changes which wells can produce at all.")
+    print("  (Diagnostics for the manifold line use the reference fluid.)")
 
 
 if __name__ == "__main__":

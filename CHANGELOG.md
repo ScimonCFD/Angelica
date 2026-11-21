@@ -1,5 +1,61 @@
 # Changelog
 
+## [1.10.0] — 2026-11-21
+
+### New: critical two-phase flow through chokes (Sachdeva et al., 1986)
+
+`Choke` now models critical (sonic) and subcritical gas-liquid flow with the
+Sachdeva, Schmidt, Brill & Blais (1986) model (SPE 15657), the standard
+mechanistic choke model in commercial simulators.  New module
+`angelica.closures.choke` with `ChokeFlowModel`, `choke_flow()`,
+`choke_operating_point()` and `ChokeOperatingPoint`.
+
+- When P2/P1 falls below the critical ratio y_c the flow is choked and the
+  rate no longer depends on the downstream pressure.
+- Limits verified in tests: pure liquid → orifice equation Cd·√(2ρΔP);
+  pure gas → y_c = (2/(k+1))^(k/(k-1)).
+- Gas k = Cp/Cv from ideal-gas Cv = Cp − R/M; frozen gas mass fraction at
+  upstream conditions (no interphase mass transfer, as in the original model).
+- New `Choke(flow_model=...)`: `"sachdeva"` (default) or `"orifice"` (the
+  v1.9.1 incompressible K-factor behaviour).  Fluids without black-oil PVT
+  (water, dead oil, gas solvers) always use the orifice K-factor.
+- `SteadyBlackOilSolver` uses `ChokeFlowModel` for all fittings; ordinary
+  `Fitting` links behave exactly as before.
+
+**Behaviour change:** in `SteadyBlackOilSolver`, chokes with free gas at the
+inlet now give lower (critical-limited) rates than in v1.9.1.  Pass
+`flow_model="orifice"` to recover the previous results.
+
+**Tutorial 10 rewritten** (steady_black_oil/10_choke_valve): wellhead at
+5 MPa (below the 19.4 MPa bubble point, x1 = 0.069, y_c = 0.546).
+  - Bean sweep: 8/64"–40/64" critical, 48/64" subcritical; the orifice
+    equation overestimates the rate by ~8 % (48/64") to ~40 % (8/64").
+  - Separator sweep (24/64"): rate constant at 1.616 kg/s from 0.5 to
+    2.5 MPa separator pressure, then falls once the choke turns subcritical.
+
+### Bug fix: Beggs-Brill ignored per-inlet fluids
+
+With `InletFluidBC` the solver wraps the fluid per pipe; that wrapper had no
+`.pvt()`, so `BeggsBrillCorrelation` silently used its all-liquid fallback
+(C_L = 1, ρ_L = 850 kg/m³) in every multi-fluid network.  The wrapper now
+exposes `fluid_for_link()`, Beggs-Brill and the choke model use it, and the
+fallback emits a warning if it is ever reached.
+
+**Tutorial 09 results corrected.**  With real PVT the Beggs-Brill manifold
+pressure is 8.10 MPa (v1.9.1 reported 8.28 MPa); it still exceeds Well 3
+(8.0 MPa), so the backflow conclusion holds (−4.7 m³/h).  The per-pipe
+diagnostics now use each well's own fluid: Well 1 (GOR 150) f_tp/f_n = 1.46×,
+Well 3 (GOR 15) 1.00×.
+
+### Tests (317 total, +13)
+
+Sachdeva limits (gas, liquid, monotone y_c, flux maximum), invalid
+`flow_model`, K-factor fallback, critical plateau vs separator pressure,
+subcritical decrease, orifice over-prediction, solver vs closed form, and a
+regression test that per-inlet networks never hit the Beggs-Brill fallback.
+
+---
+
 ## [1.9.1] — 2026-10-04
 
 ### New: Choke valve component

@@ -36,6 +36,7 @@ the turbulent correlation is an instance of `BeggsBrillCorrelation`.
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass
 
 from .gravity import GRAVITY_M_PER_S2
@@ -309,6 +310,7 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
 
     def __init__(self) -> None:
         self._fluid = None
+        self._warned_fallback = False
 
     def set_fluid(self, fluid) -> None:
         """Update the fluid model used to extract phase-fraction data."""
@@ -316,7 +318,17 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
 
     def _phase_properties(self, pipe_state) -> tuple[float, float, float, float, float]:
         """Return (C_L, rho_l, rho_g, mu_l, mu_g) at midpoint conditions."""
-        if self._fluid is None or not hasattr(self._fluid, "pvt"):
+        fluid = self._fluid
+        if fluid is not None and hasattr(fluid, "fluid_for_link"):
+            fluid = fluid.fluid_for_link(pipe_state)  # per-inlet composition wrapper
+        if fluid is None or not hasattr(fluid, "pvt"):
+            if not self._warned_fallback:
+                warnings.warn(
+                    "BeggsBrillCorrelation: fluid has no black-oil PVT; using an "
+                    "all-liquid fallback (C_L=1, rho_l=850 kg/m3).",
+                    stacklevel=2,
+                )
+                self._warned_fallback = True
             return 1.0, 850.0, 1.2, 1e-3, 1.5e-5  # all-liquid fallback
 
         # Midpoint pressure
@@ -329,11 +341,11 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
         elif P_e is not None:
             P_avg = float(P_e)
         else:
-            P_avg = getattr(self._fluid, "reference_pressure_pa", 101_325.0)
+            P_avg = getattr(fluid, "reference_pressure_pa", 101_325.0)
 
         T_avg = float(pipe_state.temperature_c) if pipe_state.temperature_c is not None else 20.0
 
-        pvt = self._fluid.pvt(P_avg, T_avg)
+        pvt = fluid.pvt(P_avg, T_avg)
 
         alpha_l = pvt.holdup_oil + pvt.holdup_water
         alpha_g = pvt.holdup_gas

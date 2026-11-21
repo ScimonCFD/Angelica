@@ -113,9 +113,17 @@ class Fitting(PressureChanger):
 
 @dataclass(frozen=True)
 class Choke(Fitting):
-    """Production choke (bean) modeled as a sharp-edged orifice.
+    """Production choke (bean) with critical / subcritical two-phase flow.
 
-    The hydraulic resistance is derived from the standard orifice equation:
+    With ``flow_model="sachdeva"`` (default) and a black-oil fluid,
+    ``SteadyBlackOilSolver`` computes the flow with the Sachdeva et al. (1986)
+    model (see ``angelica.closures.choke``): when P2/P1 drops below the
+    critical ratio the flow is choked and no longer depends on the downstream
+    pressure.  With pure liquid the model reduces to the orifice equation below.
+
+    With ``flow_model="orifice"``, or with fluids that have no black-oil PVT
+    (water, dead oil, gas solvers), the choke behaves as a K-factor fitting
+    derived from the incompressible orifice equation:
 
         ṁ = Cd · A_orifice · √(2·ρ·ΔP)
 
@@ -130,7 +138,10 @@ class Choke(Fitting):
     start_node, end_node, diameter_m : inherited (pipe cross-section)
     orifice_diameter_m : inner diameter of the choke bean/nozzle (m)
     discharge_coefficient : orifice discharge coefficient Cd (default 0.62,
-        appropriate for a sharp-edged orifice plate per ISO 5167)
+        appropriate for a sharp-edged orifice plate per ISO 5167; Sachdeva
+        et al. report Cd ≈ 0.75 for liquid-dominated and ≈ 0.85 for
+        gas-dominated flow through production chokes)
+    flow_model : "sachdeva" (default, critical-flow aware) or "orifice"
 
     Typical oilfield usage
     ----------------------
@@ -141,6 +152,7 @@ class Choke(Fitting):
 
     orifice_diameter_m: float = float("nan")
     discharge_coefficient: float = 0.62
+    flow_model: str = "sachdeva"
 
     def __post_init__(self) -> None:
         if math.isnan(self.orifice_diameter_m):
@@ -153,6 +165,10 @@ class Choke(Fitting):
             raise ValueError(
                 f"Choke orifice_diameter_m ({self.orifice_diameter_m:.4f} m) must be "
                 f"less than pipe diameter_m ({self.diameter_m:.4f} m)"
+            )
+        if self.flow_model not in ("sachdeva", "orifice"):
+            raise ValueError(
+                f"Choke flow_model must be 'sachdeva' or 'orifice' (got {self.flow_model!r})"
             )
         if not (0.0 < self.discharge_coefficient <= 1.0):
             raise ValueError(
