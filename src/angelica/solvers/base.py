@@ -81,47 +81,68 @@ class BaseSolver(ABC):
     ) -> GlobalEnergyBalance:
         """Compute the steady-state global energy balance (first law).
 
-        1. Enthalpy entering via inlet boundary nodes: Ė_in = Σ ṁ·cp·T
-        2. Enthalpy leaving via outlet boundary nodes: Ė_out = Σ ṁ·cp·T
-        3. Heat added by HeatSource links: Q_src = Σ power_w
-        4. Heat lost through pipe walls: Q_wall = Σ U·π·D·L·(T_pipe − T_amb)
+        Quantities are the ones the energy equation conserves, ṁ·cp·T with the
+        heat capacity of each link (0 °C reference):
 
-        Balance: Ė_in + Q_src − Q_wall − Ė_out ≈ 0
+        1. Ė_in / Ė_out: Σ ṁ·cp_link·T_node over the links attached to inlet /
+           outlet boundary nodes (cp of a pipe at its mean temperature, of a
+           device at its inlet / outlet state — as in the assembly).
+        2. Q_src: Σ power_w of HeatSource links.
+        3. Q_wall: Σ U·π·D·L·(T_pipe − T_amb), computed independently of the
+           assembly so that discretisation errors in the wall term show up.
+        4. W_shaft: Σ ṁ·(cp·T)_out − ṁ·(cp·T)_in over pumps/compressors
+           (= ṁ·ΔP/ρ for liquids).
+        5. Ė_JT: the same difference over isenthalpic devices (valves in a
+           real gas): the change of sensible ṁ·cp·T at constant enthalpy,
+           negative when the gas cools.
+
+        Balance: Ė_in + Q_src + W_shaft + Ė_JT − Q_wall − Ė_out ≈ 0
         """
 
-        class _TempProxy:
-            __slots__ = ("temperature_c",)
-            def __init__(self, t: float) -> None:
-                self.temperature_c = t
+        from angelica.numerics.energy import _LinkAtTemperature, device_thermal_state
 
-        # Net flow into each node
-        node_net_in: dict[int, float] = dict.fromkeys(network_state.nodes, 0.0)
+        devices = {}
         for link in network_state.components:
-            flow = link.mass_flow_kg_per_s
-            node_net_in[link.start_node.node_id] -= flow
-            node_net_in[link.end_node.node_id] += flow
+            dt = device_thermal_state(link, fluid_model, T_ref)
+            if dt is not None:
+                devices[id(link)] = dt
 
-        # Boundary enthalpy fluxes
+        def _cp_at_node(link, node_id: int, T_node: float) -> float:
+            dt = devices.get(id(link))
+            if dt is not None:
+                return dt.cp_up if dt.up_node.node_id == node_id else dt.cp_out
+            T_link = link.temperature_c if link.temperature_c is not None else T_node
+            return fluid_model.specific_heat_for_link(_LinkAtTemperature(link, T_link))
+
+        # Boundary enthalpy fluxes, link by link
         h_in_w = 0.0
         h_out_w = 0.0
-        for nid, node in network_state.nodes.items():
-            if not node.is_boundary:
+        for link in network_state.components:
+            flow = float(link.mass_flow_kg_per_s)
+            if abs(flow) < 1e-30:
                 continue
-            T_node = node.temperature_c
-            if T_node is None:
-                continue
-            net = node_net_in[nid]
-            if abs(net) < 1e-30:
-                continue
-            try:
-                cp = fluid_model.specific_heat_for_link(_TempProxy(T_node))
-            except NotImplementedError:
-                continue
-            rate = abs(net) * cp * T_node  # W  (0 °C reference)
-            if net < 0:           # fluid injected into network
-                h_in_w += rate
-            else:                 # fluid absorbed from network
-                h_out_w += rate
+            for node, leaves_node in ((link.start_node, flow > 0.0), (link.end_node, flow < 0.0)):
+                if not node.is_boundary or node.temperature_c is None:
+                    continue
+                try:
+                    cp = _cp_at_node(link, node.node_id, node.temperature_c)
+                except NotImplementedError:
+                    continue
+                rate = abs(flow) * cp * node.temperature_c   # W (0 °C reference)
+                if leaves_node:      # fluid injected into the network here
+                    h_in_w += rate
+                else:                # fluid absorbed by the boundary here
+                    h_out_w += rate
+
+        # Shaft work and Joule-Thomson term of devices
+        w_shaft_w = 0.0
+        e_jt_w = 0.0
+        for dt in devices.values():
+            delta = abs(dt.mdot) * (dt.cp_out * dt.T_out - dt.cp_up * dt.T_up)
+            if dt.kind == "pump":
+                w_shaft_w += delta
+            elif dt.kind == "isenthalpic":
+                e_jt_w += delta
 
         # Heat from link sources and pipe walls
         q_sources_w = 0.0
@@ -153,7 +174,7 @@ class BaseSolver(ABC):
                     if abs(dT1) < 1e-12 or abs(dT2) < 1e-12 or dT1 * dT2 <= 0.0:
                         # Near-ambient or sign flip: fall back to enthalpy change
                         try:
-                            cp = fluid_model.specific_heat_for_link(_TempProxy(T_up))
+                            cp = fluid_model.specific_heat_for_link(_LinkAtTemperature(link, T_up))
                         except NotImplementedError:
                             continue
                         q_wall_w += mdot * cp * (T_up - T_exit)
@@ -172,6 +193,8 @@ class BaseSolver(ABC):
             enthalpy_out_kw=h_out_w / 1000.0,
             heat_sources_kw=q_sources_w / 1000.0,
             heat_wall_loss_kw=q_wall_w / 1000.0,
+            shaft_work_kw=w_shaft_w / 1000.0,
+            joule_thomson_kw=e_jt_w / 1000.0,
         )
 
     @staticmethod

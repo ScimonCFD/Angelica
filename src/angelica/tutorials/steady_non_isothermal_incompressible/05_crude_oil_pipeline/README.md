@@ -32,7 +32,7 @@ As crude oil cools from 80 °C toward 15 °C, its viscosity rises by a factor of
 
 ```
 Fluid: 32.0°API dead crude oil
-  T =  80.0 °C  →  μ =   2.92 cP  cp = 2103 J/kg/K  k = 0.1205 W/m/K
+  T =  80.0 °C  →  μ = 2.92 cP  cp = 2103 J/kg/K  k = 0.1205 W/m/K
   T =  15.0 °C  →  μ = 129.65 cP  cp = 1866 J/kg/K  k = 0.1250 W/m/K
 
 Case: Crude Oil Pipeline — thermal (32°API, T_in=80°C)
@@ -41,16 +41,16 @@ Temperature iterations: 4
 
 Node     P (bar)    T (°C)
   1        8.000     80.00
-  2        3.716     76.65
-  3        1.013     74.36
-  4        1.013     74.96
+  2        3.717     76.53
+  3        1.013     74.17
+  4        1.013     74.79
 
 Component         ṁ (kg/s)    Q (m³/h)   T_in (°C)  T_out (°C)
-  Pipe:trunk        9.9227     41.3142       80.00       76.65
-  Pipe:branch_a      6.1560     25.6310       76.65       74.36
-  Pipe:branch_b      3.7667     15.6832       76.65       74.96
+  Pipe:trunk        9.9204     41.3045       80.00       76.53
+  Pipe:branch_a      6.1544     25.6247       76.53       74.17
+  Pipe:branch_b      3.7659     15.6798       76.53       74.79
 
-Viscosity ratio (cold/hot): 44.4×
+  Viscosity ratio (cold/hot): 44.4×
 ```
 
 ## Running

@@ -44,14 +44,14 @@ python tutorials/steady_compositional/02_gas_mixing_junction/run.py
 Converged:         True
 Outer iterations:  4
 
-Node   P (bar)    T (°C)
-   3    69.23      50.61   ← junction pressure from SIMPLE
-   4    25.00      35.82
+  Node    P (bar)    T (°C)
+     3     71.567     62.62   ← junction pressure from SIMPLE
+     4     25.000     45.06
 
 Blended composition in pipe_C (mass-weighted):
-  methane  : 78.43 mol%
-  ethane   : 16.49 mol%
-  propane  :  5.09 mol%
+  methane   : 77.79 mol%
+  ethane    : 16.95 mol%
+  propane   : 5.25 mol%
 ```
 
 The blend is weighted by the mass flows of pipes A and B, which differ

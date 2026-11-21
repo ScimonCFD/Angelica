@@ -48,18 +48,25 @@ class GlobalEnergyBalance:
     Sign convention:
         heat_sources_kw  > 0 : heat ADDED to the fluid (heaters, positive power_w)
         heat_wall_loss_kw > 0 : heat LEAVING the fluid to the environment
-        energy_error_kw ≈ 0  : residual of (Ė_in + Q_src − Q_wall − Ė_out)
+        shaft_work_kw    > 0 : work ADDED by pumps / compressors
+        joule_thomson_kw     : change of ṁ·cp·T across isenthalpic valves
+                               (< 0 when a real gas cools on expansion)
+        energy_error_kw ≈ 0  : residual of
+                               (Ė_in + Q_src + W_shaft + Ė_JT − Q_wall − Ė_out)
     """
 
     enthalpy_in_kw: float       # Σ ṁ × cp × T at inlet boundary nodes
     enthalpy_out_kw: float      # Σ ṁ × cp × T at outlet boundary nodes
     heat_sources_kw: float      # Σ power_w for all HeatSource links
     heat_wall_loss_kw: float    # Σ U·π·D·L·(T_pipe − T_amb) for all pipes
+    shaft_work_kw: float = 0.0  # Σ pump / compressor work on the fluid
+    joule_thomson_kw: float = 0.0  # Σ ṁ·Δ(cp·T) across isenthalpic devices
 
     @property
     def energy_error_kw(self) -> float:
         """Residual of the global first-law balance (should be ≈ 0)."""
-        return self.enthalpy_in_kw + self.heat_sources_kw - self.heat_wall_loss_kw - self.enthalpy_out_kw
+        return (self.enthalpy_in_kw + self.heat_sources_kw + self.shaft_work_kw
+                + self.joule_thomson_kw - self.heat_wall_loss_kw - self.enthalpy_out_kw)
 
     @property
     def energy_error_pct(self) -> float:

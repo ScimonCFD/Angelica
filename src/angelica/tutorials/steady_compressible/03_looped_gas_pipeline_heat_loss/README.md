@@ -58,22 +58,22 @@ long feeder and collector pipes.
 
 | Link | Route | Flow (kg/s) |
 |---|---|---|
-| L1 | feeder 1→2 | 2.639 |
-| L2 | upper 2→3 | 1.518 |
-| L3 | lower 2→4 | 1.122 |
-| L4 | cross 3→4 | 0.395 |
-| L5 | upper 3→5 | 1.123 |
-| L6 | lower 4→5 | 1.517 |
-| L7 | collector 5→6 | 2.639 |
+| L1 | feeder 1→2 | 2.643 |
+| L2 | upper 2→3 | 1.520 |
+| L3 | lower 2→4 | 1.123 |
+| L4 | cross 3→4 | 0.396 |
+| L5 | upper 3→5 | 1.124 |
+| L6 | lower 4→5 | 1.519 |
+| L7 | collector 5→6 | 2.643 |
 
 | Node | Pressure | Temperature |
 |---|---|---|
 | Source (1) | 700.0 kPa | 40.0 °C |
-| Junction A (2) | 663.4 kPa | 32.6 °C |
-| Junction 3 | 616.4 kPa | 26.6 °C |
-| Junction 4 | 596.9 kPa | 25.2 °C |
-| Junction B (5) | 545.3 kPa | 21.8 °C |
-| Sink (6) | 500.0 kPa | 18.9 °C |
+| Junction A (2) | 663.4 kPa | 31.9 °C |
+| Junction 3 | 616.3 kPa | 25.5 °C |
+| Junction 4 | 596.8 kPa | 24.2 °C |
+| Junction B (5) | 545.3 kPa | 20.7 °C |
+| Sink (6) | 500.0 kPa | 17.8 °C |
 
 ## Running
 

@@ -1,6 +1,6 @@
 {
  "converged": true,
- "energy_error_pct": 6.011506636010477,
+ "energy_error_pct": 8.3475756272326e-07,
  "mass_error_pct": 0.00010866408327503394,
  "mass_flows_kg_per_s": {
   "Fitting:link_2_fitting_2": 18.803753336254168,

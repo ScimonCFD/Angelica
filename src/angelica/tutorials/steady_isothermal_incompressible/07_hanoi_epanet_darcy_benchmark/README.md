@@ -109,7 +109,7 @@ The script `benchmark_tables.py` prints:
 
 Some trunk link flows are reported with a sign that may appear inverted
 relative to intuitive flow direction. This reflects the internal link
-orientation assigned when the scene was built. Links 17, 18, and 19 carry
+orientation assigned when the scene was built. Links 17, 18, 19, 26, 27 and 32 carry
 negative expected flows by convention; the magnitude is physically correct.
 
 ## Practical Interpretation

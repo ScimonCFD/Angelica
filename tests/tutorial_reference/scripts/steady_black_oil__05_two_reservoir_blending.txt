@@ -9,13 +9,13 @@ PVT iterations: 4
   Node    P (MPa)    T (°C)
      1      9.000     70.00
      2      8.000     60.00
-     3      4.674     63.30
-     4      2.000     62.17
+     3      4.674     63.27
+     4      2.000     62.14
 
 Pipe                    ṁ (kg/s)   Q_mix (m³/h)
-pipe_A                   103.460         438.74
-pipe_B                    65.899         247.45
-pipe_C                   169.358         764.23
+pipe_A                   103.459         438.74
+pipe_B                    65.898         247.45
+pipe_C                   169.357         764.18
 
 Surface rates at separator (standard conditions):
   From Reservoir A (103.5 kg/s):

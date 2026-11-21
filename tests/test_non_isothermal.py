@@ -771,3 +771,33 @@ def test_pump_heating_matches_shaft_work_incompressible():
         f"Pump ΔT = {dT_actual:.6f} °C, expected {dT_expected:.6f} °C "
         f"(ΔP = {(P3-P2)/1e5:.3f} bar)"
     )
+
+
+def test_global_energy_balance_includes_pump_shaft_work():
+    """The reported balance must carry the pump work ṁ·ΔP/ρ and close."""
+    case = NetworkCase(
+        name="pump_balance",
+        fluid_model=_OIL_FLUID,
+        node_ids=(1, 2, 3, 4),
+        pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=1e5),),
+        pressure_outlets=(PressureBoundary(node_id=4, pressure_pa=6e5),),
+        thermal_inlets=(
+            ThermalBoundary(node_id=1, bc_type="fixed_temperature", temperature_c=80.0),
+            ThermalBoundary(node_id=4, bc_type="zero_gradient"),
+        ),
+        components=(
+            _adiabatic_pipe(1, 2, cid="P1"),
+            Pump(start_node=2, end_node=3, diameter_m=0.10,
+                 curve_points_q_head=((0.0, 60.0), (180.0, 55.0), (540.0, 40.0), (1080.0, 0.0)),
+                 component_id="B"),
+            _adiabatic_pipe(3, 4, cid="P2"),
+        ),
+    )
+    result = SteadyNonIsothermalIncompressibleSolver().solve(case)
+    geb = result.global_energy_balance
+    mdot = result.component_flows[1].mass_flow_kg_per_s
+    dP = result.node_pressures_pa[3] - result.node_pressures_pa[2]
+    w_expected_kw = mdot * dP / _RHO_OIL / 1000.0
+    assert abs(geb.shaft_work_kw - w_expected_kw) < 1e-6 * max(1.0, w_expected_kw)
+    assert geb.joule_thomson_kw == 0.0
+    assert geb.energy_error_pct < 1e-3, f"energy error {geb.energy_error_pct:.2e} %"

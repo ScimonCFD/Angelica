@@ -9,17 +9,17 @@ PVT iterations: 4
      1      8.000     60.00  UNDERSATURATED
      2      7.420     59.06  UNDERSATURATED
      3      6.444     55.48  UNDERSATURATED
-     4      4.976     52.05       two-phase
-     5      4.732     51.14       two-phase
-     6      4.072     50.26       two-phase
+     4      4.976     52.03       two-phase
+     5      4.732     51.13       two-phase
+     6      4.072     50.25       two-phase
 
 Pipe                                   ṁ (kg/s)   Q_mix (m³/h)
 Pipe:pipe_A_trunk_in                    100.000         411.13
 Pipe:pipe_B_upper_L                      62.852         257.93
-Pipe:pipe_C_upper_R                      62.852         264.37
+Pipe:pipe_C_upper_R                      62.852         264.36
 Pipe:pipe_D_lower_L                      37.148         152.21
-Pipe:pipe_E_lower_R                      37.147         162.32
-Pipe:pipe_F_trunk_out                   100.000         452.42
+Pipe:pipe_E_lower_R                      37.148         162.32
+Pipe:pipe_F_trunk_out                   100.000         452.40
 
 Outlet pressure found: 4.072 MPa
 Upper loop (B+C): 62.852 kg/s  (62.9 %)

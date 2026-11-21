@@ -10,13 +10,13 @@ Branched methane network demonstrating the compressible solver.
 
 ```
 Case: Natural Gas Pipeline (methane, 800→500 kPa)
-Converged: True
+Converged:            True
 
 Node pressures:
-  Node 1 (inlet):     800.00 kPa   rho = 5.263 kg/m³
-  Node 2 (junction):  ~640  kPa    rho = ~4.2  kg/m³
-  Node 3 (outlet A):  500.00 kPa   rho = 3.289 kg/m³
-  Node 4 (outlet B):  500.00 kPa   rho = 3.289 kg/m³
+  Node 1 (inlet):        800.00 kPa   rho = 5.357 kg/m³
+  Node 2 (junction):     667.31 kPa   rho = 4.469 kg/m³
+  Node 3 (outlet A):     500.00 kPa   rho = 3.348 kg/m³
+  Node 4 (outlet B):     500.00 kPa   rho = 3.348 kg/m³
 
 Compressibility effect:
   Ratio (rho_in / rho_out): 1.600  (= P_in / P_out for ideal gas)

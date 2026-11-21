@@ -504,6 +504,13 @@ class QuantitativeBenchmarks(unittest.TestCase):
             f"Fitting enthalpy not conserved: h_in={h_in:.4f}, h_out={h_out:.4f}, "
             f"rel_err={rel_err:.2e}")
 
+        # The reported energy balance carries the Joule-Thomson term of the
+        # valve (sensible ṁ·cp·T drops at constant enthalpy) and closes.
+        geb = result.global_energy_balance
+        self.assertLess(geb.joule_thomson_kw, 0.0)
+        self.assertEqual(geb.shaft_work_kw, 0.0)
+        self.assertLess(geb.energy_error_pct, 1e-3)
+
     def test_single_pipe_heat_loss_ntu(self):
         """Outlet temperature must equal T_amb+(T_in-T_amb)·exp(-NTU) to machine precision.
 
@@ -608,6 +615,11 @@ class QuantitativeBenchmarks(unittest.TestCase):
             f"Δh={dh:.0f} J/kg below lower bound w_min={w_min:.0f} J/kg")
         self.assertLess(dh, w_max * 1.10,
             f"Δh={dh:.0f} J/kg above upper bound w_max={w_max:.0f} J/kg")
+
+        # The reported energy balance carries the compressor work and closes.
+        geb = result.global_energy_balance
+        self.assertGreater(geb.shaft_work_kw, 0.0)
+        self.assertLess(geb.energy_error_pct, 1e-3)
 
 
 if __name__ == "__main__":

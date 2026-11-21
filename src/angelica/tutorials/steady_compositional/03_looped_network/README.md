@@ -53,23 +53,23 @@ python tutorials/steady_compositional/03_looped_network/run.py
 
 ```
 Converged:         True
-Outer iterations:  4
+Outer iterations:  6
 
-Node  Label           P (bar)    T (°C)
-   3  Junction 3       67.42      55.33
-   4  Junction 4       67.07      46.15   ← slightly lower than Node 3
+  Node  Label             P (bar)    T (°C)
+     3  Junction 3         69.925     63.51
+     4  Junction 4         69.799     62.59   ← slightly lower than Node 3
 
-Pipe       ṁ (kg/s)   Direction
-pipe_D      0.63      ** 3 → 4 **   ← loop flow direction confirmed
+Pipe          ṁ (kg/s)    Q (m³/h)  Direction
+pipe_D          0.4186      25.275  ** 3 → 4 **   ← loop flow direction confirmed
 
-Compositions (mol%):
-            Node 3    Node 4   Node 5 (outlet)
-methane      90.00     61.61       74.89
-ethane        8.00     28.82       19.08
-propane       2.00      9.57        6.03
+Compositions at junction and outlet nodes (mol%):
+Component         Node 3      Node 4  Node 5 (out)
+methane            90.00       60.95         74.27
+ethane              8.00       29.31         19.53
+propane             2.00        9.75          6.19
 
-Global mass balance error: 0.0002 %
+Global mass balance error: 0.0001 %
 ```
 
-The small loop flow (0.63 kg/s vs ~11 kg/s from each source) is
+The small loop flow (0.42 kg/s vs ~12 kg/s from each source) is
 determined entirely by the pressure imbalance around the loop.

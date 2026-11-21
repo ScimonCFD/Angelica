@@ -64,7 +64,7 @@ P_in = 500 000 Pa ─── Pipe 1 (D=0.10 m, L=1 000 m) ─── Node 2 ─┬
 | Pipe 1 Re                    | ≈ 30 900       |
 | Pipe 2 Re                    | ≈ 24 000       |
 | Pipe 3 Re                    | ≈ 19 500       |
-| Turbulent iterations         | 28             |
+| Turbulent iterations         | 21             |
 | Converged                    | True           |
 
 All pipes operate in the fully turbulent regime (Re ≫ 2 300).  Flow splits

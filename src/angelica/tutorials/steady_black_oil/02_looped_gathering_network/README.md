@@ -1,34 +1,35 @@
 # Tutorial: Black-Oil Looped Gathering Network
 
-A looped pipeline network with two parallel flow paths between a high-pressure
-inlet and a low-pressure separator.  The solver distributes flow between the
-paths according to their hydraulic resistances, and the intermediate pressures
-determine the PVT regime (undersaturated vs. two-phase) in each branch.
+A trunk-fed diamond loop.  A single header feeds a T-split junction, two
+parallel loop branches reconnect at a T-merge junction, and a discharge header
+leads to the separator.  The solver distributes flow between the branches
+according to their hydraulic resistances, and the intermediate pressures
+determine the PVT regime (undersaturated vs. two-phase) in each pipe.
 
 ## Network
 
 ```
-                PipeA (5 km, D=0.20 m)
-  [Node 1] ─────────────────────────────> [Node 2] ──┐
-      │                                              │
-      │  PipeC (8 km, D=0.15 m)                  PipeB
-      └────────────────────────> [Node 3]         (5 km, D=0.18 m)
-                                    │                │
-                                 PipeD               │
-                              (3 km, D=0.20 m)       │
-                                    └────────────> [Node 4]
-                                                  Separator
+                    PipeB  5 km, D=0.20 m          PipeC  5 km, D=0.18 m
+              ┌────────────────────── Node 3 ──────────────────────┐
+              │                                                     │
+  Node 1 ─PipeA─ Node 2                                         Node 5 ─PipeF─ Node 6
+  8 MPa   2 km   T-split                                        T-merge  2 km  2 MPa
+  60 °C   0.22 m  │                                                     │  0.22 m
+              └────────────────────── Node 4 ──────────────────────┘
+                    PipeD  8 km, D=0.15 m          PipeE  3 km, D=0.20 m
 ```
 
 | Node | Role | Boundary |
 |---|---|---|
 | 1 | Inlet | P = 8 MPa, T = 60 °C |
-| 2 | Upper junction | Free |
-| 3 | Lower junction | Free |
-| 4 | Separator outlet | P = 2 MPa |
+| 2 | T-split | Free |
+| 3 | Upper loop junction | Free |
+| 4 | Lower loop junction | Free |
+| 5 | T-merge | Free |
+| 6 | Separator outlet | P = 2 MPa |
 
-Upper path (1 → 2 → 4): 10 km total, wider diameters  
-Lower path (1 → 3 → 4): 11 km total, narrower middle section
+Upper branch (2 → 3 → 5): 10 km, wider pipes
+Lower branch (2 → 4 → 5): 11 km, narrow 8 km section (PipeD)
 
 ## Fluid
 
@@ -39,22 +40,25 @@ Bubble point at 60 °C: **5.63 MPa**.
 
 | Node | P (MPa) | Regime |
 |---|---|---|
-| 1 | 8.00 | Undersaturated |
-| 2 | 5.99 | Undersaturated (just above Pb) |
-| 3 | 2.68 | Two-phase |
-| 4 | 2.00 | Two-phase |
+| 1 | 8.000 | Undersaturated |
+| 2 | 7.176 | Undersaturated |
+| 3 | 5.793 | Undersaturated (just above Pb) |
+| 4 | 3.567 | Two-phase |
+| 5 | 3.174 | Two-phase |
+| 6 | 2.000 | Two-phase |
 
-| Path | Mass flow | Share |
+| Branch | Mass flow | Share |
 |---|---|---|
-| Upper (A + B) | 92.4 kg/s | 62.7 % |
-| Lower (C + D) | 54.9 kg/s | 37.3 % |
+| Upper (B + C) | 75.7 kg/s | 62.9 % |
+| Lower (D + E) | 44.7 kg/s | 37.1 % |
 
-**PVT effect on volumetric flow:** Pipe A and Pipe B carry the same mass but
-different mixture volumes (380 vs 439 m³/h).  The increase happens because
-the pressure in Pipe B falls below the bubble point along the way, liberating
-free gas and expanding the mixture.  This is not observed in the lower path
-because Pipe C is the narrower bottleneck — the pressure at Node 3 is already
-below Pb, so the lower path is two-phase from the start.
+**PVT effect on volumetric flow:** Pipe B and Pipe C carry the same mass but
+different mixture volumes (311 vs 343 m³/h).  Pipe B stays above the bubble
+point (Node 3 is at 5.79 MPa), while along Pipe C the pressure falls below Pb,
+liberating free gas and expanding the mixture.  In the lower branch the narrow
+PipeD already takes the pressure below Pb (Node 4 at 3.57 MPa), so both lower
+pipes carry a two-phase mixture (191 and 225 m³/h).  The discharge header
+carries 687 m³/h of mixture for the 495 m³/h entering the trunk.
 
 Solver converges in **3 PVT iterations**.
 

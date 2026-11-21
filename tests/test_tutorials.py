@@ -10,8 +10,9 @@ For each ``run.py``:
 For each ``.gui.json``:
   - it solves, as the GUI does, to a converged and finite result;
   - the global mass balance closes (< 0.01 %);
-  - the global energy balance closes (< 0.5 %) where the reported balance is
-    complete (see KNOWN_ENERGY_BALANCE_GAPS);
+  - the global energy balance closes (< 0.01 %): boundary fluxes, heat
+    sources, wall loss (computed independently of the assembly), shaft work
+    and the Joule-Thomson term of valves;
   - node pressures, temperatures and mass flows match the stored reference
     (``tests/tutorial_reference/gui``).
 
@@ -41,21 +42,8 @@ from _tutorial_golden import (
     tutorial_id,
 )
 
-ENERGY_TOL_PCT = 0.5
+ENERGY_TOL_PCT = 0.01
 UPDATE_HINT = "If the change is intended, run: python tests/update_tutorial_references.py"
-
-# The reported global energy balance is a sensible-heat balance (Σ ṁ·cp·T,
-# heat sources, wall loss).  It does not yet include shaft work, the pressure
-# dependence of enthalpy (Joule-Thomson) or latent heat, so it cannot close for
-# these cases even though the solution itself accounts for those effects.
-KNOWN_ENERGY_BALANCE_GAPS = {
-    "steady_compressible__05_valve_jt_effect": "isenthalpic valve (JT): enthalpy not in balance",
-    "steady_compressible__06_compressor_heating": "compressor shaft work not in balance",
-    "steady_non_isothermal_incompressible__08_pump_heating": "pump shaft work not in balance",
-    "steady_compositional__04_free_water": "phase change / composition-dependent cp",
-    "steady_compositional__05_three_phase_condensate": "phase change / composition-dependent cp",
-    "steady_compositional__06_three_phase_loop": "phase change / composition-dependent cp",
-}
 
 
 @pytest.fixture(scope="session")
@@ -98,23 +86,10 @@ def test_tutorial_gui_file(gui_json, gui_results):
     assert all(math.isfinite(v) for v in values), "non-finite result"
     if res["mass_error_pct"] is not None:
         assert res["mass_error_pct"] < 0.01, f"mass balance error {res['mass_error_pct']:.4f} %"
-    tid = tutorial_id(gui_json)
-    if res["energy_error_pct"] is not None and tid not in KNOWN_ENERGY_BALANCE_GAPS:
+    if res["energy_error_pct"] is not None:
         assert res["energy_error_pct"] < ENERGY_TOL_PCT, f"energy balance error {res['energy_error_pct']:.3f} %"
 
     ref = gui_ref_path(gui_json)
     assert ref.exists(), f"no reference result {ref.name}. {UPDATE_HINT}"
     diffs = compare_gui(res, json.loads(ref.read_text(encoding="utf-8")))
     assert not diffs, "result differs from reference:\n  " + "\n  ".join(diffs) + f"\n{UPDATE_HINT}"
-
-
-@pytest.mark.parametrize("tid", sorted(KNOWN_ENERGY_BALANCE_GAPS))
-def test_known_energy_balance_gaps_still_exist(tid, gui_results):
-    """Remove an entry from KNOWN_ENERGY_BALANCE_GAPS once its balance closes."""
-    match = [p for p in GUI_FILES if tutorial_id(p) == tid]
-    assert match, f"{tid} has no GUI file"
-    res = json.loads(gui_results[match[0]].stdout)
-    assert res["energy_error_pct"] is not None and res["energy_error_pct"] >= ENERGY_TOL_PCT, (
-        f"{tid}: energy balance now closes ({res['energy_error_pct']:.3f} %) — "
-        "remove it from KNOWN_ENERGY_BALANCE_GAPS"
-    )

@@ -54,8 +54,8 @@ With ΔP = 50 000 Pa:
 | Pipe | Q (m³/s)       | Q (m³/h)  | Re  |
 |------|----------------|-----------|-----|
 | 1    | 1.9635 × 10⁻⁴  | 0.7069    | 110 |
-| 2    | 7.7632 × 10⁻⁵  | 0.2795    | 58  |
-| 3    | 3.9936 × 10⁻⁴  | 1.4377    | 179 |
+| 2    | 7.7658 × 10⁻⁵  | 0.2796    | 58  |
+| 3    | 3.9947 × 10⁻⁴  | 1.4381    | 179 |
 
 ## Reynolds Numbers — Laminar Regime Confirmation
 
@@ -67,8 +67,8 @@ Maximum Re ≈ 179 (Pipe 3), far below the turbulent transition threshold.
 | Quantity                         | Value              |
 |----------------------------------|--------------------|
 | Pipe 1 flow (m³/h)               | 0.70686            |
-| Pipe 2 flow (m³/h)               | 0.27948            |
-| Pipe 3 flow (m³/h)               | 1.43769            |
+| Pipe 2 flow (m³/h)               | 0.27957            |
+| Pipe 3 flow (m³/h)               | 1.43811            |
 | Max relative error vs analytical | < 0.001 %          |
 | Converged                        | True               |
 

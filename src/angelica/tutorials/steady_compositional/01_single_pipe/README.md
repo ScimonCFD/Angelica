@@ -49,17 +49,17 @@ python tutorials/steady_compositional/01_single_pipe/run.py
 ## Expected output (abridged)
 
 ```
-EOS flash preview
-                            Inlet (100 bar)  Outlet (20 bar)
-ρ  (kg/m³)                           68.04           13.61
+EOS flash preview (thermo library)
+                                Inlet (100 bar)  Outlet (20 bar)
+ρ  (kg/m³)                               81.93           14.21
 
 Converged:         True
-Outer iterations:  3
-Mass flow:         14.54 kg/s
-Velocity @ inlet:  12.09 m/s
-Velocity @ outlet: 60.44 m/s   (gas expands 5× as P drops)
+Outer iterations:  4
+Mass flow:       15.5745 kg/s
+Velocity @ inlet:  10.76 m/s
+Velocity @ outlet: 62.01 m/s  (gas expands as P drops)
 Global mass balance error: 0.0000 %
 ```
 
-Gas velocity nearly quintuples from inlet to outlet because the density
-drops 5:1 while mass flow is conserved.
+Gas velocity increases nearly sixfold from inlet to outlet because the density
+drops ~6:1 while mass flow is conserved.

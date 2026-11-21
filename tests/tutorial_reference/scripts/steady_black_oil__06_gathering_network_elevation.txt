@@ -13,20 +13,20 @@ Density iterations: 3
 Node     P (MPa)   T (°C)     Elevation
   1       6.0000    65.00    +150.0 m
   2       9.0000    60.00    -100.0 m
-  3       3.7233    62.90      +0.0 m
-  4       3.0000    62.89     -30.0 m
+  3       3.7232    62.88      +0.0 m
+  4       3.0000    62.87     -30.0 m
 
 Pipe                        ṁ (kg/s)     T_in    T_out        Δz
-  well_a_flowline             286.2294    65.00    62.90   -150 m
-  well_b_flowline             203.7292    60.00    62.90   +100 m
-  manifold_to_separator       489.9556    62.90    62.89    -30 m
+  well_a_flowline             286.2302    65.00    62.88   -150 m
+  well_b_flowline             203.7297    60.00    62.88   +100 m
+  manifold_to_separator       489.9568    62.88    62.87    -30 m
 
 Mass balance:
-  Well A + Well B in:  489.9586 kg/s
-  Separator out:       489.9556 kg/s
-  Imbalance:           3.05e-03 kg/s
+  Well A + Well B in:  489.9598 kg/s
+  Separator out:       489.9568 kg/s
+  Imbalance:           3.04e-03 kg/s
 
 Flow split at manifold:
-  Well A (6 MPa, ↓ 150 m): 286.2294 kg/s  (58.4%)
-  Well B (9 MPa, ↑ 100 m): 203.7292 kg/s  (41.6%)
+  Well A (6 MPa, ↓ 150 m): 286.2302 kg/s  (58.4%)
+  Well B (9 MPa, ↑ 100 m): 203.7297 kg/s  (41.6%)
   Despite lower wellhead pressure, Well A compensates via gravity.

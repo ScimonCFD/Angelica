@@ -1,5 +1,60 @@
 # Changelog
 
+## [1.10.8] — 2026-11-21
+
+### Fix: energy equation used the default composition at 1 atm for cp
+
+The energy assembly evaluated cp and k through a temperature-only stand-in for
+each link.  Fluids whose properties depend on pressure or composition fell
+back to defaults: the compositional EOS fluid used its default composition at
+1 atm (2 065 J/(kg·K) for every pipe of compositional tutorial 06, where the
+actual values are 2 600–2 850), and black-oil networks with per-well fluids
+used one fluid for all pipes.  The assembly now passes the real link state
+(composition, end-node pressures, component) with only the temperature
+overridden.
+
+  - Compositional tutorial 01: outlet 37.87 → 40.51 °C, flow −0.4 %.
+  - Compositional tutorial 06: stream temperatures 3–10 °C higher (the gas
+    has 30–40 % more heat capacity than assumed).  Lean-gas cp now
+    2 678 J/(kg·K) vs CoolProp 2 680.
+  - Black-oil networks with per-well fluids: changes of ≤ 0.1 °C.
+  - Isothermal, non-isothermal and compressible tutorials: unchanged.
+
+### Fix: global energy balance now closes for every tutorial
+
+The reported balance (GUI, CSV/Excel reports) was a sensible-heat balance
+with cp at boundary nodes and no device terms, so it showed 6–75 % "errors"
+for valves, compressors, pumps and multi-composition cases.  It now uses the
+quantities the energy equation conserves:
+
+  - boundary fluxes Σ ṁ·cp·T with each link's cp, as in the assembly;
+  - `shaft_work_kw`: pump / compressor work (= ṁ·ΔP/ρ for liquids);
+  - `joule_thomson_kw`: change of ṁ·cp·T across isenthalpic valves
+    (negative when a real gas cools);
+  - wall loss still computed independently as U·π·D·L·ΔT, so assembly errors
+    remain visible (re-introducing the old wall-area bug gives 9 % error).
+
+All 35 GUI tutorials now close below 0.002 % (compressor 74.8 % → 0 %,
+valve 6.0 % → 0 %, three-phase condensate 9.4 % → 0 %).  The tutorial test
+tolerance is tightened from 0.5 % to 0.01 % and the list of known gaps is
+removed.  Reports gain "Shaft work" and "Joule-Thomson term" rows.  The pump
+and compressor share one helper (`device_thermal_state`) between the energy
+assembly and the balance.
+
+### Documentation
+
+Expected-output sections of 13 tutorial READMEs updated to the current
+results.  Black-oil 02 README rewritten for its current trunk-fed diamond
+network (it described an older 4-node network).  Poiseuille README:
+arithmetic errors in the analytical table fixed (pipe 2: 0.2796 m³/h,
+pipe 3: 1.4381 m³/h).  Hanoi README lists all reversed links.
+
+### Tests
+
+  - Shaft work in the balance equals ṁ·ΔP/ρ for a pump; the valve case has a
+    negative Joule-Thomson term; the compressor case positive shaft work; all
+    close below 10⁻³ %.
+
 ## [1.10.7] — 2026-11-21
 
 ### Tutorial tests: convergence residuals compared by magnitude

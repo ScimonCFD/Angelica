@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 import warnings
+from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -132,7 +134,7 @@ def solve_energy_system(
             T_amb = ps.component.ambient_temperature_c
 
         T_repr = ps.temperature_c if ps.temperature_c is not None else T_ref
-        _ls = _TempCarrier(T_repr)
+        _ls = _LinkAtTemperature(ps, T_repr)
 
         cp = fluid_model.specific_heat_for_link(_ls)
         k_fl = fluid_model.thermal_conductivity_for_link(_ls)
@@ -234,15 +236,13 @@ def solve_energy_system(
     explicit_inflow_total: dict[int, float] = dict.fromkeys(range(N_nodes), 0.0)
     explicit_rhs: dict[int, float] = dict.fromkeys(range(N_nodes), 0.0)
 
-    _fluid_has_enthalpy = hasattr(fluid_model, "enthalpy_j_per_kg")
-
     for pipe_idx, ps in enumerate(pipe_states):
         n_segs = max(ps.component.n_thermal_segments, 2)
         n_internal = n_segs - 1
         offset = pipe_internal_offset[pipe_idx]
 
         T_repr = ps.temperature_c if ps.temperature_c is not None else T_ref
-        _ls = _TempCarrier(T_repr)
+        _ls = _LinkAtTemperature(ps, T_repr)
         cp = fluid_model.specific_heat_for_link(_ls)
         mdot = float(ps.mass_flow_kg_per_s)
         abs_mdot_cp = abs(mdot) * cp
@@ -272,57 +272,21 @@ def solve_energy_system(
     # In all cases where T_out ≠ T_in the downstream contribution is injected
     # as an explicit RHS term so the mixing equation remains valid.
     for dev in network_state.components:
-        if not isinstance(dev, (FittingState, PumpState)):
+        dt = device_thermal_state(dev, fluid_model, T_ref)
+        if dt is None:
             continue
-        mdot = float(dev.mass_flow_kg_per_s)
-        if abs(mdot) < 1e-30:
-            continue
-
-        up_node   = dev.start_node if mdot >= 0.0 else dev.end_node
-        down_node = dev.end_node   if mdot >= 0.0 else dev.start_node
-        up_idx    = node_index[up_node.node_id]
-        down_idx  = node_index[down_node.node_id]
-
-        T_up = up_node.temperature_c if up_node.temperature_c is not None else T_ref
-        cp   = fluid_model.specific_heat_for_link(_TempCarrier(T_up))
-        abs_mdot_cp = abs(mdot) * cp
-
-        _p_up   = getattr(up_node,   "pressure_pa", None)
-        _p_down = getattr(down_node, "pressure_pa", None)
-        _p_ref  = getattr(fluid_model, "reference_pressure_pa", 101_325.0)
-        P_up   = _p_up   if _p_up   is not None else _p_ref
-        P_down = _p_down if _p_down is not None else _p_ref
-
-        if isinstance(dev, PumpState):
-            # Shaft work per unit mass: w = ΔP / ρ (J/kg)
-            rho = fluid_model.density_for_link(dev)
-            w_shaft = (P_down - P_up) / rho
-            if _fluid_has_enthalpy:
-                h_out = fluid_model.enthalpy_j_per_kg(P_up, T_up) + w_shaft
-                T_out = fluid_model.temperature_from_enthalpy(h_out, P_down, T_guess_c=T_up)
-                cp_out = fluid_model._specific_heat_fn(P_down, T_out)
-            else:
-                T_out = T_up + w_shaft / cp
-                cp_out = cp
-            abs_mdot_cp_out = abs(mdot) * cp_out
-            outflow_total[up_idx]           += abs_mdot_cp
-            explicit_inflow_total[down_idx] += abs_mdot_cp_out
-            explicit_rhs[down_idx]          -= abs_mdot_cp_out * T_out
-
-        elif _fluid_has_enthalpy:
-            # Compressible fitting: isenthalpic
-            h_in   = fluid_model.enthalpy_j_per_kg(P_up, T_up)
-            T_out  = fluid_model.temperature_from_enthalpy(h_in, P_down, T_guess_c=T_up)
-            cp_out = fluid_model._specific_heat_fn(P_down, T_out)
-            abs_mdot_cp_out = abs(mdot) * cp_out
-            outflow_total[up_idx]           += abs_mdot_cp
-            explicit_inflow_total[down_idx] += abs_mdot_cp_out
-            explicit_rhs[down_idx]          -= abs_mdot_cp_out * T_out
-
-        else:
+        up_idx = node_index[dt.up_node.node_id]
+        down_idx = node_index[dt.down_node.node_id]
+        abs_mdot_cp = abs(dt.mdot) * dt.cp_up
+        if dt.kind == "passthrough":
             # Incompressible fitting: T_out = T_in (implicit matrix term)
             inflow[down_idx].append((up_idx, abs_mdot_cp))
             outflow_total[up_idx] += abs_mdot_cp
+        else:
+            abs_mdot_cp_out = abs(dt.mdot) * dt.cp_out
+            outflow_total[up_idx]           += abs_mdot_cp
+            explicit_inflow_total[down_idx] += abs_mdot_cp_out
+            explicit_rhs[down_idx]          -= abs_mdot_cp_out * dt.T_out
 
     thermal_inlet_map = {}
     for node in network_state.nodes.values():
@@ -408,10 +372,86 @@ def solve_energy_system(
     return node_temps, component_mean_temps
 
 
-class _TempCarrier:
-    """Minimal stand-in for link_state when only temperature_c is needed."""
+@dataclass(frozen=True)
+class DeviceThermalState:
+    """Inlet/outlet thermal state of a pump or fitting, as used by the solver.
 
-    __slots__ = ("temperature_c",)
+    kind:
+      ``"pump"``         shaft work w = ΔP/ρ added (T_out = T_up + w/cp, or
+                          h_out = h(T_up, P_up) + w for fluids with enthalpy)
+      ``"isenthalpic"``  compressible fitting, h(T_out, P_down) = h(T_up, P_up)
+      ``"passthrough"``  incompressible fitting, T_out = T_up
+    """
 
-    def __init__(self, temperature_c: float) -> None:
+    mdot: float
+    up_node: Any
+    down_node: Any
+    T_up: float
+    cp_up: float
+    T_out: float
+    cp_out: float
+    kind: str
+
+
+def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState | None:
+    """Thermal state of a pump/fitting link (None for other links or no flow).
+
+    Shared by the energy assembly and the global energy balance so both use
+    exactly the same outlet temperature and heat capacities.
+    """
+    if not isinstance(dev, (FittingState, PumpState)):
+        return None
+    mdot = float(dev.mass_flow_kg_per_s)
+    if abs(mdot) < 1e-30:
+        return None
+
+    up_node   = dev.start_node if mdot >= 0.0 else dev.end_node
+    down_node = dev.end_node   if mdot >= 0.0 else dev.start_node
+    T_up = up_node.temperature_c if up_node.temperature_c is not None else T_ref
+    cp = fluid_model.specific_heat_for_link(_LinkAtTemperature(dev, T_up))
+    has_enthalpy = hasattr(fluid_model, "enthalpy_j_per_kg")
+
+    _p_up   = getattr(up_node,   "pressure_pa", None)
+    _p_down = getattr(down_node, "pressure_pa", None)
+    _p_ref  = getattr(fluid_model, "reference_pressure_pa", 101_325.0)
+    P_up   = _p_up   if _p_up   is not None else _p_ref
+    P_down = _p_down if _p_down is not None else _p_ref
+
+    if isinstance(dev, PumpState):
+        rho = fluid_model.density_for_link(dev)
+        w_shaft = (P_down - P_up) / rho
+        if has_enthalpy:
+            h_out = fluid_model.enthalpy_j_per_kg(P_up, T_up) + w_shaft
+            T_out = fluid_model.temperature_from_enthalpy(h_out, P_down, T_guess_c=T_up)
+            cp_out = fluid_model._specific_heat_fn(P_down, T_out)
+        else:
+            T_out = T_up + w_shaft / cp
+            cp_out = cp
+        return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_out, cp_out, "pump")
+    if has_enthalpy:
+        h_in = fluid_model.enthalpy_j_per_kg(P_up, T_up)
+        T_out = fluid_model.temperature_from_enthalpy(h_in, P_down, T_guess_c=T_up)
+        cp_out = fluid_model._specific_heat_fn(P_down, T_out)
+        return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_out, cp_out, "isenthalpic")
+    return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_up, cp, "passthrough")
+
+
+class _LinkAtTemperature:
+    """A link state seen at a given temperature.
+
+    Every attribute (composition ``zs``, end-node pressures, component, …) is
+    delegated to the real link state; only ``temperature_c`` is overridden.
+    Fluid models whose properties depend on pressure or composition — the
+    compositional EOS fluid, the black-oil per-inlet fluids — therefore see the
+    actual pipe conditions.  (A temperature-only stand-in made the
+    compositional fluid fall back to its default composition at 1 atm.)
+    """
+
+    __slots__ = ("_link", "temperature_c")
+
+    def __init__(self, link_state, temperature_c: float) -> None:
+        self._link = link_state
         self.temperature_c = temperature_c
+
+    def __getattr__(self, name: str):
+        return getattr(self._link, name)

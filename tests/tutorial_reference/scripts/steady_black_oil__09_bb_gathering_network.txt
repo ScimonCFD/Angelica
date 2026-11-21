@@ -7,18 +7,18 @@ Node    P_CK (MPa)    P_BB (MPa)   T_CK (°C)   T_BB (°C)
    1        12.000        12.000        80.0        80.0
    2        10.000        10.000        65.0        65.0
    3         8.000         8.000        50.0        50.0
-   4         7.888         8.099        66.9        66.1
-   5         1.500         1.500        62.0        60.5
+   4         7.888         8.099        66.9        66.0
+   5         1.500         1.500        62.0        60.4
 
       Pipe    Well    CK (m³/h)    BB (m³/h)          Regime     H_L  f_tp/f_n
 ---------------------------------------------------------------------------
    A_well1  Well 1       150.67       119.89    intermittent  0.594     1.46×
-   B_well2  Well 2       109.77       101.48     distributed  0.981     1.04×
+   B_well2  Well 2       109.77       101.48     distributed  0.982     1.04×
    C_well3  Well 3         0.59        -4.67    intermittent  1.000     1.00×
-D_manifold  Manifo       403.90       327.89     distributed  0.729     1.44×
+D_manifold  Manifo       403.86       327.85     distributed  0.729     1.44×
 
   Manifold pressure:  Colebrook = 7.888 MPa,  Beggs-Brill = 8.099 MPa
-  Manifold temperature: CK = 66.9 °C,  BB = 66.1 °C
+  Manifold temperature: CK = 66.9 °C,  BB = 66.0 °C
 
   BB total to separator: 327.9 m³/h
   CK total to separator: 403.9 m³/h
