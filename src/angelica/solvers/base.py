@@ -114,6 +114,19 @@ class BaseSolver(ABC):
             T_link = link.temperature_c if link.temperature_c is not None else T_node
             return fluid_model.specific_heat_for_link(_LinkAtTemperature(link, T_link))
 
+        def _arriving_temperature(link, T_node: float) -> float:
+            """Temperature of the fluid a link delivers into a boundary node.
+
+            Usually equal to the node temperature, but not when the node has a
+            fixed temperature and receives back-flow (e.g. a well taking flow
+            from the manifold): the fluid arrives at the pipe's exit temperature.
+            """
+            dt = devices.get(id(link))
+            if dt is not None:
+                return dt.T_out
+            t_exit = getattr(link, "exit_temperature_c", None)
+            return t_exit if t_exit is not None else T_node
+
         # Boundary enthalpy fluxes, link by link
         h_in_w = 0.0
         h_out_w = 0.0
@@ -128,11 +141,10 @@ class BaseSolver(ABC):
                     cp = _cp_at_node(link, node.node_id, node.temperature_c)
                 except NotImplementedError:
                     continue
-                rate = abs(flow) * cp * node.temperature_c   # W (0 °C reference)
                 if leaves_node:      # fluid injected into the network here
-                    h_in_w += rate
+                    h_in_w += abs(flow) * cp * node.temperature_c      # W (0 °C reference)
                 else:                # fluid absorbed by the boundary here
-                    h_out_w += rate
+                    h_out_w += abs(flow) * cp * _arriving_temperature(link, node.temperature_c)
 
         # Shaft work and Joule-Thomson term of devices
         w_shaft_w = 0.0
@@ -157,7 +169,7 @@ class BaseSolver(ABC):
                     continue
                 T_amb = pipe.ambient_temperature_c
                 if pipe.n_thermal_segments == 1:
-                    # NTU analytical bypass: link.temperature_c IS the exit temperature.
+                    # NTU analytical bypass: link.exit_temperature_c is the pipe exit temperature.
                     # Use LMTD: Q = U·π·D·L·LMTD, exact for the NTU bypass path.
                     mdot = abs(link.mass_flow_kg_per_s)
                     if mdot < 1e-30:
@@ -168,7 +180,8 @@ class BaseSolver(ABC):
                     else:
                         _t = network_state.nodes[link.end_node.node_id].temperature_c
                         T_up = _t if _t is not None else T_ref
-                    T_exit = link.temperature_c if link.temperature_c is not None else T_ref
+                    T_exit = (link.exit_temperature_c if link.exit_temperature_c is not None
+                              else link.temperature_c if link.temperature_c is not None else T_ref)
                     dT1 = T_up - T_amb
                     dT2 = T_exit - T_amb
                     if abs(dT1) < 1e-12 or abs(dT2) < 1e-12 or dT1 * dT2 <= 0.0:

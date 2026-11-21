@@ -171,6 +171,9 @@ class NetSimGui:
         "panhandle_b": {
             "name": "Panhandle B (gas)",
         },
+        "beggs_brill": {
+            "name": "Beggs-Brill (two-phase, black-oil)",
+        },
     }
     VELOCITY_LOOP_METHOD_LIBRARY = {
         "fixed_point": {
@@ -236,6 +239,7 @@ class NetSimGui:
     _FIELD_QUANTITY: dict[str, str] = {
         "length_m":        "length",
         "diameter_m":      "diameter",
+        "orifice_diameter_m": "diameter",
         "roughness_m":     "roughness",
         "height_change_m": "height_change",
     }
@@ -1023,6 +1027,10 @@ class NetSimGui:
         tc_var = tk.StringVar(master=dialog, value=material.get("critical_temperature_k", ""))
         pc_var = tk.StringVar(master=dialog, value=material.get("critical_pressure_pa", ""))
         omega_var = tk.StringVar(master=dialog, value=material.get("acentric_factor", ""))
+        tdep_var = tk.BooleanVar(
+            master=dialog,
+            value=str(material.get("temperature_dependent", "")).lower() in ("1", "true", "yes"),
+        )
 
         ttk.Label(frame, text="Definition").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
         mode_row = ttk.Frame(frame)
@@ -1095,6 +1103,13 @@ class NetSimGui:
         k_label.grid(row=9, column=0, sticky="w", padx=(0, 8), pady=4)
         k_entry = ttk.Entry(frame, textvariable=k_var, width=26)
         k_entry.grid(row=9, column=1, sticky="ew", pady=4)
+
+        tdep_check = ttk.Checkbutton(
+            frame,
+            text="Temperature-dependent properties (water / crude oil correlations)",
+            variable=tdep_var,
+        )
+        tdep_check.grid(row=10, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         frame.columnconfigure(1, weight=1)
 
@@ -1170,15 +1185,28 @@ class NetSimGui:
                 cp_entry.grid_remove()
                 k_label.grid_remove()
                 k_entry.grid_remove()
+            tdep_ok = is_non_isothermal and (
+                is_crude_oil or (is_library and library_var.get() == "water_liquid")
+            )
+            if tdep_ok:
+                tdep_check.grid()
+            else:
+                tdep_check.grid_remove()
+                tdep_var.set(False)
+            if tdep_ok and tdep_var.get():
+                # cp and k come from the correlations
+                cp_entry.configure(state="disabled")
+                k_entry.configure(state="disabled")
             if is_library and library_var.get():
                 apply_library_selection()
 
         library_box.bind("<<ComboboxSelected>>", apply_library_selection)
+        tdep_var.trace_add("write", lambda *_a: sync_mode_state())
         mode_var.trace_add("write", sync_mode_state)
         sync_mode_state()
 
         button_row = ttk.Frame(frame)
-        button_row.grid(row=10, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=11, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
         ttk.Button(
             button_row,
@@ -1198,6 +1226,7 @@ class NetSimGui:
                 tc_var,
                 pc_var,
                 omega_var,
+                tdep_var,
             ),
         ).pack(side="right", padx=(0, 8))
 
@@ -1645,9 +1674,14 @@ class NetSimGui:
         tc_var: tk.StringVar | None = None,
         pc_var: tk.StringVar | None = None,
         omega_var: tk.StringVar | None = None,
+        tdep_var: tk.BooleanVar | None = None,
     ) -> None:
         mode = mode_var.get()
         is_non_isothermal = self.scene.physics_mode == "non_isothermal"
+        temperature_dependent = bool(
+            is_non_isothermal and tdep_var is not None and tdep_var.get()
+            and (mode == "crude_oil" or (mode == "library" and library_var.get() == "water_liquid"))
+        )
 
         if mode == "gas":
             mw_text = (mw_var.get() if mw_var else "").strip()
@@ -1763,7 +1797,10 @@ class NetSimGui:
                 "density_kg_per_m3": f"{density:.4f}",
                 "viscosity_pa_s": f"{viscosity:.6f}",
             }
-            if is_non_isothermal:
+            if temperature_dependent:
+                material["temperature_dependent"] = "true"
+                material["name"] = f"Crude oil ({api:.1f}°API, temperature-dependent)"
+            elif is_non_isothermal:
                 if not self._validate_and_attach_thermal_props(
                     material, cp_var, k_var, dialog
                 ):
@@ -1806,7 +1843,11 @@ class NetSimGui:
                 parent=dialog,
             )
             return
-        if is_non_isothermal:
+        if temperature_dependent:
+            material["temperature_dependent"] = "true"
+            material["specific_heat_j_per_kg_k"] = cp_var.get().strip()
+            material["thermal_conductivity_w_per_m_k"] = k_var.get().strip()
+        elif is_non_isothermal:
             if not self._validate_and_attach_thermal_props(
                 material, cp_var, k_var, dialog
             ):
@@ -2486,6 +2527,9 @@ class NetSimGui:
         elif self.scene.physics_mode == "compositional":
             comp_names = self.scene.material.get("component_names", "—")
             lines = [comp_names]
+        elif (self.scene.physics_mode == "non_isothermal"
+              and str(self.scene.material.get("temperature_dependent", "")).lower() in ("1", "true", "yes")):
+            lines.append("rho, mu, cp, k = f(T)")
         else:
             density = self.scene.material.get("density_kg_per_m3", "").strip()
             viscosity = self.scene.material.get("viscosity_pa_s", "").strip()
@@ -3338,6 +3382,8 @@ class NetSimGui:
                 bo_fields = [
                     ("gor_sc_m3_per_m3", "GOR sc (m³/m³)"),
                     ("wor_sc_m3_per_m3", "WOR sc (m³/m³)"),
+                    ("api_gravity", "API gravity (°) — blank: material"),
+                    ("gas_gravity", "Gas gravity (−) — blank: material"),
                 ]
                 for bo_i, (bo_key, bo_label) in enumerate(bo_fields):
                     ttk.Label(pf, text=bo_label).grid(
@@ -3474,6 +3520,17 @@ class NetSimGui:
             command=lambda: self._add_component_to_link(
                 link.link_id,
                 "pump",
+                components_list,
+                properties_frame,
+            ),
+            width=12,
+        ).pack(anchor="w", pady=4)
+        ttk.Button(
+            palette,
+            text="Choke",
+            command=lambda: self._add_component_to_link(
+                link.link_id,
+                "choke",
                 components_list,
                 properties_frame,
             ),
@@ -3734,9 +3791,10 @@ class NetSimGui:
             if comp.component_type == "pipe":
                 canvas.create_line(x0c, y0c, x1c, y1c, fill=pipe_color, width=2)
                 legend_seen.setdefault("Pipe", (pipe_color, ()))
-            elif comp.component_type == "fitting":
+            elif comp.component_type in ("fitting", "choke"):
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=fitting_color, width=2, dash=(6, 3))
-                legend_seen.setdefault("Fitting", (fitting_color, (6, 3)))
+                legend_seen.setdefault("Fitting" if comp.component_type == "fitting" else "Choke",
+                                       (fitting_color, (6, 3)))
             elif comp.component_type == "pump":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
                 legend_seen.setdefault("Pump", (pump_color, (6, 3)))
@@ -3769,7 +3827,7 @@ class NetSimGui:
                                    anchor="s", font=("TkDefaultFont", 7),
                                    fill=pipe_color)
             else:
-                lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater"}
+                lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke"}
                 clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
                 lbl = lbl_map.get(comp.component_type, comp.component_type)
                 clr = clr_map.get(comp.component_type, fitting_color)
@@ -4444,9 +4502,10 @@ class NetSimGui:
             if comp.component_type == "pipe":
                 canvas.create_line(x0c, y0c, x1c, y1c, fill=temp_color, width=2)
                 legend_seen.setdefault("Pipe", (temp_color, ()))
-            elif comp.component_type == "fitting":
+            elif comp.component_type in ("fitting", "choke"):
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=fitting_color, width=2, dash=(6, 3))
-                legend_seen.setdefault("Fitting", (fitting_color, (6, 3)))
+                legend_seen.setdefault("Fitting" if comp.component_type == "fitting" else "Choke",
+                                       (fitting_color, (6, 3)))
             elif comp.component_type == "pump":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
                 legend_seen.setdefault("Pump", (pump_color, (6, 3)))
@@ -4477,7 +4536,7 @@ class NetSimGui:
                                    anchor="s", font=("TkDefaultFont", 7),
                                    fill=temp_color)
             else:
-                lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater"}
+                lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke"}
                 clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
                 lbl = lbl_map.get(comp.component_type, comp.component_type)
                 clr = clr_map.get(comp.component_type, fitting_color)
@@ -4560,6 +4619,14 @@ class NetSimGui:
             return
         if component.component_type == "heat_source":
             self._render_heat_source_component_properties(
+                component,
+                properties_frame,
+                link_id,
+                components_list,
+            )
+            return
+        if component.component_type == "choke":
+            self._render_choke_component_properties(
                 component,
                 properties_frame,
                 link_id,
@@ -4761,6 +4828,54 @@ class NetSimGui:
                 entries,
                 components_list,
                 properties_frame,
+            ),
+        ).pack(side="right")
+
+    def _render_choke_component_properties(
+        self,
+        component: CanvasLinkComponent,
+        properties_frame: ttk.LabelFrame,
+        link_id: int,
+        components_list: tk.Listbox,
+    ) -> None:
+        """Choke (bean): pipe and orifice diameters, Cd and flow model."""
+        props = component.properties
+        entries: dict[str, tk.StringVar] = {
+            "diameter_m": tk.StringVar(value=self._field_from_si("diameter_m", props.get("diameter_m", ""))),
+            "orifice_diameter_m": tk.StringVar(
+                value=self._field_from_si("orifice_diameter_m", props.get("orifice_diameter_m", ""))),
+            "discharge_coefficient": tk.StringVar(value=props.get("discharge_coefficient", "0.75")),
+            "flow_model": tk.StringVar(value=props.get("flow_model", "sachdeva") or "sachdeva"),
+        }
+        unit = self._unit_label("diameter")
+        rows = [
+            ("diameter_m", f"Pipe diameter ({unit})"),
+            ("orifice_diameter_m", f"Bean / orifice diameter ({unit})"),
+            ("discharge_coefficient", "Discharge coefficient Cd (−)"),
+        ]
+        for i, (key, label) in enumerate(rows, start=1):
+            ttk.Label(properties_frame, text=label).grid(row=i, column=0, sticky="w", pady=4)
+            ttk.Entry(properties_frame, textvariable=entries[key], width=18).grid(
+                row=i, column=1, sticky="ew", pady=4)
+        ttk.Label(properties_frame, text="Flow model").grid(row=4, column=0, sticky="w", pady=4)
+        ttk.Combobox(
+            properties_frame, textvariable=entries["flow_model"], state="readonly",
+            values=("sachdeva", "orifice"), width=16,
+        ).grid(row=4, column=1, sticky="ew", pady=4)
+        ttk.Label(
+            properties_frame,
+            text=("sachdeva: critical two-phase flow (black-oil mode; Cd ≈ 0.75 liquid,\n"
+                  "≈ 0.85 gas-dominated).  orifice: incompressible orifice equation.\n"
+                  "Bean sizes: 16/64 in = 6.35 mm, 24/64 in = 9.525 mm, 32/64 in = 12.7 mm."),
+            foreground="gray",
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 6))
+        button_row = ttk.Frame(properties_frame)
+        button_row.grid(row=6, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        ttk.Button(
+            button_row,
+            text="Save",
+            command=lambda: self._save_link_component_properties(
+                link_id, component.component_id, entries, components_list, properties_frame,
             ),
         ).pack(side="right")
 
@@ -5062,6 +5177,8 @@ class NetSimGui:
             return f"Pump #{display_index}"
         if component.component_type == "heat_source":
             return f"Heat Source #{display_index}"
+        if component.component_type == "choke":
+            return f"Choke #{display_index}"
         return f"{component.component_type.capitalize()} #{display_index}"
 
     def _pretty_field_name(self, field_name: str) -> str:

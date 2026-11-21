@@ -1,0 +1,97 @@
+{
+  "case_name": "10 — Wellhead choke 24/64 in + 4 km flowline (separator 0.5 MPa)",
+  "physics_mode": "black_oil",
+  "material": {
+    "name": "Black-oil (PVT)",
+    "definition_mode": "black_oil",
+    "api_gravity": "35.0",
+    "gas_gravity": "0.65"
+  },
+  "pressure_drop_model": {
+    "library_key": "beggs_brill",
+    "name": "Beggs-Brill (two-phase, black-oil)"
+  },
+  "solver_settings": {},
+  "initial_node_pressures_pa": {},
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 100,
+      "y": 260,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "5000000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "60.0",
+        "thermal_gradient_dc_per_m": "0.0",
+        "gor_sc_m3_per_m3": "120.0",
+        "wor_sc_m3_per_m3": "0.2"
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "junction",
+      "x": 330,
+      "y": 260,
+      "properties": {
+        "label": "Downstream of choke"
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "sink",
+      "x": 700,
+      "y": 260,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "500000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "choke",
+          "properties": {
+            "diameter_m": "0.1016",
+            "orifice_diameter_m": "0.009524999999999999",
+            "discharge_coefficient": "0.75",
+            "flow_model": "sachdeva"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 2,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "4000.0",
+            "diameter_m": "0.1016",
+            "height_change_m": "0.0",
+            "roughness_m": "4.6e-05",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "20.0"
+          }
+        }
+      ]
+    }
+  ]
+}

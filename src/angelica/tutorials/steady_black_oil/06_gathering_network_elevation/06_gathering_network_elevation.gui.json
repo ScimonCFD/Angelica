@@ -1,0 +1,140 @@
+{
+  "case_name": "06 — Gathering network with elevation (two crudes)",
+  "physics_mode": "black_oil",
+  "material": {
+    "name": "Black-oil (PVT)",
+    "definition_mode": "black_oil",
+    "api_gravity": "32.0",
+    "gas_gravity": "0.65"
+  },
+  "pressure_drop_model": {
+    "library_key": "colebrook_white",
+    "name": "Colebrook-White"
+  },
+  "solver_settings": {},
+  "initial_node_pressures_pa": {},
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 100,
+      "y": 120,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "6000000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "65.0",
+        "thermal_gradient_dc_per_m": "0.0",
+        "gor_sc_m3_per_m3": "25.0",
+        "wor_sc_m3_per_m3": "0.4"
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "source",
+      "x": 100,
+      "y": 440,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "9000000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "60.0",
+        "thermal_gradient_dc_per_m": "0.0",
+        "gor_sc_m3_per_m3": "15.0",
+        "wor_sc_m3_per_m3": "0.8",
+        "api_gravity": "28.0",
+        "gas_gravity": "0.68"
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "junction",
+      "x": 400,
+      "y": 280,
+      "properties": {
+        "label": "Manifold"
+      }
+    },
+    {
+      "node_id": 4,
+      "node_type": "sink",
+      "x": 680,
+      "y": 330,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "3000000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "200.0",
+            "diameter_m": "0.15",
+            "height_change_m": "-150.0",
+            "roughness_m": "4.6e-05",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "20.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 2,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "180.0",
+            "diameter_m": "0.12",
+            "height_change_m": "100.0",
+            "roughness_m": "4.6e-05",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "20.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 3,
+      "start_node_id": 3,
+      "end_node_id": 4,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "80.0",
+            "diameter_m": "0.2",
+            "height_change_m": "-30.0",
+            "roughness_m": "4.6e-05",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "20.0"
+          }
+        }
+      ]
+    }
+  ]
+}

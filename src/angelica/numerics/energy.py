@@ -113,6 +113,10 @@ def solve_energy_system(
         cols.append(c)
         vals.append(v)
 
+    # NTU of pipes solved with the analytical single-segment path, used to
+    # report their length-averaged temperature.
+    ntu_paths: dict[int, tuple[float, float]] = {}   # pipe_idx → (NTU, T_amb)
+
     # ── FV equations for pipe internal nodes ──────────────────────────────
     for pipe_idx, ps in enumerate(pipe_states):
         n_segs = max(ps.component.n_thermal_segments, 2)
@@ -152,6 +156,7 @@ def solve_energy_system(
                 and ps.component.n_thermal_segments == 1
                 and abs(F) > 1e-30):
             ntu = U * math.pi * D_pipe * L / abs(F)
+            ntu_paths[pipe_idx] = (ntu, T_amb)
             decay = math.exp(-ntu) if ntu > 0.0 else 1.0
             # The sole interior node (offset + 0) represents the pipe exit.
             internal_row = offset
@@ -362,7 +367,21 @@ def solve_energy_system(
         n_internal = n_segs - 1
         offset = pipe_internal_offset[pipe_idx]
         if n_internal > 0:
-            component_mean_temps[pipe_idx] = float(np.mean(T_vec[offset:offset + n_internal]))
+            # Temperature of the fluid leaving the pipe: the last interior node
+            # in the flow direction (for the NTU path, the sole interior node).
+            exit_row = offset + n_internal - 1 if ps.mass_flow_kg_per_s >= 0.0 else offset
+            ps.exit_temperature_c = float(T_vec[exit_row])
+            if pipe_idx in ntu_paths:
+                # Analytical path: the interior node is the exit, so use the exact
+                # length average T_amb + (T_in − T_amb)·(1 − e^−NTU)/NTU for
+                # property evaluation instead of the (colder) exit temperature.
+                ntu, T_amb_p = ntu_paths[pipe_idx]
+                up_id = ps.start_node.node_id if ps.mass_flow_kg_per_s >= 0.0 else ps.end_node.node_id
+                T_in_p = float(T_vec[node_index[up_id]])
+                factor = (1.0 - math.exp(-ntu)) / ntu if ntu > 1e-12 else 1.0
+                component_mean_temps[pipe_idx] = T_amb_p + (T_in_p - T_amb_p) * factor
+            else:
+                component_mean_temps[pipe_idx] = float(np.mean(T_vec[offset:offset + n_internal]))
         else:
             si = node_index[ps.start_node.node_id]
             ei = node_index[ps.end_node.node_id]

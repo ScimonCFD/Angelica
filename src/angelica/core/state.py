@@ -43,6 +43,7 @@ class PipeState(PressureChangerState):
     reynolds: float = 0.0
     temperature_c: float | None = None
     zs: tuple[float, ...] = ()
+    exit_temperature_c: float | None = None   # fluid temperature leaving the pipe (flow direction)
 
 
 @dataclass
@@ -63,6 +64,7 @@ class HeatSourceState(PressureChangerState):
     reynolds: float = 0.0
     temperature_c: float | None = None
     zs: tuple[float, ...] = ()
+    exit_temperature_c: float | None = None
 
 
 @dataclass

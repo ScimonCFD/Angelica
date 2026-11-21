@@ -1,0 +1,138 @@
+{
+  "case_name": "06 — Hilly hot-water network (T-dependent water)",
+  "physics_mode": "non_isothermal",
+  "material": {
+    "definition_mode": "library",
+    "library_key": "water_liquid",
+    "name": "Water (temperature-dependent)",
+    "density_kg_per_m3": "998.25",
+    "viscosity_pa_s": "0.001",
+    "specific_heat_j_per_kg_k": "4182.0",
+    "thermal_conductivity_w_per_m_k": "0.598",
+    "temperature_dependent": "true"
+  },
+  "pressure_drop_model": {
+    "library_key": "colebrook_white",
+    "name": "Colebrook-White"
+  },
+  "solver_settings": {},
+  "initial_node_pressures_pa": {},
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 80,
+      "y": 380,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "600000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "85.0",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "junction",
+      "x": 360,
+      "y": 160,
+      "properties": {
+        "label": "Hilltop (+40 m)"
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "sink",
+      "x": 660,
+      "y": 420,
+      "properties": {
+        "condition_type": "flow",
+        "pressure": "",
+        "flow": "3.0",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    },
+    {
+      "node_id": 4,
+      "node_type": "sink",
+      "x": 660,
+      "y": 240,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "200000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "150.0",
+            "diameter_m": "0.15",
+            "height_change_m": "40.0",
+            "roughness_m": "4.6e-05",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "8.0",
+            "ambient_temperature_c": "10.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 2,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "220.0",
+            "diameter_m": "0.1",
+            "height_change_m": "-60.0",
+            "roughness_m": "4.6e-05",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "8.0",
+            "ambient_temperature_c": "10.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 3,
+      "start_node_id": 2,
+      "end_node_id": 4,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "120.0",
+            "diameter_m": "0.12",
+            "height_change_m": "-30.0",
+            "roughness_m": "4.6e-05",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "8.0",
+            "ambient_temperature_c": "10.0"
+          }
+        }
+      ]
+    }
+  ]
+}

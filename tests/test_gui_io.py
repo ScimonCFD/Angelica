@@ -354,3 +354,70 @@ class GuiIoTests(unittest.TestCase):
         scene = self._minimal_scene_with_junction_links([(1, 2), (2, 3)])
         case = build_network_case_from_scene(scene)
         self.assertEqual(len(case.components), 2)
+
+
+_TUT = Path(__file__).resolve().parents[1] / "src" / "angelica" / "tutorials"
+
+
+class GuiNewFeatureTests(unittest.TestCase):
+    """v1.10.9 GUI features: T-dependent liquids, per-well black-oil fluids,
+    Beggs-Brill, and the choke component."""
+
+    @staticmethod
+    def _scene(rel: str) -> CanvasScene:
+        return load_scene_from_file(next((_TUT / rel).glob("*.gui.json")))
+
+    def test_temperature_dependent_crude_oil(self):
+        case = build_network_case_from_scene(self._scene("steady_non_isothermal_incompressible/05_crude_oil_pipeline"))
+
+        class _At:
+            def __init__(self, t):
+                self.temperature_c = t
+
+        mu80 = case.fluid_model.viscosity_for_link(_At(80.0))
+        mu20 = case.fluid_model.viscosity_for_link(_At(20.0))
+        self.assertGreater(mu20 / mu80, 5.0, "dead-oil viscosity must depend on temperature")
+
+    def test_temperature_dependent_water(self):
+        case = build_network_case_from_scene(self._scene("steady_non_isothermal_incompressible/06_hilly_network_heat_loss"))
+
+        class _At:
+            def __init__(self, t):
+                self.temperature_c = t
+
+        self.assertLess(case.fluid_model.viscosity_for_link(_At(85.0)),
+                        0.5 * case.fluid_model.viscosity_for_link(_At(20.0)))
+
+    def test_temperature_dependent_requires_supported_material(self):
+        scene = self._scene("steady_non_isothermal_incompressible/06_hilly_network_heat_loss")
+        material = dict(scene.material)
+        material["definition_mode"] = "custom"
+        scene.update_material(material)
+        with self.assertRaisesRegex(ValueError, "Temperature-dependent"):
+            build_network_case_from_scene(scene)
+
+    def test_per_well_api_and_gas_gravity(self):
+        case = build_network_case_from_scene(self._scene("steady_black_oil/06_gathering_network_elevation"))
+        bcs = {bc.node_id: bc for bc in case.inlet_fluid_bcs}
+        self.assertEqual((bcs[1].api_gravity, bcs[1].gas_gravity), (32.0, 0.65))   # material default
+        self.assertEqual((bcs[2].api_gravity, bcs[2].gas_gravity), (28.0, 0.68))   # node override
+
+    def test_beggs_brill_selected_for_black_oil(self):
+        from angelica.closures import BeggsBrillCorrelation
+        solver = build_solver_from_scene(self._scene("steady_black_oil/08_beggs_brill"))
+        self.assertIsInstance(solver._hydraulic_solver.turbulent_pipe_correlation, BeggsBrillCorrelation)
+
+    def test_beggs_brill_rejected_outside_black_oil(self):
+        scene = self._scene("steady_non_isothermal_incompressible/06_hilly_network_heat_loss")
+        scene.pressure_drop_model = {"library_key": "beggs_brill", "name": "Beggs-Brill"}
+        with self.assertRaisesRegex(ValueError, "black-oil"):
+            build_solver_from_scene(scene)
+
+    def test_choke_component(self):
+        from angelica.core.components import Choke
+        case = build_network_case_from_scene(self._scene("steady_black_oil/10_choke_valve"))
+        chokes = [c for c in case.components if isinstance(c, Choke)]
+        self.assertEqual(len(chokes), 1)
+        ch = chokes[0]
+        self.assertAlmostEqual(ch.orifice_diameter_m, 24 * 0.0254 / 64)
+        self.assertEqual((ch.discharge_coefficient, ch.flow_model), (0.75, "sachdeva"))

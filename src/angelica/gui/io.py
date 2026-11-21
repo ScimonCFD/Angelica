@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 
 from angelica.closures import (
+    BeggsBrillCorrelation,
     ColebrookPipeCorrelation,
     HazenWilliamsPipeCorrelation,
     PanhandleAPipeCorrelation,
@@ -20,7 +21,7 @@ from angelica.core.case import (
     PressureBoundary,
     ThermalBoundary,
 )
-from angelica.core.components import FITTING_PRESET_LIBRARY, Fitting, HeatSource, Pipe, Pump
+from angelica.core.components import FITTING_PRESET_LIBRARY, Choke, Fitting, HeatSource, Pipe, Pump
 from angelica.core.results import ComponentFlowResult, IterationMetrics
 from angelica.core.settings import SolverSettings
 from angelica.properties.black_oil import BlackOilFluid
@@ -309,7 +310,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 "in Settings or remove the Heat Source component."
             )
 
-    if is_non_isothermal:
+    if is_non_isothermal and not material_is_temperature_dependent(scene.material):
         cp_text = scene.material.get("specific_heat_j_per_kg_k", "").strip()
         k_text = scene.material.get("thermal_conductivity_w_per_m_k", "").strip()
         if not cp_text:
@@ -485,6 +486,21 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         component_id=f"link_{link.link_id}_fitting_{component.component_id}",
                     )
                 )
+            elif component.component_type == "choke":
+                diameter = _required_float(component, "diameter_m", link.link_id)
+                orifice = _required_float(component, "orifice_diameter_m", link.link_id)
+                flow_model = component.properties.get("flow_model", "sachdeva").strip() or "sachdeva"
+                components.append(
+                    Choke(
+                        start_node=current_start,
+                        end_node=current_end,
+                        diameter_m=diameter,
+                        orifice_diameter_m=orifice,
+                        discharge_coefficient=_optional_float(component, "discharge_coefficient", default=0.75),
+                        flow_model=flow_model,
+                        component_id=f"link_{link.link_id}_choke_{component.component_id}",
+                    )
+                )
             elif component.component_type == "pump":
                 diameter = _required_float(component, "diameter_m", link.link_id)
                 components.append(
@@ -563,12 +579,15 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 "condition to 'Fixed temperature'."
             )
     elif is_non_isothermal:
-        fluid_model = ThermalFluid.from_constants(
-            density_kg_per_m3=float(scene.material["density_kg_per_m3"]),
-            viscosity_pa_s=float(scene.material["viscosity_pa_s"]),
-            specific_heat_j_per_kg_k=float(scene.material["specific_heat_j_per_kg_k"]),
-            thermal_conductivity_w_per_m_k=float(scene.material["thermal_conductivity_w_per_m_k"]),
-        )
+        if material_is_temperature_dependent(scene.material):
+            fluid_model = _temperature_dependent_fluid(scene.material)
+        else:
+            fluid_model = ThermalFluid.from_constants(
+                density_kg_per_m3=float(scene.material["density_kg_per_m3"]),
+                viscosity_pa_s=float(scene.material["viscosity_pa_s"]),
+                specific_heat_j_per_kg_k=float(scene.material["specific_heat_j_per_kg_k"]),
+                thermal_conductivity_w_per_m_k=float(scene.material["thermal_conductivity_w_per_m_k"]),
+            )
         thermal_inlets = tuple(
             tb
             for tb in (
@@ -615,8 +634,8 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 )
             inlet_fluid_bcs.append(InletFluidBC(
                 node_id          = node.node_id,
-                api_gravity      = api_gravity,
-                gas_gravity      = gas_gravity,
+                api_gravity      = _optional_node_float(node, "api_gravity", api_gravity),
+                gas_gravity      = _optional_node_float(node, "gas_gravity", gas_gravity),
                 gor_sc_m3_per_m3 = float(node.properties["gor_sc_m3_per_m3"]),
                 wor_sc_m3_per_m3 = float(node.properties["wor_sc_m3_per_m3"]),
             ))
@@ -753,6 +772,13 @@ def build_solver_from_scene(scene: CanvasScene):
         turbulent_pipe_correlation = PanhandleAPipeCorrelation()
     elif pressure_drop_model_key == "panhandle_b":
         turbulent_pipe_correlation = PanhandleBPipeCorrelation()
+    elif pressure_drop_model_key == "beggs_brill":
+        if scene.physics_mode != "black_oil":
+            raise ValueError(
+                "The Beggs-Brill pressure-drop model needs black-oil PVT. "
+                "Switch the physics mode to Black-oil or choose another model."
+            )
+        turbulent_pipe_correlation = BeggsBrillCorrelation()
     else:
         raise ValueError(
             f"Unsupported pipe pressure-drop model '{pressure_drop_model_key}'."
@@ -904,6 +930,39 @@ def _build_thermal_boundary(node) -> ThermalBoundary | None:
         bc_type="zero_gradient",
         gradient_dc_per_m=0.0,
     )
+
+
+def material_is_temperature_dependent(material: dict) -> bool:
+    """True when a non-isothermal material asks for T-dependent properties."""
+    return str(material.get("temperature_dependent", "")).strip().lower() in ("1", "true", "yes")
+
+
+def _temperature_dependent_fluid(material: dict) -> ThermalFluid:
+    """Temperature-dependent liquid for non-isothermal mode.
+
+    - library water: density, viscosity, cp, k as functions of T
+      (``build_water_thermal_fluid``);
+    - crude oil: dead-oil correlations at the given API gravity
+      (``build_thermal_dead_oil``: Beggs-Robinson viscosity, Watson-Nelson cp,
+      Cragoe k).
+    """
+    mode = material.get("definition_mode", "")
+    if mode == "crude_oil":
+        from angelica.properties.dead_oil import build_thermal_dead_oil
+        return build_thermal_dead_oil(float(material["api_gravity"]))
+    if mode == "library" and material.get("library_key") == "water_liquid":
+        from angelica.properties.water_liquid import build_water_thermal_fluid
+        return build_water_thermal_fluid()
+    raise ValueError(
+        "Temperature-dependent properties are available for library water and "
+        "crude oil only. Open Material → Define Material and change the "
+        "definition, or clear the temperature-dependent option."
+    )
+
+
+def _optional_node_float(node, key: str, default: float) -> float:
+    text = str(node.properties.get(key, "")).strip()
+    return float(text) if text else default
 
 
 def _required_float(
