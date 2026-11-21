@@ -42,7 +42,11 @@ class HybridScheme(ConvectionScheme):
     """
 
     def face_coefficients(self, F: float, D: float) -> tuple[float, float]:
-        a_W = max(F, D - F / 2.0, 0.0)
+        # Patankar (1980), eq. 5.47: a_W = max(F, D + F/2, 0), a_E = max(−F, D − F/2, 0).
+        # (Before v1.12.0 a_W used D − F/2, which turned reverse flow (F < 0)
+        # at high Péclet into central differencing — inaccurate and not
+        # conservative at the pipe ends.)
+        a_W = max(F, D + F / 2.0, 0.0)
         a_E = max(-F, D - F / 2.0, 0.0)
         return a_W, a_E
 

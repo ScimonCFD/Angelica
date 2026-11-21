@@ -205,6 +205,7 @@ def run():
     print(f"  with Colebrook it sits {(P_manifold_ck - P_well3)/1e6:+.2f} MPa (q = {q3_ck:+.2f} m³/h).")
     print("  Backflow into a well would close a check valve in a real field —")
     print("  slip-aware pressure drop changes which wells can produce at all.")
+    print("  Tutorial 11 models the wells with IPRs and check valves.")
     print("  (Diagnostics for the manifold line use the reference fluid.)")
 
 

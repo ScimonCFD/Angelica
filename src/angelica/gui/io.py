@@ -21,7 +21,16 @@ from angelica.core.case import (
     PressureBoundary,
     ThermalBoundary,
 )
-from angelica.core.components import FITTING_PRESET_LIBRARY, Choke, Fitting, HeatSource, Pipe, Pump
+from angelica.core.components import (
+    FITTING_PRESET_LIBRARY,
+    CheckValve,
+    Choke,
+    Fitting,
+    HeatSource,
+    Pipe,
+    Pump,
+    WellInflow,
+)
 from angelica.core.results import ComponentFlowResult, IterationMetrics
 from angelica.core.settings import SolverSettings
 from angelica.properties.black_oil import BlackOilFluid
@@ -484,6 +493,32 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         diameter_m=diameter,
                         loss_coefficient=loss_coefficient,
                         component_id=f"link_{link.link_id}_fitting_{component.component_id}",
+                    )
+                )
+            elif component.component_type == "check_valve":
+                components.append(
+                    CheckValve(
+                        start_node=current_start,
+                        end_node=current_end,
+                        diameter_m=_required_float(component, "diameter_m", link.link_id),
+                        loss_coefficient=_optional_float(component, "loss_coefficient", default=2.0),
+                        component_id=f"link_{link.link_id}_check_valve_{component.component_id}",
+                    )
+                )
+            elif component.component_type == "well_inflow":
+                if not is_black_oil:
+                    raise ValueError(
+                        f"Connection #{link.link_id} has a Well IPR, which needs black-oil mode."
+                    )
+                components.append(
+                    WellInflow(
+                        start_node=current_start,
+                        end_node=current_end,
+                        diameter_m=_optional_float(component, "diameter_m", default=0.1016),
+                        productivity_index_m3_per_day_per_bar=_required_float(
+                            component, "productivity_index_m3_per_day_per_bar", link.link_id),
+                        ipr_model=component.properties.get("ipr_model", "vogel").strip() or "vogel",
+                        component_id=f"link_{link.link_id}_well_inflow_{component.component_id}",
                     )
                 )
             elif component.component_type == "choke":

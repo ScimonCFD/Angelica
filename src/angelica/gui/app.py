@@ -3536,6 +3536,29 @@ class NetSimGui:
             ),
             width=12,
         ).pack(anchor="w", pady=4)
+        ttk.Button(
+            palette,
+            text="Check valve",
+            command=lambda: self._add_component_to_link(
+                link.link_id,
+                "check_valve",
+                components_list,
+                properties_frame,
+            ),
+            width=12,
+        ).pack(anchor="w", pady=4)
+        if self.scene.physics_mode == "black_oil":
+            ttk.Button(
+                palette,
+                text="Well IPR",
+                command=lambda: self._add_component_to_link(
+                    link.link_id,
+                    "well_inflow",
+                    components_list,
+                    properties_frame,
+                ),
+                width=12,
+            ).pack(anchor="w", pady=4)
         if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil", "compositional"):
             ttk.Button(
                 palette,
@@ -3791,10 +3814,12 @@ class NetSimGui:
             if comp.component_type == "pipe":
                 canvas.create_line(x0c, y0c, x1c, y1c, fill=pipe_color, width=2)
                 legend_seen.setdefault("Pipe", (pipe_color, ()))
-            elif comp.component_type in ("fitting", "choke"):
+            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow"):
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=fitting_color, width=2, dash=(6, 3))
-                legend_seen.setdefault("Fitting" if comp.component_type == "fitting" else "Choke",
-                                       (fitting_color, (6, 3)))
+                legend_seen.setdefault(
+                    {"fitting": "Fitting", "choke": "Choke", "check_valve": "Check valve",
+                     "well_inflow": "Well IPR"}[comp.component_type],
+                    (fitting_color, (6, 3)))
             elif comp.component_type == "pump":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
                 legend_seen.setdefault("Pump", (pump_color, (6, 3)))
@@ -3827,7 +3852,8 @@ class NetSimGui:
                                    anchor="s", font=("TkDefaultFont", 7),
                                    fill=pipe_color)
             else:
-                lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke"}
+                lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke",
+                           "check_valve": "check", "well_inflow": "IPR"}
                 clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
                 lbl = lbl_map.get(comp.component_type, comp.component_type)
                 clr = clr_map.get(comp.component_type, fitting_color)
@@ -4502,10 +4528,12 @@ class NetSimGui:
             if comp.component_type == "pipe":
                 canvas.create_line(x0c, y0c, x1c, y1c, fill=temp_color, width=2)
                 legend_seen.setdefault("Pipe", (temp_color, ()))
-            elif comp.component_type in ("fitting", "choke"):
+            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow"):
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=fitting_color, width=2, dash=(6, 3))
-                legend_seen.setdefault("Fitting" if comp.component_type == "fitting" else "Choke",
-                                       (fitting_color, (6, 3)))
+                legend_seen.setdefault(
+                    {"fitting": "Fitting", "choke": "Choke", "check_valve": "Check valve",
+                     "well_inflow": "Well IPR"}[comp.component_type],
+                    (fitting_color, (6, 3)))
             elif comp.component_type == "pump":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
                 legend_seen.setdefault("Pump", (pump_color, (6, 3)))
@@ -4536,7 +4564,8 @@ class NetSimGui:
                                    anchor="s", font=("TkDefaultFont", 7),
                                    fill=temp_color)
             else:
-                lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke"}
+                lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke",
+                           "check_valve": "check", "well_inflow": "IPR"}
                 clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
                 lbl = lbl_map.get(comp.component_type, comp.component_type)
                 clr = clr_map.get(comp.component_type, fitting_color)
@@ -4631,6 +4660,25 @@ class NetSimGui:
                 properties_frame,
                 link_id,
                 components_list,
+            )
+            return
+        if component.component_type == "check_valve":
+            self._render_simple_component_properties(
+                component, properties_frame, link_id, components_list,
+                fields=[("diameter_m", f"Diameter ({self._unit_label('diameter')})"),
+                        ("loss_coefficient", "Loss coefficient K, open (−)")],
+                note=("Lets flow pass only from the link's start node to its end node;\n"
+                      "closes when the downstream pressure is higher.  K ≈ 2 for a swing check."),
+            )
+            return
+        if component.component_type == "well_inflow":
+            self._render_simple_component_properties(
+                component, properties_frame, link_id, components_list,
+                fields=[("productivity_index_m3_per_day_per_bar", "Productivity index J (m³/d/bar, stock-tank oil)"),
+                        ("diameter_m", f"Tubing bore ({self._unit_label('diameter')})")],
+                choices={"ipr_model": ("IPR model", ("vogel", "linear"))},
+                note=("Start node = reservoir (pressure boundary at P_r, reservoir temperature);\n"
+                      "end node = bottom hole / wellhead.  Vogel applies below the bubble point."),
             )
             return
 
@@ -4828,6 +4876,47 @@ class NetSimGui:
                 entries,
                 components_list,
                 properties_frame,
+            ),
+        ).pack(side="right")
+
+    def _render_simple_component_properties(
+        self,
+        component: CanvasLinkComponent,
+        properties_frame: ttk.LabelFrame,
+        link_id: int,
+        components_list: tk.Listbox,
+        fields: list[tuple[str, str]],
+        choices: dict[str, tuple[str, tuple[str, ...]]] | None = None,
+        note: str = "",
+    ) -> None:
+        """Entries (and optional comboboxes) for a component, saved through
+        ``_save_link_component_properties`` (unit conversion via _FIELD_QUANTITY)."""
+        props = component.properties
+        entries: dict[str, tk.StringVar] = {}
+        row = 1
+        for key, label in fields:
+            entries[key] = tk.StringVar(value=self._field_from_si(key, props.get(key, "")))
+            ttk.Label(properties_frame, text=label).grid(row=row, column=0, sticky="w", pady=4)
+            ttk.Entry(properties_frame, textvariable=entries[key], width=18).grid(
+                row=row, column=1, sticky="ew", pady=4)
+            row += 1
+        for key, (label, values) in (choices or {}).items():
+            entries[key] = tk.StringVar(value=props.get(key, values[0]) or values[0])
+            ttk.Label(properties_frame, text=label).grid(row=row, column=0, sticky="w", pady=4)
+            ttk.Combobox(properties_frame, textvariable=entries[key], state="readonly",
+                         values=values, width=16).grid(row=row, column=1, sticky="ew", pady=4)
+            row += 1
+        if note:
+            ttk.Label(properties_frame, text=note, foreground="gray").grid(
+                row=row, column=0, columnspan=2, sticky="w", pady=(0, 6))
+            row += 1
+        button_row = ttk.Frame(properties_frame)
+        button_row.grid(row=row, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        ttk.Button(
+            button_row,
+            text="Save",
+            command=lambda: self._save_link_component_properties(
+                link_id, component.component_id, entries, components_list, properties_frame,
             ),
         ).pack(side="right")
 
@@ -5179,6 +5268,10 @@ class NetSimGui:
             return f"Heat Source #{display_index}"
         if component.component_type == "choke":
             return f"Choke #{display_index}"
+        if component.component_type == "check_valve":
+            return f"Check valve #{display_index}"
+        if component.component_type == "well_inflow":
+            return f"Well IPR #{display_index}"
         return f"{component.component_type.capitalize()} #{display_index}"
 
     def _pretty_field_name(self, field_name: str) -> str:

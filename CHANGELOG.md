@@ -1,5 +1,77 @@
 # Changelog
 
+## [1.12.0] — 2026-11-22
+
+### New: well inflow (IPR) and check valves
+
+  - **`WellInflow`** — inflow performance relationship between a reservoir
+    node (pressure boundary at P_r) and the bottom-hole / wellhead node:
+    linear productivity index or composite Vogel (Vogel 1968; Brown 1984)
+    below the bubble point of the well's crude at reservoir temperature.
+    J is given in stock-tank m³ of oil per day per bar; the mass rate adds
+    the produced gas and water.  If P_wf > P_r the well takes injection.
+    Black-oil solver only (other solvers raise a clear error).
+  - **`CheckValve`** — K-factor fitting (K = 2 by default) that only passes
+    flow from its start to its end node and closes when the downstream
+    pressure is higher.  Works in every solver.
+  - Both are available in the GUI ("Check valve" in all modes, "Well IPR" in
+    black-oil mode).
+  - **Black-oil tutorial 11** (script + GUI file): three wells with IPRs and
+    Beggs-Brill flowlines.  Without check valves the weakest well is injected
+    (−0.15 kg/s); with check valves it is shut in and its wellhead sits at the
+    reservoir pressure.  A linear IPR over-predicts production by 8 % vs
+    Vogel.  Tutorial 09 now points to it.
+
+### Fix: black-oil compositions did not cross devices
+
+Per-well compositions were propagated through pipes and heat sources only.
+A choke, check valve, pump or IPR between a well and its flowline cut the
+propagation and the flowline fell back to the case default fluid.  All link
+types now carry their upstream composition.
+
+### Fix: hybrid convection scheme wrong for reverse flow
+
+The hybrid scheme (default of the compositional and black-oil solvers) used
+a_W = max(F, D − F/2, 0) instead of Patankar's max(F, D + F/2, 0).  For a pipe
+whose flow runs against its definition (F < 0) at high Péclet number this
+became central differencing: inaccurate, and not conservative at the pipe
+ends (2.3 kW of energy lost in the tutorial 11 injection case).  Fixed;
+black-oil tutorial 09, whose Well-3 line has reverse flow, moves from −4.67 to
+−4.74 m³/h.  A new test checks that a pipe defined against the flow gives
+the same outlet temperature as one defined with it.
+
+### Fix: Beggs-Brill returned zero flow when gravity should drive it
+
+When the pressure difference across an inclined pipe could not overcome the
+hydrostatic head, Beggs-Brill returned zero velocity instead of computing the
+gravity-driven flow in the opposite direction.  It now tries the other
+direction before declaring no flow.
+
+### Fix: nodes without flow blocked convergence
+
+The nodal mass-imbalance metric divided each node's imbalance by its own
+throughput, so a node with round-off-level flow (behind a closed check valve,
+on a dead-end branch) reported 100 % imbalance forever.  Nodes carrying less
+than 0.1 % of the largest nodal throughput are now measured against that
+floor.
+
+### Known limitation
+
+Vertical two-phase tubing (e.g. a 2 km riser between bottom hole and
+wellhead) inside a network does not converge reliably yet: the Beggs-Brill
+holdup makes the tubing pressure drop non-monotonic in the flow rate (the
+J-shaped tubing performance curve) and the density loop can oscillate.
+Tutorial 11 therefore refers the IPRs to the wellhead.  A stable-branch
+selection for risers is planned.
+
+### Tests
+
+  - `tests/test_well_inflow.py` (18 tests): IPR formulas (linear, Vogel open
+    flow, continuity at P_b, derivative), solver reproduces the IPR, IPR
+    rejected outside black-oil, check valve forward / blocked, back-flow
+    without check valve, shut-in with check valve and closed energy balance,
+    composition through devices, hybrid scheme reverse-flow symmetry.
+
 ## [1.11.0] — 2026-11-21
 
 ### GUI: four new features — every tutorial now has a GUI file

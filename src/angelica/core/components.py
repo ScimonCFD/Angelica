@@ -179,6 +179,66 @@ class Choke(Fitting):
 
 
 @dataclass(frozen=True)
+class CheckValve(Fitting):
+    """Non-return (check) valve: a K-factor fitting that only lets flow pass
+    from ``start_node`` to ``end_node``.
+
+    Forward flow sees the loss coefficient ``loss_coefficient`` (default 2.0, a
+    swing check valve fully open).  When the pressure at ``end_node`` exceeds
+    the pressure at ``start_node`` the valve closes and carries no flow.  Works
+    in every solver.
+
+    Typical use: on each well of a gathering network, so that a low-pressure
+    well is shut in instead of taking back-flow from the manifold.
+    """
+
+    loss_coefficient: float = 2.0
+    blocks_reverse_flow = True   # class attribute read by the minor-loss model
+
+
+@dataclass(frozen=True)
+class WellInflow(Fitting):
+    """Well inflow performance relationship (IPR) between a reservoir node and
+    the bottom-hole node.
+
+    ``start_node`` is the reservoir (a pressure boundary at the average
+    reservoir pressure P_r, with the reservoir temperature), ``end_node`` the
+    bottom hole (flowing pressure P_wf).  The stock-tank oil rate is
+
+      linear:  q_o = J · (P_r − P_wf)
+      vogel:   q_o = J · (P_r − P_wf)                        for P_wf ≥ P_b
+               q_o = J · (P_r − P_b) + J·P_b/1.8 · (1 − 0.2·x − 0.8·x²),
+                     x = P_wf / P_b                          for P_wf < P_b
+               (composite Vogel; P_b is the bubble point of the well fluid at
+               reservoir temperature, capped at P_r)
+
+    with J = ``productivity_index_m3_per_day_per_bar`` (stock-tank m³ of oil
+    per day per bar).  The mass rate includes the produced gas and water,
+    ṁ = q_o·(ρ_o,sc + GOR·ρ_g,sc + WOR·ρ_w,sc).  If P_wf > P_r the well takes
+    injection at the same J (use a ``CheckValve`` to prevent it).
+
+    Requires ``SteadyBlackOilSolver``.  ``diameter_m`` is the tubing bore used
+    only to report a velocity.
+    """
+
+    productivity_index_m3_per_day_per_bar: float = float("nan")
+    ipr_model: str = "vogel"
+    loss_coefficient: float = 1.0   # unused; keeps the Fitting interface
+    is_well_inflow = True           # class attribute read by the flow models
+
+    def __post_init__(self) -> None:
+        if math.isnan(self.productivity_index_m3_per_day_per_bar):
+            raise ValueError("WellInflow requires productivity_index_m3_per_day_per_bar.")
+        if self.productivity_index_m3_per_day_per_bar <= 0.0:
+            raise ValueError(
+                "WellInflow productivity_index_m3_per_day_per_bar must be positive "
+                f"(got {self.productivity_index_m3_per_day_per_bar})"
+            )
+        if self.ipr_model not in ("linear", "vogel"):
+            raise ValueError(f"WellInflow ipr_model must be 'linear' or 'vogel' (got {self.ipr_model!r})")
+
+
+@dataclass(frozen=True)
 class Pump(PressureChanger):
     """Centrifugal pump (or compressor) defined by a head curve.
 

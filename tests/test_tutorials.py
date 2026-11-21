@@ -57,8 +57,8 @@ def gui_results(tmp_path_factory):
 
 
 def test_tutorials_discovered():
-    assert len(SCRIPTS) >= 41
-    assert len(GUI_FILES) >= 41
+    assert len(SCRIPTS) >= 42
+    assert len(GUI_FILES) >= 42
 
 
 @pytest.mark.parametrize("run_py", SCRIPTS, ids=tutorial_id)

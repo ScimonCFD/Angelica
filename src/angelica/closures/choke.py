@@ -197,12 +197,17 @@ def choke_operating_point(choke_state, fluid) -> ChokeOperatingPoint | None:
 # ── Solver correlation ─────────────────────────────────────────────────────────
 
 class ChokeFlowModel(MinorLossModel):
-    """Minor-loss model that applies Sachdeva critical flow to ``Choke`` links.
+    """Device model of the black-oil solver.
 
-    Ordinary ``Fitting`` links, chokes with ``flow_model="orifice"``, and
-    fluids without black-oil PVT all fall back to the K-factor equation of
-    ``MinorLossModel``.  ``SteadyBlackOilSolver`` uses this model by default
-    and calls ``set_fluid()`` before every hydraulic solve.
+    - ``Choke`` links: Sachdeva critical / subcritical two-phase flow;
+    - ``WellInflow`` links: linear or composite-Vogel IPR
+      (``angelica.closures.well_inflow``);
+    - everything else (ordinary fittings, check valves, orifice-model chokes,
+      fluids without black-oil PVT): the K-factor equation of
+      ``MinorLossModel``.
+
+    ``SteadyBlackOilSolver`` uses this model by default and calls
+    ``set_fluid()`` before every hydraulic solve.
     """
 
     def __init__(self) -> None:
@@ -218,7 +223,20 @@ class ChokeFlowModel(MinorLossModel):
         link_fluid = resolve_link_fluid(self._fluid, link_state)
         return link_fluid is not None and hasattr(link_fluid, "pvt")
 
+    def _well_fluid(self, link_state):
+        if not getattr(link_state.component, "is_well_inflow", False):
+            return None
+        link_fluid = resolve_link_fluid(self._fluid, link_state)
+        if link_fluid is None or not hasattr(link_fluid, "pvt"):
+            raise ValueError("WellInflow (IPR) links need a black-oil fluid.")
+        return link_fluid
+
     def calculate_velocity(self, link_state, delta_p, density, viscosity, tolerance=None) -> float:
+        well_fluid = self._well_fluid(link_state)
+        if well_fluid is not None:
+            from .well_inflow import well_inflow_point
+            m_dot = well_inflow_point(link_state, well_fluid).mass_flow_kg_per_s
+            return m_dot / (density * link_state.area_m2)
         if not self._uses_sachdeva(link_state) or delta_p == 0.0:
             return super().calculate_velocity(link_state, delta_p, density, viscosity, tolerance)
         op = choke_operating_point(link_state, self._fluid)
@@ -227,6 +245,20 @@ class ChokeFlowModel(MinorLossModel):
         return v if delta_p > 0.0 else -v
 
     def calculate_coupling(self, link_state, density, viscosity) -> float:
+        well_fluid = self._well_fluid(link_state)
+        if well_fluid is not None:
+            # Tangent dṁ/dΔP of the IPR (exact for the linear part).
+            from .well_inflow import mass_per_oil_sc_m3, oil_rate_derivative
+            comp = link_state.component
+            p_res = float(link_state.start_node.pressure_pa)
+            p_wf = float(link_state.end_node.pressure_pa)
+            T = link_state.start_node.temperature_c
+            if T is None:
+                T = getattr(well_fluid, "reference_temperature_c", 60.0)
+            p_b = well_fluid.pvt(p_res, T).bubble_point_pa if comp.ipr_model == "vogel" else p_res
+            dq = oil_rate_derivative(p_res, p_wf, comp.productivity_index_m3_per_day_per_bar,
+                                     comp.ipr_model, p_b)
+            return -max(dq * mass_per_oil_sc_m3(well_fluid) / 86_400.0, 1e-12)
         if not self._uses_sachdeva(link_state):
             return super().calculate_coupling(link_state, density, viscosity)
         delta_p = abs(float(link_state.start_node.pressure_pa) - float(link_state.end_node.pressure_pa))

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 NODE_TYPES = ("source", "sink", "junction")
-LINK_COMPONENT_TYPES = ("pipe", "fitting", "pump", "heat_source", "choke")
+LINK_COMPONENT_TYPES = ("pipe", "fitting", "pump", "heat_source", "choke", "check_valve", "well_inflow")
 DEFAULT_LIBRARY_MATERIAL = {
     "library_key": "water_liquid",
     "definition_mode": "library",
@@ -308,6 +308,17 @@ class CanvasScene:
             return {
                 "diameter_m": "",
                 "curve_points_q_head": "",
+            }
+        if component_type == "check_valve":
+            return {
+                "diameter_m": "",
+                "loss_coefficient": "2.0",
+            }
+        if component_type == "well_inflow":
+            return {
+                "diameter_m": "0.1016",
+                "productivity_index_m3_per_day_per_bar": "",
+                "ipr_model": "vogel",
             }
         if component_type == "choke":
             return {

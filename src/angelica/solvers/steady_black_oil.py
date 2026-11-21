@@ -139,11 +139,10 @@ class SteadyBlackOilSolver(BaseSolver):
         # For each node accumulate (mass_flow, composition) of incoming pipes.
         # Incoming means: flow is from the pipe's upstream end TO this node.
         incoming: dict[int, list] = defaultdict(list)
-        pipe_states = [
-            (idx, ps)
-            for idx, ps in enumerate(network_state.components)
-            if isinstance(ps, (PipeState, HeatSourceState))
-        ]
+        # Every link carries composition downstream — pipes and heat sources,
+        # but also chokes, check valves, well inflows and pumps (a device with
+        # no volume still delivers its upstream fluid to the next node).
+        pipe_states = list(enumerate(network_state.components))
 
         inlet_node_ids = frozenset(ibc.node_id for ibc in case.inlet_fluid_bcs)
 
@@ -213,10 +212,6 @@ class SteadyBlackOilSolver(BaseSolver):
                 up_id = ps.end_node.node_id
             pipe_comp[idx] = node_comp.get(up_id, default_comp)
 
-        # Non-pipe components inherit the default
-        for idx in range(len(network_state.components)):
-            if idx not in pipe_comp:
-                pipe_comp[idx] = default_comp
 
         return pipe_comp, node_comp
 

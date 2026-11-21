@@ -374,12 +374,17 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             throughput_by_node[link_state.start_node.node_id] += abs_flow
             throughput_by_node[link_state.end_node.node_id] += abs_flow
 
+        # Nodes with (almost) no flow — e.g. behind a closed check valve or on a
+        # dead-end branch — carry round-off-level flows; dividing by their own
+        # throughput would report ~100 % imbalance forever.  Measure them
+        # against the typical throughput of the network instead.
+        throughput_floor = max(1e-10, 1e-3 * max(throughput_by_node.values(), default=0.0))
         max_rel = 0.0
         for node_id, node_state in network_state.nodes.items():
             if node_state.is_boundary:
                 continue
             imbalance = abs(imbalance_by_node[node_id])
             throughput = throughput_by_node[node_id]
-            max_rel = max(max_rel, imbalance / max(throughput, 1e-10))
+            max_rel = max(max_rel, imbalance / max(throughput, throughput_floor))
 
         return max_rel

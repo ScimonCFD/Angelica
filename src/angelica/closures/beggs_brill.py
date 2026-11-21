@@ -439,19 +439,27 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
 
         C_L, rho_l, rho_g, mu_l, mu_g = self._phase_properties(pipe_state)
 
-        sign = 1.0 if delta_p >= 0.0 else -1.0
-
-        # Gravity contribution at current holdup (iterate once)
         v0 = max(abs(pipe_state.velocity_m_per_s), _MIN_VELOCITY)
-        st0 = beggs_brill_gradient(v0, C_L, rho_l, rho_g, mu_l, mu_g,
-                                   D, roughness, sign * theta_rad)
-        gravity_dp = st0.dP_dz_gravity * L
 
-        net_driving = abs(delta_p) - gravity_dp
+        def _net_driving(direction: float):
+            """Friction-available pressure drop for flow in ``direction``
+            (+1: start → end).  Gravity uses the holdup of that flow direction."""
+            st = beggs_brill_gradient(v0, C_L, rho_l, rho_g, mu_l, mu_g,
+                                      D, roughness, direction * theta_rad)
+            return direction * delta_p - st.dP_dz_gravity * L, st
+
+        # Try the direction the pressure difference points to first.  If it
+        # cannot overcome gravity (e.g. a riser whose ΔP is below the static
+        # head), the fluid flows the other way, driven by gravity.
+        sign = 1.0 if delta_p >= 0.0 else -1.0
+        net_driving, st0 = _net_driving(sign)
         if net_driving <= 0.0:
-            pipe_state.velocity_m_per_s = 0.0
-            pipe_state.friction_factor  = st0.f_tp
-            return 0.0
+            net_rev, st_rev = _net_driving(-sign)
+            if net_rev <= 0.0:
+                pipe_state.velocity_m_per_s = 0.0
+                pipe_state.friction_factor  = st0.f_tp
+                return 0.0
+            sign, net_driving, st0 = -sign, net_rev, st_rev
 
         v_m, f_tp, _HL = self._solve_vm(
             net_driving, C_L, rho_l, rho_g, mu_l, mu_g,
