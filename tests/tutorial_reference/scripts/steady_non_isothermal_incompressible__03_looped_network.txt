@@ -1,0 +1,32 @@
+Case: Looped network with heat loss
+Converged:              True
+Temperature iterations: 12
+Hyd. iterations:        433
+
+Node                           P (bar)    T (°C)
+  Source                         5.000     95.00
+  Junction A                     4.507     91.87
+  Junction B                     2.789     74.85
+  Junction C (mixing)            1.495     69.99
+  Sink                           1.000     67.78
+
+Pipe                              kg/s      m³/h
+  Feed  1→2 (D50, 100m)         3.0004    11.206
+  Upper 2→3 (D40, 400m)         1.5470     5.713
+  Upper 3→4 (D40, 300m)         1.5470     5.678
+  Bypass 2→4 (D35, 400m)        1.4534     5.370
+  Exit  4→5 (D50, 100m)         3.0004    11.033
+
+Temperature convergence history (max |ΔT| per outer iteration):
+  iter  1:  13.5984 K  ████████████████████████████████████████
+  iter  2:   6.8115 K  ████████████████████
+  iter  3:   3.4058 K  ██████████
+  iter  4:   1.7029 K  █████
+  iter  5:   0.8514 K  ██
+  iter  6:   0.4257 K  █
+  iter  7:   0.2129 K  █
+  iter  8:   0.1064 K  █
+  iter  9:   0.0532 K  █
+  iter 10:   0.0266 K  █
+  iter 11:   0.0133 K  █
+  iter 12:   0.0067 K  █

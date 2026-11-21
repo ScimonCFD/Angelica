@@ -1,0 +1,32 @@
+Bubble point at 60 °C : 5.63 MPa
+
+============================================================
+Case: Black-Oil Loop — Two Separators
+Converged:      True
+PVT iterations: 4
+
+  Node    P (MPa)    T (°C)          Regime
+     1      8.000     60.00  UNDERSATURATED
+     2      7.420     59.05  UNDERSATURATED
+     3      6.766     54.66  UNDERSATURATED
+     4      6.375     54.99  UNDERSATURATED
+     5      5.651     50.45  UNDERSATURATED
+     6      5.246     49.37       two-phase
+     7      6.102     51.99  UNDERSATURATED
+
+Pipe                                   ṁ (kg/s)   Q_mix (m³/h)
+Pipe:pipe_A_trunk_in                    100.000         411.13
+Pipe:pipe_B_upper_L                      50.712         208.02
+Pipe:pipe_C_upper_R                      50.712         207.39
+Pipe:pipe_D_lower_L                      49.288         202.21
+Pipe:pipe_E_lower_R                      29.288         120.23
+Pipe:pipe_F_trunk_out                    80.000         336.74
+Pipe:pipe_G_satellite                    20.000          81.84
+
+Primary separator  (Node 6) P = 5.246 MPa
+Satellite separator(Node 7) P = 6.102 MPa
+
+Upper loop (B+C): 50.712 kg/s  (50.7 % of loop flow)
+Lower loop (D+E): 49.288 kg/s  (49.3 % of loop flow)
+Satellite branch : 20.000 kg/s  (drawn from Node 4)
+Total inlet:       100.000 kg/s

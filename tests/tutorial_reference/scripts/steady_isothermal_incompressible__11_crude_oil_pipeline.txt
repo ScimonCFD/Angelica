@@ -1,0 +1,19 @@
+Fluid: 32.0°API crude oil at 65.0°C
+  Density:   864.63 kg/m³
+  Viscosity: 4.2539 cP  (0.004254 Pa·s)
+
+Case: Crude Oil Pipeline (32°API, 65°C)
+Converged: True
+Laminar iterations:   1
+Turbulent iterations: 21
+
+Component             Mass flow (kg/s)    Vol. flow (m³/h)
+Pipe:pipe_1                    10.3274             42.9994
+Pipe:pipe_2                     6.4091             26.6852
+Pipe:pipe_3                     3.9183             16.3142
+
+Node       Pressure (Pa)  Pressure (bar)
+1              500000.00          5.0000
+2              254669.61          2.5467
+3              101325.00          1.0132
+4              101325.00          1.0132

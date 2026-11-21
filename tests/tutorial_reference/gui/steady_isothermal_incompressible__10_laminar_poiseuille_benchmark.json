@@ -1,0 +1,19 @@
+{
+ "converged": true,
+ "energy_error_pct": null,
+ "mass_error_pct": 2.1228120769977668e-05,
+ "mass_flows_kg_per_s": {
+  "Pipe:link_1_pipe_1_seg0": 0.5926638296845459,
+  "Pipe:link_2_pipe_2_seg0": 0.1727875959284734,
+  "Pipe:link_3_pipe_3_seg0": 0.0683388440928044,
+  "Pipe:link_4_pipe_4_seg0": 0.3515372638518746,
+  "Pipe:link_5_pipe_5_seg0": 0.5926637038731524
+ },
+ "node_pressures_pa": {
+  "1": 50000.0,
+  "2": 0.0,
+  "3": 49999.99999725599,
+  "4": 2.7440104163654833e-06
+ },
+ "node_temperatures_c": {}
+}

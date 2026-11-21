@@ -1,0 +1,14 @@
+Case: District heating branch
+Converged:              True
+Temperature iterations: 2
+
+Pipe                       Mass flow (kg/s)    Vol. flow (m³/h)
+Main supply (1→2)                    1.6227               6.028
+Branch A (2→3)                       0.5877               2.179
+Branch B (2→4)                       1.0350               3.842
+
+Node                  Pressure (bar)  Temperature (°C)
+Supply (source)               4.0000             85.00
+Junction                      3.6984             83.28
+Load A (sink)                 1.5000             79.86
+Load B (sink)                 1.5000             82.62

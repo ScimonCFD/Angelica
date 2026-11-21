@@ -1,0 +1,34 @@
+==============================================================
+Tutorial 06 — Hilly hot-water network (non-isothermal)
+==============================================================
+Converged:              True
+Temperature iterations: 2
+
+Expected hydrostatic contributions (ρ·g·Δz):
+  trunk (↑)           Δz=+40 m  →  382.6 kPa  (opposes flow)
+  branch A (↓)        Δz=-60 m  →  573.9 kPa  (assists flow)
+  branch B (↓)        Δz=-30 m  →  286.9 kPa  (assists flow)
+
+Node      P (kPa)   T (°C)     Elevation
+  1        600.00    85.00      +0.0 m
+  2        127.23    84.83     +40.0 m
+  3        694.73    81.61     -20.0 m
+  4        200.00    84.72     +10.0 m
+
+Pipe                      ṁ (kg/s)     T_in    T_out        Δz
+  trunk_ascending            60.1789    85.00    84.83    +40 m
+  branch_a_descending         3.0000    84.83    81.61    -60 m
+  branch_b_descending        57.1789    84.83    84.72    -30 m
+
+Mass balance:
+  Trunk in:           60.1789 kg/s
+  Branch A + B out:   60.1789 kg/s
+  Imbalance:          5.51e-07 kg/s
+
+Elevation effect:
+  Node 2 (hilltop):   127.23 kPa
+  Node 3 (outflow):   694.73 kPa  (free — set by continuity)
+  Node 4 (outlet):    200.00 kPa  (fixed BC)
+  Gravity assist in branch A: 573.9 kPa
+  Node 3 is BELOW node 1 by 20 m, yet it can sustain pressure
+  because the 60 m descent from node 2 provides significant head.

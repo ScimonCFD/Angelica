@@ -1,0 +1,37 @@
+Case: Steady water network with elevation changes and outlet flow boundary
+Converged: True
+
+Iteration Summary
+  Laminar initialisation iterations: 20
+  Turbulent iterations:              69
+
+Node Pressures
+  Node   Pressure (Pa)  Pressure (kPa)
+     1       251300.00        251.3000
+     2       273899.40        273.8994
+     3       152248.13        152.2481
+     4       227409.69        227.4097
+     5       201300.00        201.3000
+     6       101282.59        101.2826
+     7       251404.81        251.4048
+     8       251014.52        251.0145
+     9       217829.06        217.8291
+    10       215424.64        215.4246
+
+Component Flows
+Component             Mass flow (kg/s)   Vol. flow (m^3/h)
+Pipe 1->7                       1.4151              5.1034
+Fitting 7->8                    1.4152              5.1036
+Pipe 8->2                       1.4151              5.1034
+Pipe 2->9                       0.8781              3.1668
+Fitting 9->10                   0.8781              3.1669
+Pipe 10->3                      0.8781              3.1668
+Pipe 2->4                       0.5370              1.9366
+Pipe 4->3                       0.8936              3.2225
+Pipe 5->4                       0.3566              1.2859
+Pipe 3->6                       1.7717              6.3893
+
+Final Turbulent Metrics
+  Max abs pressure correction (Pa): 0.095644113
+  Max rel pressure correction:      9.443292709e-07
+  Max nodal mass imbalance (−):     2.412427030e-05

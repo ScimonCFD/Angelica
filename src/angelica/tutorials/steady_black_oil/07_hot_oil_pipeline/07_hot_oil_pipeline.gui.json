@@ -1,0 +1,71 @@
+{
+  "case_name": "07 — Hot-oil pipeline (20 km, 80 °C inlet)",
+  "physics_mode": "black_oil",
+  "material": {
+    "name": "Black-oil (PVT)",
+    "definition_mode": "black_oil",
+    "api_gravity": "32.0",
+    "gas_gravity": "0.65"
+  },
+  "pressure_drop_model": {
+    "library_key": "colebrook_white",
+    "name": "Colebrook-White"
+  },
+  "solver_settings": {},
+  "initial_node_pressures_pa": {},
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 120,
+      "y": 260,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "8000000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "80.0",
+        "thermal_gradient_dc_per_m": "0.0",
+        "gor_sc_m3_per_m3": "25.0",
+        "wor_sc_m3_per_m3": "0.5"
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "sink",
+      "x": 700,
+      "y": 260,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "2000000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "20000.0",
+            "diameter_m": "0.25",
+            "height_change_m": "0.0",
+            "roughness_m": "4.6e-05",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "2.0",
+            "ambient_temperature_c": "10.0"
+          }
+        }
+      ]
+    }
+  ]
+}

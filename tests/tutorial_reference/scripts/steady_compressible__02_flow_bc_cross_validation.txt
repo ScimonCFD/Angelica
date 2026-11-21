@@ -1,0 +1,23 @@
+Case: Natural Gas Pipeline — Flow BC Cross-Validation
+Converged:            True
+Density iterations:   2
+
+Node pressures:
+  Node 1:   800.00 kPa   rho = 5.266 kg/m³
+  Node 2:   667.32 kPa   rho = 4.393 kg/m³
+  Node 3:   500.04 kPa   rho = 3.291 kg/m³
+  Node 4:   500.04 kPa   rho = 3.292 kg/m³
+
+Component flows:
+  Pipe:pipe_1             2.7962 kg/s
+  Pipe:pipe_2             1.2555 kg/s
+  Pipe:pipe_3             1.5407 kg/s
+
+Mass balance:
+  ṁ_pipe1 = 2.7962 kg/s  (inlet)
+  ṁ_pipe2 + ṁ_pipe3 = 2.7961 kg/s  (outlets)
+  Imbalance: 5.53e-05 kg/s
+
+Cross-validation: outlet pressures with flow BCs
+  Node 3: 500.04 kPa  (should match pressure-BC case ≈ 500 kPa)
+  Node 4: 500.04 kPa  (should match pressure-BC case ≈ 500 kPa)

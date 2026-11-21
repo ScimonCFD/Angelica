@@ -1,5 +1,53 @@
 # Changelog
 
+## [1.10.6] — 2026-11-21
+
+### Automated regression tests for every tutorial
+
+`tests/test_tutorials.py` runs all 41 tutorial scripts and solves all 35 GUI
+files (in parallel, ~35 s):
+
+  - scripts run from an unrelated directory without error, print no nan/inf
+    and no non-converged solve, and every printed number matches the stored
+    reference (`tests/tutorial_reference/scripts`) to within one unit of its
+    last printed digit;
+  - GUI files converge with finite results, the global mass balance closes
+    (< 0.01 %), the energy balance closes (< 0.5 %) where the reported balance
+    is complete, and node pressures, temperatures and mass flows match the
+    stored reference (`tests/tutorial_reference/gui`).
+
+A 0.1 % change of the gravity constant makes 15 of these tests fail.  Results
+were checked to be bit-identical between the local environment (Python 3.8,
+thermo 0.5.0, numpy 1.24) and the CI one (Python 3.11, thermo 0.6.1,
+numpy 2.4).  After an intentional change, regenerate the references with
+`python tests/update_tutorial_references.py` and review the diff.
+
+### New GUI files
+
+  - Compressible 04 (hill crossing): matches the script (hilltop 68.893 bar,
+    valley 71.176 bar).
+  - Black-oil 07 (hot-oil pipeline, 80 °C case): 137.60 kg/s and 74.62 °C
+    outlet (script 137.55 kg/s, 74.64 °C; analytical 74.63 °C).
+
+Six tutorials still have no GUI file because the GUI lacks a feature they
+use: temperature-dependent liquid properties in non-isothermal mode
+(non-isothermal 05, 06), per-well API/gas gravity in black-oil mode
+(black-oil 06), Beggs-Brill (black-oil 08, 09) and the choke component
+(black-oil 10).
+
+### Known issues found by the new tests (not changed in this release)
+
+  - The reported global energy balance is a sensible-heat balance
+    (Σ ṁ·cp·T, heat sources, wall loss).  It omits pump/compressor shaft work,
+    the pressure dependence of enthalpy (Joule-Thomson) and latent heat, so it
+    shows 6 %–75 % "errors" for compressible 05 (valve) and 06 (compressor),
+    non-isothermal 08 (pump) and compositional 04–06 although the solution
+    includes those effects.  Listed in `KNOWN_ENERGY_BALANCE_GAPS`.
+  - The energy equation evaluates cp with a temperature-only proxy, so the
+    compositional fluid falls back to its default composition at 1 atm
+    (e.g. ≈2 200 instead of 2 869 J/(kg·K) at 100 bar in compositional
+    tutorial 01).
+
 ## [1.10.5] — 2026-11-21
 
 ### Fix: compositional gas viscosity had no pressure dependence

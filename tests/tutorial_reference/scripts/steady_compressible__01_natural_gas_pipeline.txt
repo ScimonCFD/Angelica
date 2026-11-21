@@ -1,0 +1,24 @@
+Case: Natural Gas Pipeline (methane, 800→500 kPa)
+Converged:            True
+Density iterations:   2
+
+Node pressures:
+  Node 1 (inlet):        800.00 kPa   rho = 5.357 kg/m³
+  Node 2 (junction):     667.31 kPa   rho = 4.469 kg/m³
+  Node 3 (outlet A):     500.00 kPa   rho = 3.348 kg/m³
+  Node 4 (outlet B):     500.00 kPa   rho = 3.348 kg/m³
+
+Component flows:
+  Pipe:pipe_1             2.8206 kg/s  (2066.82 m³/h)
+  Pipe:pipe_2             1.2665 kg/s  (1166.53 m³/h)
+  Pipe:pipe_3             1.5542 kg/s  (1431.55 m³/h)
+
+Mass balance (inlet = outlet A + outlet B):
+  ṁ_pipe1 = 2.8206 kg/s
+  ṁ_pipe2 + ṁ_pipe3 = 2.8207 kg/s
+  Imbalance: 1.04e-04 kg/s
+
+Compressibility effect:
+  Inlet density:  5.357 kg/m³
+  Outlet density: 3.348 kg/m³
+  Ratio (rho_in / rho_out): 1.600  (= P_in / P_out for ideal gas)

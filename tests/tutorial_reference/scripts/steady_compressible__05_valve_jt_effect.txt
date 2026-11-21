@@ -1,0 +1,18 @@
+
+── Peng-Robinson (real gas) ──
+  Converged: True
+  Node 2 (upstream valve):   64.056 bar  39.155 °C
+  Node 3 (downstream valve): 57.451 bar  36.585 °C
+  ΔP valve: 6.606 bar
+  ΔT valve: -2.5702 °C   Δh = +0.400 J/kg
+
+── Ideal gas               ──
+  Converged: True
+  Node 2 (upstream valve):   64.020 bar  39.109 °C
+  Node 3 (downstream valve): 57.438 bar  39.109 °C
+  ΔP valve: 6.582 bar
+  ΔT valve: +0.0002 °C   Δh = +0.394 J/kg
+
+Joule-Thomson cooling:
+  Real gas (PR):  ΔT = -2.5702 °C
+  Ideal gas:      ΔT = +0.0002 °C  (zero by definition)

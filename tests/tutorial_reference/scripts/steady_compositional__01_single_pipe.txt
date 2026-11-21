@@ -1,0 +1,25 @@
+============================================================
+EOS flash preview (thermo library)
+------------------------------------------------------------
+                                Inlet (100 bar)  Outlet (20 bar)
+ρ  (kg/m³)                               81.93           14.21
+μ  (Pa·s × 10⁻⁵)                        1.4619          1.2226
+Cp (J/(kg·K))                           2869.3          2293.5
+k  (mW/(m·K))                          46.9285         39.8930
+
+============================================================
+Case:              Compositional Single Pipe
+Converged:         True
+Outer iterations:  3
+
+  Node    P (bar)    T (°C)
+     1    100.000     60.00
+     2     20.000     37.87
+
+Mass flow:       15.6434 kg/s
+Volumetric flow: 1143.60 m³/h  (at pipe conditions)
+
+Velocity @ inlet:  10.81 m/s
+Velocity @ outlet: 62.28 m/s  (gas expands as P drops)
+
+Global mass balance error: 0.0000 %

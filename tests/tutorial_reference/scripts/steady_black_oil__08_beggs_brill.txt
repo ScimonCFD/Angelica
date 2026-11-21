@@ -1,0 +1,28 @@
+============================================================
+Tutorial 08 — Beggs-Brill two-phase flow
+============================================================
+
+Pipe: D=102 mm, L=10 km, horizontal
+P_in = 6.0 MPa  →  P_out = 2.0 MPa  (ΔP = 4.0 MPa)
+
+Fluid at avg conditions (4.0 MPa, 50 °C):
+  No-slip liquid content  C_L = 0.425
+  No-slip gas content     C_G = 0.575
+  Mix density             ρ_m = 382.0 kg/m³
+  Mix viscosity           µ_m = 1.44 mPa·s
+
+Beggs-Brill at v_m = 2.62 m/s:
+  Flow regime        = intermittent
+  In-situ holdup H_L = 0.517  (vs no-slip C_L = 0.425)
+  Froude number N_Fr = 6.91
+  No-slip f_n        = 0.02123
+  Two-phase f_tp     = 0.03089  (ratio = 1.46×)
+  dP/dz friction     = 400 Pa/m
+
+                          Colebrook  Beggs-Brill
+  Converged                    True         True
+  Mass flow (kg/s)            9.970        8.127
+  Volume flow (m³/h)          93.97        76.60
+
+  Colebrook / BB ratio: 1.227  (BB predicts lower flow)
+  → ignoring slip overestimates flow by 22.7 %

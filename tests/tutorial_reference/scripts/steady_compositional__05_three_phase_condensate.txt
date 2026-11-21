@@ -1,0 +1,42 @@
+====================================================================
+Section 1 — HC phase state scan at 80 bar (where does liquid appear?)
+--------------------------------------------------------------------
+ T (°C)     VF_hc    V  gas    L  HCliq  Phase (HC)
+--------------------------------------------------------------------
+  120.0    1.0000    0.9300      0.0000  Single-phase gas
+  115.0    1.0000    0.9300      0.0000  Single-phase gas
+  110.0    1.0000    0.9300      0.0000  Single-phase gas
+  105.0    0.9902    0.9209      0.0091  Gas + HC liquid  (L = 0.0091)
+  100.0    0.9491    0.8826      0.0474  Gas + HC liquid  (L = 0.0474)
+   90.0    0.8755    0.8142      0.1158  Gas + HC liquid  (L = 0.1158)
+   70.0    0.7517    0.6991      0.2309  Gas + HC liquid  (L = 0.2309)
+   50.0    0.6453    0.6002      0.3298  Gas + HC liquid  (L = 0.3298)
+   30.0    0.5447    0.5066      0.4234  Gas + HC liquid  (L = 0.4234)
+
+====================================================================
+Section 2 — Network solve results
+--------------------------------------------------------------------
+Case:       Three-Phase Rich Condensate Pipeline
+Converged:  True
+
+ Node    P (bar)    T (°C)
+    1     80.000    110.00
+    2     60.933     19.09
+    3     30.000     15.13
+
+Pipe             T_in    T_out     V gas    L HCliq        FW  Phase state
+---------------------------------------------------------------------------
+Pipe:pipe_A    110.00    19.09    0.5780     0.3525    0.0695  Gas + HC liq + Free water
+Pipe:pipe_B     19.09    15.13    0.5893     0.3410    0.0698  Gas + HC liq + Free water
+
+Gas phase composition  y_i  (within gas phase):
+  Pipe             methane      ethane     propane    n-butane   n-pentane    n-hexane
+  Pipe:pipe_A       0.7757      0.1029      0.0705      0.0332      0.0115      0.0062
+  Pipe:pipe_B       0.8105      0.1015      0.0590      0.0213      0.0055      0.0022
+
+HC liquid phase composition  x_i  (within HC liquid phase):
+  Pipe             methane      ethane     propane    n-butane   n-pentane    n-hexane
+  Pipe:pipe_A       0.2896      0.1151      0.1681      0.1725      0.1230      0.1317
+  Pipe:pipe_B       0.2130      0.1180      0.1913      0.1979      0.1371      0.1428
+
+Global mass balance error: 0.0003 %

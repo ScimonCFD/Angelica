@@ -1,0 +1,11 @@
+Case: Inline heater
+Converged:              True
+Temperature iterations: 2
+
+Mass flow:  13.8559 kg/s  (49.974 m³/h)
+T_in  (heater inlet):   19.9952 °C
+T_out (heater outlet):  20.8631 °C
+ΔT (actual):            0.8679 K
+
+Expected ΔT = Q / (ṁ·cp) = 50000 / (13.8559 × 4182) = 0.8629 K
+Error: 0.0050 K

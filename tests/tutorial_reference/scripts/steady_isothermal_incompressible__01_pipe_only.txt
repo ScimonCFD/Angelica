@@ -1,0 +1,29 @@
+Case: Recovered steady water network without fittings
+Converged: True
+
+Iteration Summary
+  Laminar initialisation iterations: 1
+  Turbulent iterations:              21
+
+Node Pressures
+  Node   Pressure (Pa)  Pressure (kPa)
+     1       251300.00        251.3000
+     2       213811.30        213.8113
+     3       124947.69        124.9477
+     4       186007.60        186.0076
+     5       201300.00        201.3000
+     6       101300.00        101.3000
+
+Component Flows
+Component             Mass flow (kg/s)   Vol. flow (m^3/h)
+Pipe 1->2                       1.7267              6.2272
+Pipe 2->3                       1.1802              4.2560
+Pipe 2->4                       0.5466              1.9712
+Pipe 4->3                       1.3936              5.0258
+Pipe 5->4                       0.8470              3.0546
+Pipe 3->6                       2.5738              9.2818
+
+Final Turbulent Metrics
+  Max abs pressure correction (Pa): 0.001327358
+  Max rel pressure correction:      7.136040736e-09
+  Max nodal mass imbalance (−):     2.000169098e-08

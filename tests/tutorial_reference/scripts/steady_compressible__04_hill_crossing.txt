@@ -1,0 +1,32 @@
+==============================================================
+Tutorial 04 — Gas pipeline hill crossing (compressible)
+==============================================================
+Converged:          True
+Density iterations: 2
+
+Inlet density at 8.0 MPa, 15°C: 53.57 kg/m³
+  trunk (↑ 500 m)         ρ·g·|Δz| ≈ 262.8 kPa  (opposes flow)
+  branch A (↓ 300 m)      ρ·g·|Δz| ≈ 157.7 kPa  (assists flow)
+  branch B (↓ 550 m)      ρ·g·|Δz| ≈ 289.1 kPa  (assists flow)
+
+Node     P (MPa)   ρ (kg/m³)     Elevation
+  1       8.0000      53.573        +0 m
+  2       6.8893      46.135      +500 m
+  3       5.5000      36.832      +200 m
+  4       7.1176      47.664       -50 m
+
+Pipe                          ṁ (kg/s)    Q (m³/h)        Δz
+  trunk_ascending               147.6071   10658.816   +500 m
+  branch_a_partial_descent      139.6065   12115.321   -300 m
+  branch_b_full_descent           7.9994     614.032   -550 m
+
+Mass balance:
+  Trunk in:            147.6071 kg/s
+  Branch A + B out:    147.6059 kg/s
+  Imbalance:           1.27e-03 kg/s
+
+Hill-crossing observation:
+  Pressure at hilltop (node 2): 6.8893 MPa
+  Pressure at valley  (node 4): 7.1176 MPa  (free — set by continuity)
+  Branch B descends 550 m past the inlet level, so the gravity
+  term in that pipe partially recovers the head lost climbing the hill.

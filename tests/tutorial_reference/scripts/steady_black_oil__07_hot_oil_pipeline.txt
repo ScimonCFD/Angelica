@@ -1,0 +1,33 @@
+=================================================================
+PVT comparison: same fluid at different (P, T) conditions
+                                          T=80°C,8MPa  T=10°C,2MPa
+Bubble point Pb (MPa)                            6.08         4.63
+Solution GOR Rs (m³/m³)                         25.00         8.15
+Mixture density ρ (kg/m³)                       860.7        608.7
+Mixture viscosity μ (mPa·s)                     1.143       79.956
+Mixture Cp (J/kg·K)                              2865         2707
+
+Viscosity ratio cold/hot = 70.0×
+  → hot oil has far lower viscosity; same ΔP drives much higher flow
+
+=================================================================
+HOT case (T_in = 80 °C):
+  Converged:       True
+  T_outlet:        74.64 °C
+  T_out analytical:74.63 °C  (NTU = 0.0799)
+  Error:           0.010 °C  (tolerance: ±2 °C)
+  Mass flow:       137.55 kg/s
+
+COLD case (T_in = 10 °C, isothermal at ambient):
+  Converged:       True
+  Mass flow:       101.73 kg/s
+
+Flow ratio (hot / cold) = 1.352
+  → Hot oil delivers 35.2% more flow for the same ΔP
+    driven by viscosity: 1.143 mPa·s (inlet)
+    vs cold viscosity:   79.956 mPa·s (10 °C, 2 MPa)
+
+PVT change along the hot pipe:
+  Inlet  (8 MPa, 80 °C): ρ = 860.7 kg/m³  μ = 1.143 mPa·s  Rs = 25.00 m³/m³  (undersaturated: P > Pb)
+  Outlet (2 MPa, 74.6 °C): ρ = 521.1 kg/m³  μ = 1.109 mPa·s  Rs = 6.39 m³/m³  (two-phase: P < Pb)
+  Gas liberation: ΔRs = 18.61 m³/m³  (74% of inlet GOR)

@@ -1,0 +1,5 @@
+Case: EPANET pump benchmark
+Converged: True
+Laminar iterations: 4
+Turbulent iterations: 7
+Final metrics: abs_dp=1.345412e-06 Pa, rel_dp=2.537563e-12, max_mass_imbalance_rel=2.040211e-09

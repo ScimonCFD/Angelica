@@ -1,0 +1,30 @@
+============================================================
+Bubble point at 60 °C : 5.63 MPa
+  → Inlet (8 MPa) is UNDERSATURATED
+  → Outlet (2 MPa) is TWO-PHASE
+
+                                 Inlet (8 MPa)  Outlet (2 MPa)
+Rs (m³/m³)                               25.00            6.75
+Bo (m³_res/m³_sc)                       1.0901          1.0497
+z-factor                                0.8883          0.9685
+Holdup oil                              0.6829          0.4052
+Holdup gas                              0.0000          0.3989
+Holdup water                            0.3171          0.1959
+ρ_mixture (kg/m³)                        875.2           539.2
+μ_mixture (cP)                           1.711           1.609
+
+============================================================
+Case: Three-Phase Black-Oil Pipeline
+Converged:           True
+PVT iterations:      3
+
+Mass flow:   109.7810 kg/s
+Vol. flow:   481.501 m³/h  (mixture at actual conditions)
+
+T inlet:     60.00 °C
+T outlet:    55.67 °C
+
+Surface rates (standard conditions):
+  Oil:    282.89 m³/h
+  Gas:    7072.3 m³/h  (25.0 m³/m³  ← GOR input: 25.0)
+  Water:  141.45 m³/h  (0.50 m³/m³  ← WOR input: 0.5)

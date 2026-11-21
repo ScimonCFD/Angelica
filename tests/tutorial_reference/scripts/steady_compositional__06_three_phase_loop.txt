@@ -1,0 +1,46 @@
+==============================================================================
+Case:       Compositional Ring Main
+Converged:  True
+
+ Node  Label                     P (bar)    T (°C)
+--------------------------------------------------
+    1  Source A (rich)             80.00    110.00
+    7  Source B (lean)             75.00     50.00
+    2  Ring N2 (A entry)           60.02     66.30
+    4  Ring N4 (B entry)           61.21     31.70
+    3  Ring N3 (plant tap)         42.55     26.13
+    5  Ring N5 (power tap)         53.48     17.83
+    6  Gas plant                   30.00     24.19
+    8  Power station               40.00     17.21
+
+Pipe          ṁ (kg/s)     T_in    T_out   V gas  L HCliq   W free  Phase state
+----------------------------------------------------------------------------------
+feed_A          29.705   110.00    66.30   0.780    0.155   0.0647  Gas + HC liq + Free water
+feed_B          21.337    50.00    31.70   1.000    0.000   0.0000  Gas
+ring_north      21.646    66.30    26.13   0.663    0.268   0.0689  Gas + HC liq + Free water
+ring_east        9.625    31.70    26.13   1.000    0.000   0.0000  Gas
+ring_west        8.058    66.30    17.83   0.601    0.330   0.0695  Gas + HC liq + Free water
+ring_south      11.712    31.70    17.83   1.000    0.000   0.0000  Gas
+to_plant        31.271    26.13    24.19   0.793    0.159   0.0478  Gas + HC liq + Free water
+to_power        19.771    17.83    17.21   0.873    0.099   0.0282  Gas + HC liq + Free water
+
+Source split (mass):
+  Source A  29.70 kg/s → plant 72.9%, power station 27.1%
+  Source B  21.34 kg/s → plant 45.1%, power station 54.9%
+
+Delivered stream (overall mole fractions):
+  Customer         ṁ (kg/s)   methane    ethane   propane  n-butane  n-pentan  n-hexane     water
+  Gas plant           31.27     0.658     0.088     0.078     0.058     0.035     0.035     0.048
+  Power station       19.77     0.757     0.076     0.059     0.039     0.020     0.020     0.029
+
+Delivered phase split (molar):
+  Customer           Gas   HC liq  Free water
+  Gas plant        0.793    0.159      0.0478
+  Power station    0.873    0.099      0.0282
+
+  • The gas plant sits closer (hydraulically) to Source A and receives the
+    richer, wetter blend; the other customer gets a leaner, drier gas.
+  • Right-click any pipe in the GUI → Phase Envelope to see where each
+    stream sits relative to its bubble and dew curves.
+
+Global mass balance error: 0.0003 %

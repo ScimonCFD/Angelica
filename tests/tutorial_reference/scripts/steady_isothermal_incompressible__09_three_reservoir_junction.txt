@@ -1,0 +1,24 @@
+Case: Three-reservoir junction
+Converged: True
+
+Iteration Summary
+  Laminar initialisation iterations: 1
+  Turbulent iterations:              54
+
+Node Pressures
+  Node   Pressure (Pa)  Pressure (kPa)
+     1       293784.98        293.7850
+     2       247403.38        247.4034
+     3       195856.65        195.8567
+     4        48964.16         48.9642
+
+Component Flows
+Component             Mass flow (kg/s)   Vol. flow (m^3/h)
+Pipe 1->2                      31.1530            112.3476
+Pipe 2->3                      17.2911             62.3571
+Pipe 2->4                      13.8619             49.9904
+
+Final Turbulent Metrics
+  Max abs pressure correction (Pa): 0.001833579
+  Max rel pressure correction:      7.411293360e-09
+  Max nodal mass imbalance (−):     4.715216564e-08

@@ -1,0 +1,11 @@
+Case: Hot water pipe with heat loss
+Converged:               True
+Temperature iterations:  3
+
+Mass flow:  0.4240 kg/s  (1.549 m³/h)
+
+T_in  (node 1):  80.00 °C
+T_out (node 2):  40.07 °C
+ΔT:              39.93 K
+
+Analytical T_out:  39.82 °C  (error 0.25 K)

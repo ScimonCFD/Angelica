@@ -1,0 +1,12 @@
+Case: Laminar Poiseuille Benchmark
+Converged: True
+Laminar iterations: 1
+Turbulent iterations: 1
+
+Component Flows
+Component             Mass flow (kg/s)    Vol. flow (m³/h)
+Pipe:pipe_1                   0.172788            0.706858
+Pipe:pipe_2                   0.068339            0.279568
+Pipe:pipe_3                   0.351537            1.438107
+
+Final laminar metrics: abs_dp=0.000000e+00 Pa, rel_dp=0.000000e+00, max_mass_imbalance_rel=0.000000e+00

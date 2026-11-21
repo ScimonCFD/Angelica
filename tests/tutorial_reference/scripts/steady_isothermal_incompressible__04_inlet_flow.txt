@@ -1,0 +1,37 @@
+Case: Recovered steady water network with inlet flow boundary
+Converged: True
+
+Iteration Summary
+  Laminar initialisation iterations: 7
+  Turbulent iterations:              18
+
+Node Pressures
+  Node   Pressure (Pa)  Pressure (kPa)
+     1       251300.00        251.3000
+     2       214100.80        214.1008
+     3       124591.48        124.5915
+     4       185985.23        185.9852
+     5       201299.81        201.2998
+     6       101300.00        101.3000
+     7       223825.65        223.8256
+     8       223258.92        223.2589
+     9       185651.93        185.6519
+    10       181489.22        181.4892
+
+Component Flows
+Component             Mass flow (kg/s)   Vol. flow (m^3/h)
+Pipe 1->7                       1.7053              6.1499
+Fitting 7->8                    1.7053              6.1499
+Pipe 8->2                       1.7053              6.1499
+Pipe 2->9                       1.1554              4.1668
+Fitting 9->10                   1.1554              4.1669
+Pipe 10->3                      1.1554              4.1668
+Pipe 2->4                       0.5499              1.9830
+Pipe 4->3                       1.3976              5.0401
+Pipe 5->4                       0.8477              3.0571
+Pipe 3->6                       2.5530              9.2069
+
+Final Turbulent Metrics
+  Max abs pressure correction (Pa): 0.111019667
+  Max rel pressure correction:      5.515140154e-07
+  Max nodal mass imbalance (−):     5.185685769e-06

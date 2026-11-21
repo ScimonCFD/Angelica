@@ -1,0 +1,25 @@
+Case: Looped Gas Pipeline with Heat Loss
+Converged:           True
+Density iterations:  3
+
+Node pressures and temperatures:
+  Node 1 (Source      )  700.0 kPa    40.0 °C
+  Node 2 (Junction A  )  663.4 kPa    31.9 °C
+  Node 3 (Upper jct   )  616.3 kPa    25.5 °C
+  Node 4 (Lower jct   )  596.8 kPa    24.2 °C
+  Node 5 (Junction B  )  545.3 kPa    20.7 °C
+  Node 6 (Sink        )  500.0 kPa    17.8 °C
+
+Component flows:
+  Pipe:L1-feeder           2.643 kg/s
+  Pipe:L2-upper            1.520 kg/s
+  Pipe:L3-lower            1.123 kg/s
+  Pipe:L4-cross            0.396 kg/s
+  Pipe:L5-upper            1.124 kg/s
+  Pipe:L6-lower            1.519 kg/s
+  Pipe:L7-collector        2.643 kg/s
+
+Mass balance:
+  Feeder (L1):    2.6430 kg/s
+  Collector (L7): 2.6431 kg/s
+  Imbalance:      9.78e-05 kg/s

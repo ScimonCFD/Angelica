@@ -1,0 +1,27 @@
+=================================================================
+Case:              Looped Gas Gathering Network
+Converged:         True
+Outer iterations:  5
+
+  Node  Label             P (bar)    T (°C)
+     1  Source A          120.000     70.00
+     2  Source B          110.000     60.00
+     3  Junction 3         69.160     54.74
+     4  Junction 4         68.991     47.07
+     5  Outlet             20.000     32.48
+
+Pipe          ṁ (kg/s)    Q (m³/h)  Direction
+pipe_A         11.7624     603.859  
+pipe_B         13.0281     439.846  
+pipe_C         11.2733    1216.929  
+pipe_D          0.4892      29.359  ** 3 → 4 **
+pipe_E         13.5173    1012.668  
+
+Compositions at junction and outlet nodes (mol%):
+Component         Node 3      Node 4  Node 5 (out)
+--------------------------------------------------
+methane            90.00       61.09         74.23
+ethane              8.00       29.20         19.56
+propane             2.00        9.71          6.20
+
+Global mass balance error: 0.0000 %
