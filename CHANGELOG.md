@@ -1,5 +1,64 @@
 # Changelog
 
+## [1.10.1] — 2026-11-21
+
+Bug-fix release from a full audit of all 41 tutorials.
+
+### Fix: segmented pipes lost 1/n of their wall heat transfer
+
+With `n_thermal_segments = n`, the wall source term was applied on the n−1
+interior FV nodes with a length of L/n each, so only (n−1)/n of the pipe area
+exchanged heat (10 % too little heat loss with 10 segments, 50 % with 2).
+Each interior node now carries L/(n−1), so the full area U·π·D·L is used.
+The global energy balance, which had mirrored the missing area, now also uses
+the full pipe length.  Affects every non-isothermal, compressible, black-oil
+and compositional case with U > 0 and `n_thermal_segments > 1`
+(`n_thermal_segments = 1`, the analytical NTU path, was already correct).
+
+  - Black-oil Tutorial 07: error vs the analytical outlet temperature drops
+    from 0.268 °C to 0.010 °C.
+  - Non-isothermal Tutorial 01: error drops from 0.69 K to 0.25 K.
+  - Typical outlet temperatures fall by 0.1–3 °C; flows change < 0.5 %.
+
+### Fix: 31 of 41 tutorials imported the installed Angelica, not the source tree
+
+Their `SRC_ROOT` pointed at non-existent paths (`src/src`, `src/angelica/src`),
+so running a tutorial from a clone either failed with `ModuleNotFoundError` or
+silently used whatever version was installed with pip.  All tutorials now use
+`Path(__file__).resolve().parents[4]`.
+
+### Fix: pump curve units in non-isothermal Tutorial 08 (pump heating)
+
+`Pump.curve_points_q_head` takes Q in **m³/h**, but the tutorial (script and
+GUI file) gave the curve in m³/s, so the pump shut off at 0.05 m³/h and the
+oil crawled at 6.5 g/s, cooling to ambient.  The curve is now in m³/h:
+ṁ = 11.66 kg/s, pump heating +0.615 °C offsets ~40 % of the upstream loss.
+The same unit slip in `test_pump_heating_matches_shaft_work_incompressible`
+is corrected, and `Pump` now documents the units.
+
+### Tutorial output fixes
+
+  - Compositional 01: thermal conductivity label W/(m·K) → mW/(m·K)
+    (values were printed ×1000).
+  - Compositional 04: water column header kg/s → kg/h.
+  - Black-oil 09: prints convergence status.
+  - Non-isothermal 08: header printed "Case: Converged".
+
+### Known limitation (not changed)
+
+Compositional gas viscosity from `thermo` has no pressure correction: at
+100 bar it is ~21 % below Lee-Gonzalez-Eakin (6 % at 20 bar).  The effect on
+turbulent pressure drop is small; a dense-gas correction is planned.
+
+### Tests (366 total, +49)
+
+`tests/test_wall_heat_loss.py`: segmented heat loss equals the exact discrete
+upwind solution for n = 3, 5, 10, 50; convergence to exp(−NTU); global energy
+balance closure; and a check that every tutorial's `SRC_ROOT` resolves to the
+package source.
+
+---
+
 ## [1.10.0] — 2026-11-21
 
 ### New: critical two-phase flow through chokes (Sachdeva et al., 1986)

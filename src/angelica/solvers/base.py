@@ -162,13 +162,10 @@ class BaseSolver(ABC):
                         lmtd = (dT1 - dT2) / math.log(ratio) if abs(ratio - 1.0) > 1e-9 else dT1
                         q_wall_w += U * math.pi * pipe.diameter_m * pipe.length_m * lmtd
                 else:
-                    # Multi-segment FV: source terms act on n_internal = n_segs−1 nodes,
-                    # each covering dx = L/n_segs. Effective wall length = L·n_internal/n_segs.
-                    n_segs = max(pipe.n_thermal_segments, 2)
-                    n_internal = n_segs - 1
-                    fv_length = pipe.length_m * n_internal / n_segs
+                    # Multi-segment FV: the full wall area U·π·D·L is shared by the
+                    # n_internal nodes; link.temperature_c is their mean temperature.
                     T_pipe = link.temperature_c if link.temperature_c is not None else T_ref
-                    q_wall_w += U * math.pi * pipe.diameter_m * fv_length * (T_pipe - T_amb)
+                    q_wall_w += U * math.pi * pipe.diameter_m * pipe.length_m * (T_pipe - T_amb)
 
         return GlobalEnergyBalance(
             enthalpy_in_kw=h_in_w / 1000.0,

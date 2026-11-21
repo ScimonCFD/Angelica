@@ -27,7 +27,7 @@ What the outer loop does
 import sys
 from pathlib import Path
 
-SRC_ROOT = Path(__file__).resolve().parents[4] / "src"
+SRC_ROOT = Path(__file__).resolve().parents[4]
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
@@ -58,7 +58,7 @@ print(f"{'':30s}  {'Inlet (100 bar)':>14s}  {'Outlet (20 bar)':>14s}")
 print(f"{'ρ  (kg/m³)':30s}  {rho_in:>14.2f}  {rho_out:>14.2f}")
 print(f"{'μ  (Pa·s × 10⁻⁵)':30s}  {mu_in*1e5:>14.4f}  {mu_out*1e5:>14.4f}")
 print(f"{'Cp (J/(kg·K))':30s}  {Cp_in:>14.1f}  {Cp_out:>14.1f}")
-print(f"{'k  (W/(m·K))':30s}  {k_in*1e3:>14.4f}  {k_out*1e3:>14.4f}")
+print(f"{'k  (mW/(m·K))':30s}  {k_in*1e3:>14.4f}  {k_out*1e3:>14.4f}")
 print()
 
 # ── Network case ──────────────────────────────────────────────────────────────

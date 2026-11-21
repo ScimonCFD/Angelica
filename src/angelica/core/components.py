@@ -180,6 +180,13 @@ class Choke(Fitting):
 
 @dataclass(frozen=True)
 class Pump(PressureChanger):
+    """Centrifugal pump (or compressor) defined by a head curve.
+
+    ``curve_points_q_head`` holds ``(Q, H)`` pairs with Q the volumetric flow
+    in **m³/h** (not m³/s) and H the head in metres of fluid.  A single point
+    is treated as the design point of a standard three-term curve.
+    """
+
     curve_points_q_head: tuple[tuple[float, float], ...] = ()
 
     def __post_init__(self) -> None:

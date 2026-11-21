@@ -70,14 +70,14 @@ def build_case() -> NetworkCase:
             Pump(
                 start_node=2, end_node=3,
                 diameter_m=_D,
-                curve_points_q_head=(
-                    (0.000, 130.0),
-                    (0.005, 129.0),
-                    (0.010, 127.0),
-                    (0.020, 122.0),
-                    (0.030, 115.0),
-                    (0.040,  95.0),
-                    (0.050,   0.0),
+                curve_points_q_head=(   # (Q in m³/h, head in m)
+                    (  0.0, 130.0),
+                    ( 18.0, 129.0),
+                    ( 36.0, 127.0),
+                    ( 72.0, 122.0),
+                    (108.0, 115.0),
+                    (144.0,  95.0),
+                    (180.0,   0.0),
                 ),
                 component_id="pump",
             ),
@@ -97,7 +97,8 @@ def build_case() -> NetworkCase:
 def main() -> None:
     result = SteadyNonIsothermalIncompressibleSolver().solve(build_case())
 
-    print(f"Case: {result.converged and 'Converged' or 'NOT CONVERGED'}")
+    print("Case: Pump shaft-work heating — crude oil")
+    print(f"Converged: {result.converged}")
     print()
 
     T1 = result.node_temperatures_c[1]

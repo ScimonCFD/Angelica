@@ -26,7 +26,7 @@ The outlet composition is a mass-weighted average of the two inlet streams.
 import sys
 from pathlib import Path
 
-SRC_ROOT = Path(__file__).resolve().parents[4] / "src"
+SRC_ROOT = Path(__file__).resolve().parents[4]
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 

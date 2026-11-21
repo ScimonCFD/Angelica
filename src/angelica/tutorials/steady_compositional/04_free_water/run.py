@@ -38,7 +38,7 @@ What this tutorial shows
 import sys
 from pathlib import Path
 
-SRC_ROOT = Path(__file__).resolve().parents[5] / "src"
+SRC_ROOT = Path(__file__).resolve().parents[4]
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
@@ -168,7 +168,7 @@ for nid in sorted(result.node_pressures_pa):
 print()
 
 # ── Section 4: Free-water results per pipe ────────────────────────────────────
-print(f"{'Pipe':>6}  {'mdot (kg/s)':>11}  {'VF':>6}  {'free water':>11}  {'water (kg/s est.)':>18}")
+print(f"{'Pipe':>6}  {'mdot (kg/s)':>11}  {'VF':>6}  {'free water':>11}  {'water (kg/h est.)':>18}")
 print("-" * 65)
 
 # Molecular weight of water (g/mol) and approximate average MW of wet feed

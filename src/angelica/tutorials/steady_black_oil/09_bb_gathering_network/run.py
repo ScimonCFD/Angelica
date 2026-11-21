@@ -133,6 +133,7 @@ def run():
     print("=" * 65)
     print("Tutorial 09 — Beggs-Brill in a multi-well gathering network")
     print("=" * 65)
+    print(f"Converged:  Colebrook = {res_ck.converged},  Beggs-Brill = {res_bb.converged}")
 
     P_manifold_ck = res_ck.node_pressures_pa[4]
     P_manifold_bb = res_bb.node_pressures_pa[4]

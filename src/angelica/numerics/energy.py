@@ -160,9 +160,13 @@ def solve_energy_system(
             rhs[internal_row] = (1.0 - decay) * T_amb
             continue
 
-        # Moukalled source linearisation: S = Sc + Sp·T_P, Sp ≤ 0
-        Sc = U * math.pi * D_pipe * dx * T_amb
-        Sp = -U * math.pi * D_pipe * dx   # negative → strengthens diagonal
+        # Moukalled source linearisation: S = Sc + Sp·T_P, Sp ≤ 0.
+        # The whole wall area U·π·D·L is shared by the n_internal nodes (the
+        # junction nodes carry no wall term), so each node gets L/n_internal.
+        # Using dx = L/n_segs here would drop 1/n_segs of the pipe area.
+        dx_wall = L / n_internal
+        Sc = U * math.pi * D_pipe * dx_wall * T_amb
+        Sp = -U * math.pi * D_pipe * dx_wall   # negative → strengthens diagonal
 
         # Fixed power source (heater/cooler): Sc += Q/n_internal, Sp_extra = 0
         if isinstance(ps, HeatSourceState) and n_internal > 0:

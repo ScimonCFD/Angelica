@@ -750,7 +750,7 @@ def test_pump_heating_matches_shaft_work_incompressible():
             _adiabatic_pipe(1, 2, cid="P1"),
             Pump(
                 start_node=2, end_node=3, diameter_m=0.10,
-                curve_points_q_head=((0.0, 60.0), (0.05, 55.0), (0.15, 40.0), (0.3, 0.0)),
+                curve_points_q_head=((0.0, 60.0), (180.0, 55.0), (540.0, 40.0), (1080.0, 0.0)),  # Q in m³/h
                 component_id="B",
             ),
             _adiabatic_pipe(3, 4, cid="P2"),
