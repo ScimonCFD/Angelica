@@ -367,5 +367,36 @@ class TestRichCondensateEnvelope(unittest.TestCase):
         self.assertLess(min(p for _, p in self.dew), 1.0e5)
 
 
+
+class TestAbsentComponents(unittest.TestCase):
+    """Components with zero mole fraction (e.g. the lean gas of compositional
+    tutorial 06, 0 % C5/C6) must be ignored.  Before v1.10.3 they made every
+    flash fail: ~40 s of work and an empty "no two-phase region" plot."""
+
+    H = ["methane", "ethane", "propane", "n-butane", "n-pentane", "n-hexane"]
+
+    def test_zero_components_give_same_envelope_as_reduced_mixture(self):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            full = compute_phase_envelope(self.H, [0.90, 0.06, 0.03, 0.01, 0.0, 0.0])
+            reduced = compute_phase_envelope(self.H[:4], [0.90, 0.06, 0.03, 0.01])
+        self.assertGreater(len(full[0]), 5)
+        self.assertGreater(len(full[1]), 5)
+        self.assertAlmostEqual(full[2], reduced[2], places=6)
+        self.assertAlmostEqual(full[3], reduced[3], delta=1.0)
+
+    def test_quality_line_with_zero_components(self):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            pts = compute_quality_line(self.H, [0.90, 0.06, 0.03, 0.01, 0.0, 0.0], 0.5)
+        self.assertGreater(len(pts), 3)
+
+    def test_all_zero_composition_raises(self):
+        with self.assertRaises(ValueError):
+            compute_phase_envelope(self.H[:2], [0.0, 0.0])
+
+
 if __name__ == "__main__":
     unittest.main()

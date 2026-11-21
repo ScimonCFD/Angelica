@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.10.3] — 2026-11-21
+
+### Fix: no phase envelope for compositions with absent components
+
+A component with zero mole fraction has an undefined K-value (0/0), and every
+flash and Newton step failed.  The lean gas of compositional tutorial 06
+(0 % C₅, 0 % C₆) spent ~37 s in fallback scans and then showed "No two-phase
+region found".  Absent components (z ≤ 10⁻¹⁰) are now removed and the rest
+renormalised before tracing, in both `compute_phase_envelope` and
+`compute_quality_line`.  The lean gas now closes at Tc = −56.3 °C,
+Pc = 67.7 bar, identical to the four-component mixture.
+
+### Faster phase envelope (3–8× fewer EOS evaluations)
+
+  - The Newton corrector reuses the Jacobian of the accepted line-search
+    trial, so each iteration costs one EOS evaluation instead of two, and the
+    Jacobian at the converged point is reused for the next tangent.
+  - Step size adapts to the number of Newton iterations (Michelsen 1980)
+    instead of growing 5 % per point, and is capped at 5 K / 3 bar per step so
+    the curve stays smooth around the cricondentherm and cricondenbar.
+  - Bubble-curve descent stops at 0.05 bar instead of tracing down to 75 K.
+  - The EPPR78 kij table is loaded once per process.
+
+Typical envelope: 0.2–0.4 s (was 0.9–2.9 s), 120–190 points (was 250–360).
+Critical points are unchanged and the curves lie within 0.3 % of the plot
+span of the previous dense trace.
+
+### Tests
+
+  - 3 tests for absent components (same envelope as the reduced mixture,
+    quality line, all-zero composition raises).
+
 ## [1.10.2] — 2026-11-21
 
 ### Fix: phase envelope left open for mixtures with heavy ends

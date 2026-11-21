@@ -8,18 +8,33 @@ starting point.  Falls back to a temperature scan when Wilson fails.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
 
 
-def _build_kij_matrix(constants) -> list[list[float]]:
-    """Build kij matrix from EPPR78 database (Jaubert & Mutelet 2004).
+def _drop_absent(
+    component_names: "tuple[str, ...] | list[str]",
+    zs: "tuple[float, ...] | list[float]",
+    z_min: float = 1e-10,
+) -> "tuple[list[str], list[float]]":
+    """Remove components with zero (or negligible) mole fraction and renormalise.
 
-    Returns an N×N list of lists; off-diagonal values come from thermo's
-    bundled eppr78_common.json keyed by CAS-number pairs.  Missing pairs
-    default to 0.0.
+    A component that is absent has undefined K = y/x = 0/0; leaving it in made
+    every flash and Newton step fail, so e.g. a lean gas with 0 % C5/C6 took
+    ~40 s and returned no envelope at all.
     """
+    kept = [(n, float(z)) for n, z in zip(component_names, zs) if float(z) > z_min]
+    if not kept:
+        raise ValueError("Composition has no component with a positive mole fraction.")
+    total = sum(z for _, z in kept)
+    return [n for n, _ in kept], [z / total for _, z in kept]
+
+
+@lru_cache(maxsize=1)
+def _eppr78_table() -> dict:
+    """EPPR78 kij table bundled with thermo, loaded once per process."""
     import json
     import os
 
@@ -31,9 +46,19 @@ def _build_kij_matrix(constants) -> list[list[float]]:
             "eppr78_common.json",
         )
         with open(db_path, encoding="utf-8") as fh:
-            raw: dict = json.load(fh)["data"]
+            return json.load(fh)["data"]
     except Exception:
-        raw = {}
+        return {}
+
+
+def _build_kij_matrix(constants) -> list[list[float]]:
+    """Build kij matrix from EPPR78 database (Jaubert & Mutelet 2004).
+
+    Returns an N×N list of lists; off-diagonal values come from thermo's
+    bundled eppr78_common.json keyed by CAS-number pairs.  Missing pairs
+    default to 0.0.
+    """
+    raw = _eppr78_table()
 
     CASs = list(constants.CASs)
     N = len(CASs)
@@ -186,43 +211,47 @@ def _null(J: "np.ndarray", prev_t: "np.ndarray") -> "np.ndarray":
     return t / (norm if norm > 1e-300 else 1.0)
 
 
+def _state_TPK(S: "np.ndarray", N: int) -> "tuple[np.ndarray, float, float]":
+    """Clipped (K, T, P) for a state vector S = [lnK, lnT, lnP]."""
+    K = np.exp(np.clip(S[:N], -40, 40))
+    T = max(float(np.exp(np.clip(S[N], 4.5, 8.0))), 90.0)
+    P = max(float(np.exp(np.clip(S[N + 1], 7.0, 19.0))), 1e3)
+    return K, T, P
+
+
 def _correct(
     gas_phase: object,
     liq_phase: object,
-    T0: float,
-    P0: float,
-    K0: "np.ndarray",
+    S0: "np.ndarray",
     z: "np.ndarray",
     VF: int,
     spec_idx: int,
     spec_val: float,
-    tol: float = 1e-9,
-    max_iter: int = 50,
-) -> "np.ndarray | None":
-    """Newton-Raphson corrector with line search.  Returns S or None on failure."""
-    N = len(z)
-    S = np.concatenate(
-        [
-            np.log(np.clip(K0, 1e-15, 1e15)),
-            [np.log(max(T0, 50.0)), np.log(max(P0, 1e3))],
-        ]
-    )
-    S[spec_idx] = spec_val
+    tol: float = 1e-8,
+    max_iter: int = 12,
+) -> "tuple[np.ndarray, np.ndarray, int] | None":
+    """Newton-Raphson corrector with backtracking line search.
 
-    err = float("inf")
-    for _ in range(max_iter):
-        K_ = np.exp(np.clip(S[:N], -40, 40))
-        T_ = max(float(np.exp(np.clip(S[N], 4.5, 8.0))), 90.0)
-        P_ = max(float(np.exp(np.clip(S[N + 1], 7.0, 19.0))), 1e3)
-        try:
-            F, J = _eval_FJ(gas_phase, liq_phase, T_, P_, K_, z, VF)
-        except Exception:
-            return None
-        if not np.all(np.isfinite(F)):
-            return None
-        err = float(np.max(np.abs(F)))
+    Returns (S, J, n_iter) — the converged state, the Jacobian evaluated at it
+    (reused by the caller for the next tangent) and the number of Newton
+    iterations — or None on failure.  Each accepted line-search trial already
+    carries F and J, so every iteration costs a single EOS evaluation unless
+    the full Newton step has to be cut back.
+    """
+    N = len(z)
+    S = np.array(S0, dtype=float)
+    S[spec_idx] = spec_val
+    try:
+        F, J = _eval_FJ(gas_phase, liq_phase, *_reorder(_state_TPK(S, N)), z, VF)
+    except Exception:
+        return None
+    if not np.all(np.isfinite(F)):
+        return None
+    err = float(np.max(np.abs(F)))
+
+    for it in range(max_iter):
         if err < tol:
-            return S.copy()
+            return S, J, it
 
         F_aug = np.append(F, S[spec_idx] - spec_val)
         J_aug = np.zeros((N + 2, N + 2))
@@ -236,16 +265,14 @@ def _correct(
             return None
 
         alpha = 1.0
-        for _ in range(14):
+        for _ in range(10):
             S_try = S + alpha * dS
             S_try[spec_idx] = spec_val
-            K_t = np.exp(np.clip(S_try[:N], -40, 40))
-            T_t = max(float(np.exp(np.clip(S_try[N], 4.5, 8.0))), 90.0)
-            P_t = max(float(np.exp(np.clip(S_try[N + 1], 7.0, 19.0))), 1e3)
             try:
-                F_t, _ = _eval_FJ(gas_phase, liq_phase, T_t, P_t, K_t, z, VF)
-                if np.all(np.isfinite(F_t)) and np.max(np.abs(F_t)) < err * (1 - 1e-6):
-                    S = S_try
+                F_t, J_t = _eval_FJ(gas_phase, liq_phase, *_reorder(_state_TPK(S_try, N)), z, VF)
+                err_t = float(np.max(np.abs(F_t)))
+                if np.isfinite(err_t) and err_t < err * (1 - 1e-6):
+                    S, F, J, err = S_try, F_t, J_t, err_t
                     break
             except Exception:
                 pass
@@ -253,7 +280,13 @@ def _correct(
         else:
             return None
 
-    return S if err < 1e-5 else None
+    return (S, J, max_iter) if err < 1e-5 else None
+
+
+def _reorder(KTP: "tuple[np.ndarray, float, float]") -> "tuple[float, float, np.ndarray]":
+    """(K, T, P) → (T, P, K), the argument order of _eval_FJ."""
+    K, T, P = KTP
+    return T, P, K
 
 
 def _trace_arc(
@@ -266,13 +299,15 @@ def _trace_arc(
     K_start: "np.ndarray",
     ds0: float = 0.05,
     ds_min: float = 0.001,
-    ds_max: float = 0.5,
-    max_steps: int = 1000,
+    ds_max: float = 1.0,
+    max_steps: int = 400,
     lnK_stop: float = 0.005,
     ascend: bool = True,
     T_min: float = 50.0,
     P_max: float = 1e8,
     P_min: float = 0.0,
+    dT_max: float = 5.0,
+    dP_max: float = 3.0e5,
 ) -> "list[tuple[float, float]]":
     """Arc-length continuation from (T_start, P_start, K_start).
 
@@ -280,6 +315,10 @@ def _trace_arc(
     ascend=False traces toward lower T (away from the critical point,
                  toward the left leg of the envelope).  Stops when
                  T < T_min, P > P_max or P < P_min.
+
+    Step control follows Michelsen (1980): the step grows when the corrector
+    converges in few Newton iterations and shrinks when it struggles; near
+    the critical point it is capped by max|lnK| so the trace cannot jump past it.
     """
     N = len(z)
     S = np.concatenate(
@@ -312,53 +351,50 @@ def _trace_arc(
     n_fail = 0
 
     for _ in range(max_steps):
-        K_cur = np.exp(np.clip(S[:N], -40, 40))
-        lnK_max = float(np.max(np.abs(np.log(K_cur))))
-
-        ds = min(ds, lnK_max * 0.15, ds_max)
-        ds = max(ds, ds_min)
+        lnK_max = float(np.max(np.abs(S[:N])))
+        ds = max(min(ds, lnK_max * 0.25, ds_max), ds_min)
 
         S_pred = S + ds * tangent
         spec_idx = int(np.argmax(np.abs(tangent)))
-        spec_val = float(S_pred[spec_idx])
+        res = _correct(gas_phase, liq_phase, S_pred, z, VF, spec_idx, float(S_pred[spec_idx]))
 
-        K_pred = np.exp(np.clip(S_pred[:N], -40, 40))
-        T_pred = max(float(np.exp(np.clip(S_pred[N], 4.5, 8.0))), 90.0)
-        P_pred = max(float(np.exp(np.clip(S_pred[N + 1], 7.0, 19.0))), 1e3)
-
-        S_new = _correct(
-            gas_phase, liq_phase, T_pred, P_pred, K_pred, z, VF, spec_idx, spec_val
-        )
-
-        if S_new is None:
+        if res is None:
+            if ds <= ds_min * 1.0001:
+                n_fail += 1
+                if n_fail > 3:
+                    break
             ds = max(ds * 0.5, ds_min)
-            n_fail += 1
-            if n_fail > 60:
-                break
             continue
 
         n_fail = 0
-        K_new = np.exp(np.clip(S_new[:N], -40, 40))
-        T_new = float(np.exp(np.clip(S_new[N], 4.5, 8.0)))
-        P_new = float(np.exp(np.clip(S_new[N + 1], 7.0, 19.0)))
-        lnK_max_new = float(np.max(np.abs(np.log(K_new))))
-
-        try:
-            _, Jn = _eval_FJ(gas_phase, liq_phase, T_new, P_new, K_new, z, VF)
-            tangent = _null(Jn, tangent)
-        except Exception:
-            pass
+        S_new, J_new, n_iter = res
+        _, T_new, P_new = _state_TPK(S_new, N)
+        lnK_max_new = float(np.max(np.abs(S_new[:N])))
 
         # Stagnation guard: the T/P clips can pin the corrector in place.
         T_prev, P_prev = pts[-1]
         if abs(T_new - T_prev) < 1e-6 * T_prev and abs(P_new - P_prev) < 1e-6 * P_prev:
             break
 
+        # Plot resolution: a step may move at most dT_max / dP_max, so the
+        # envelope stays smooth where it bends (cricondentherm, cricondenbar).
+        r_plot = max(abs(T_new - T_prev) / dT_max, abs(P_new - P_prev) / dP_max)
+        if r_plot > 2.0 and ds > ds_min:
+            ds = max(ds / r_plot, ds_min)
+            continue
+
+        tangent = _null(J_new, tangent)
         S = S_new
         pts.append((T_new, P_new))
 
-        if lnK_max_new > 0.3:
-            ds = min(ds * 1.05, ds_max)
+        if n_iter <= 2:
+            ds = min(ds * 2.0, ds_max)
+        elif n_iter <= 4:
+            ds = min(ds * 1.25, ds_max)
+        elif n_iter > 6:
+            ds *= 0.6
+        if r_plot > 1.0:
+            ds = max(ds / r_plot, ds_min)
 
         # Ascent: stop near the critical point (K → 1).
         if ascend and lnK_max_new < lnK_stop:
@@ -393,7 +429,7 @@ def _bubble_trace(
             pts_up   = _trace_arc(gas_phase, liq_phase, z, 0, T_start, P_start, K_start,
                                    ascend=True)
             pts_down = _trace_arc(gas_phase, liq_phase, z, 0, T_start, P_start, K_start,
-                                   ascend=False, T_min=T_lo)
+                                   ascend=False, T_min=T_lo, P_min=5.0e3)
             # pts_down is [T_start, T_lower_1, ...]: reverse to get low→high T order.
             return list(reversed(pts_down)) + pts_up[1:]
 
@@ -574,8 +610,7 @@ def compute_phase_envelope(
 
     eos_cls = SRKMIX if eos_name.upper() == "SRK" else PRMIX
 
-    names = list(component_names)
-    fracs = list(zs)
+    names, fracs = _drop_absent(component_names, zs)
     z = np.asarray(fracs, float)
 
     with warnings.catch_warnings():
@@ -649,8 +684,7 @@ def compute_quality_line(
 
     eos_cls = SRKMIX if eos_name.upper() == "SRK" else PRMIX
 
-    names = list(component_names)
-    fracs = list(zs)
+    names, fracs = _drop_absent(component_names, zs)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
