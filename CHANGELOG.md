@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.13.2] — 2026-11-22
+
+  - Phase-envelope plot: the axes now span the envelope and the link's
+    operating points, and the inlet/outlet points are always drawn (with
+    their temperature and pressure).  Before, the axes followed the envelope
+    only, so the operating points of single-phase links (e.g. a lean gas
+    well to the right of its cricondentherm) fell off the plot and appeared
+    only as a note under the axis.
+
 ## [1.13.1] — 2026-11-22
 
   - `python -m angelica.gui` now starts the GUI (the guide documented it, but

@@ -4170,8 +4170,7 @@ class NetSimGui:
         W = int(canvas.winfo_width() or 700)
         H = int(canvas.winfo_height() or 440)
 
-        # Extra bottom margin for out-of-bounds operating condition annotations
-        ML, MR, MT, MB = 75, 24, 44, 70
+        ML, MR, MT, MB = 75, 24, 44, 48
         plot_w = W - ML - MR
         plot_h = H - MT - MB
 
@@ -4195,16 +4194,21 @@ class NetSimGui:
         def _to_bar(P_Pa: float) -> float:
             return P_Pa / 1.0e5
 
-        # ── axis bounds: derived from the ENVELOPE only, not operating points ──
+        # ── axis bounds: the envelope AND every operating point ──
+        # A single-phase operating point far from a small envelope is exactly
+        # what the plot has to show, so it is never left out of the axes.
         env_T = [_to_C(t) for t, _ in bubble_pts + dew_pts]
         env_P = [_to_bar(p) for _, p in bubble_pts + dew_pts]
+        op_C = [(_to_C(t), _to_bar(p)) for t, p in (op_points or [])]
+        all_T = env_T + [t for t, _ in op_C]
+        all_P = env_P + [p for _, p in op_C]
 
-        T_pad = max((max(env_T) - min(env_T)) * 0.08, 5.0)
-        P_pad = max(max(env_P) * 0.12, 1.0)
-        T_min_d = min(env_T) - T_pad
-        T_max_d = max(env_T) + T_pad
+        T_pad = max((max(all_T) - min(all_T)) * 0.08, 5.0)
+        P_pad = max(max(all_P) * 0.12, 1.0)
+        T_min_d = min(all_T) - T_pad
+        T_max_d = max(all_T) + T_pad
         P_min_d = 0.0
-        P_max_d = max(env_P) + P_pad
+        P_max_d = max(all_P) + P_pad
 
         T_span = T_max_d - T_min_d or 1.0
         P_span = P_max_d - P_min_d or 1.0
@@ -4214,9 +4218,6 @@ class NetSimGui:
 
         def _cy(P_b: float) -> float:
             return MT + plot_h - (P_b - P_min_d) / P_span * plot_h
-
-        def _in_bounds(T_C: float, P_b: float) -> bool:
-            return T_min_d <= T_C <= T_max_d and P_min_d <= P_b <= P_max_d
 
         # Plot border
         canvas.create_rectangle(
@@ -4308,38 +4309,22 @@ class NetSimGui:
                                 text=f"Tc={_to_C(T_cp):.1f}°C  Pc={_to_bar(P_cp):.1f} bar",
                                 font=("TkDefaultFont", 8), fill=self._t["plot_text"])
 
-        # Cricondentherm / cricondenbar of the traced envelope
-        T_cct = max(env_T)
-        P_ccb = max(env_P)
-
-        # Operating condition points — split into in-bounds (dots) and out-of-bounds (text)
+        # Operating points (link inlet / outlet), single- or two-phase alike
         op_color = "#e69c00"
         op_labels = ["Inlet", "Outlet"]
-        out_of_bounds_notes: list[str] = []
-        has_inbounds_op = False
-
-        if op_points:
-            for idx, (T_K, P_Pa) in enumerate(op_points):
-                T_op = _to_C(T_K)
-                P_op = _to_bar(P_Pa)
-                lbl = op_labels[idx] if idx < len(op_labels) else f"Pt{idx + 1}"
-                if _in_bounds(T_op, P_op):
-                    has_inbounds_op = True
-                    xp, yp = _cx(T_op), _cy(P_op)
-                    r = 5
-                    canvas.create_oval(xp - r, yp - r, xp + r, yp + r,
-                                       fill=op_color, outline=self._t["plot_axis"])
-                    canvas.create_text(xp + 7, yp, anchor="w",
-                                       text=lbl.lower(), font=("TkDefaultFont", 8), fill=op_color)
-                else:
-                    # Out-of-range points lie outside the two-phase region
-                    if T_op > T_cct:
-                        region = f"single phase (above cricondentherm {T_cct:.0f} °C)"
-                    elif P_op > P_ccb:
-                        region = f"single phase (above cricondenbar {P_ccb:.0f} bar)"
-                    else:
-                        region = "outside plot range"
-                    out_of_bounds_notes.append(f"{lbl}: {T_op:.1f} °C, {P_op:.1f} bar — {region}")
+        for idx, (T_op, P_op) in enumerate(op_C):
+            lbl = op_labels[idx] if idx < len(op_labels) else f"Pt{idx + 1}"
+            xp, yp = _cx(T_op), _cy(P_op)
+            r = 5
+            canvas.create_oval(xp - r, yp - r, xp + r, yp + r,
+                               fill=op_color, outline=self._t["plot_axis"])
+            # Label to the left when the point sits near the right border
+            right_side = xp < ML + plot_w - 150
+            canvas.create_text(xp + 8 if right_side else xp - 8,
+                               yp + (-8 if idx == 0 else 8),
+                               anchor="w" if right_side else "e",
+                               text=f"{lbl.lower()} {T_op:.1f} °C, {P_op:.1f} bar",
+                               font=("TkDefaultFont", 8), fill=op_color)
 
         # Quality lines (constant vapor fraction)
         ql_color = "#5aaa6a"
@@ -4372,7 +4357,7 @@ class NetSimGui:
             legend.append(("Dew curve", dew_color, (6, 3)))
         if envelope_has_critical:
             legend.append(("Critical point", crit_color, None))
-        if has_inbounds_op:
+        if op_C:
             legend.append(("Operating point", op_color, None))
 
         lx, ly = ML + 10, MT + 10
@@ -4386,17 +4371,6 @@ class NetSimGui:
             canvas.create_text(lx + 27, ly + 6, text=lbl_text, anchor="w",
                                 font=("TkDefaultFont", 9), fill=self._t["plot_text"])
             ly += 20
-
-        # Out-of-bounds operating conditions — listed below the x-axis label
-        if out_of_bounds_notes:
-            note_y = MT + plot_h + 38
-            for note in out_of_bounds_notes:
-                canvas.create_text(
-                    ML + plot_w // 2, note_y,
-                    text=note, anchor="n",
-                    font=("TkDefaultFont", 8), fill=op_color,
-                )
-                note_y += 14
 
         # Composition subtitle (top of plot)
         comp_parts = [f"{n} ({z:.2f})" for n, z in zip(component_names, zs) if z > 1e-10]
