@@ -7,6 +7,10 @@ Methane at 70 bar and 40 °C flows through 500 m of pipe, a throttling valve
 real-gas equation of state (Peng-Robinson) the gas cools by about 2.6 °C as it
 expands across the valve, while an ideal gas — whose enthalpy depends on
 temperature only — shows no temperature change.
+
+The pipes expand the gas too: their energy equation includes the
+Joule-Thomson term, so the real gas reaches the valve at 37.1 °C, about 2 °C
+colder than the ideal gas (39.1 °C, which only loses heat through the wall).
 """
 from __future__ import annotations
 

@@ -93,13 +93,29 @@ class BaseSolver(ABC):
         4. W_shaft: Σ ṁ·(cp·T)_out − ṁ·(cp·T)_in over pumps/compressors
            (= ṁ·ΔP/ρ for liquids).
         5. Ė_JT: the same difference over isenthalpic devices (valves in a
-           real gas): the change of sensible ṁ·cp·T at constant enthalpy,
-           negative when the gas cools.
+           real gas), plus the Joule-Thomson source of each pipe: the change
+           of sensible ṁ·cp·T at constant enthalpy, negative when the gas cools.
+        6. Ė_pot: −Σ ṁ·g·Δz along pipes (fluids with an enthalpy model).
 
-        Balance: Ė_in + Q_src + W_shaft + Ė_JT − Q_wall − Ė_out ≈ 0
+        Balance: Ė_in + Q_src + W_shaft + Ė_JT + Ė_pot − Q_wall − Ė_out ≈ 0
         """
 
-        from angelica.numerics.energy import _LinkAtTemperature, device_thermal_state
+        from angelica.numerics.energy import (
+            _has_enthalpy,
+            _LinkAtTemperature,
+            device_thermal_state,
+            fluid_enthalpy,
+        )
+
+        real_basis = _has_enthalpy(fluid_model)
+
+        def _h_rel(link, P, T: float) -> float:
+            """ṁ-specific enthalpy above the reference (ideal gas at 0 °C)."""
+            ref = (fluid_model.reference_enthalpy_for_link(link)
+                   if hasattr(fluid_model, "reference_enthalpy_for_link") else 0.0)
+            P_use = float(P) if P is not None else getattr(fluid_model, "reference_pressure_pa", 101_325.0)
+            h = fluid_enthalpy(fluid_model, link, P_use, T)
+            return (h if h is not None else 0.0) - ref
 
         devices = {}
         for link in network_state.components:
@@ -137,6 +153,13 @@ class BaseSolver(ABC):
             for node, leaves_node in ((link.start_node, flow > 0.0), (link.end_node, flow < 0.0)):
                 if not node.is_boundary or node.temperature_c is None:
                     continue
+                if real_basis:
+                    if leaves_node:
+                        h_in_w += abs(flow) * _h_rel(link, node.pressure_pa, node.temperature_c)
+                    else:
+                        h_out_w += abs(flow) * _h_rel(link, node.pressure_pa,
+                                                      _arriving_temperature(link, node.temperature_c))
+                    continue
                 try:
                     cp = _cp_at_node(link, node.node_id, node.temperature_c)
                 except NotImplementedError:
@@ -149,25 +172,40 @@ class BaseSolver(ABC):
         # Shaft work and Joule-Thomson term of devices
         w_shaft_w = 0.0
         e_jt_w = 0.0
-        for dt in devices.values():
+        for link_id, dt in devices.items():
             delta = abs(dt.mdot) * (dt.cp_out * dt.T_out - dt.cp_up * dt.T_up)
             if dt.kind == "pump":
+                if real_basis:
+                    link = next(lk for lk in network_state.components if id(lk) == link_id)
+                    delta = abs(dt.mdot) * (_h_rel(link, dt.down_node.pressure_pa, dt.T_out)
+                                            - _h_rel(link, dt.up_node.pressure_pa, dt.T_up))
                 w_shaft_w += delta
             elif dt.kind == "isenthalpic":
                 e_jt_w += delta
 
-        # Heat from link sources and pipe walls
+        # Heat from link sources and pipe walls; pipe JT and potential-energy sources
         q_sources_w = 0.0
         q_wall_w = 0.0
+        e_pot_w = 0.0
         for link in network_state.components:
             if isinstance(link, HeatSourceState):
                 q_sources_w += link.component.power_w
             elif isinstance(link, PipeState):
+                e_jt_w += link.jt_source_w
+                e_pot_w += link.gravity_source_w
+                s_pipe = link.jt_source_w + link.gravity_source_w
                 pipe = link.component
                 U = pipe.u_overall_w_per_m2k
                 if U <= 0.0:
                     continue
+                # With a uniform source S the analytical profile relaxes to
+                # T_amb + S/(U·π·D·L); the wall loss is U·π·D·L·LMTD about that
+                # temperature plus S.
+                ua = U * math.pi * pipe.diameter_m * pipe.length_m
                 T_amb = pipe.ambient_temperature_c
+                if pipe.n_thermal_segments == 1 and s_pipe != 0.0:
+                    q_wall_w += s_pipe
+                    T_amb = T_amb + s_pipe / ua
                 if pipe.n_thermal_segments == 1:
                     # NTU analytical bypass: link.exit_temperature_c is the pipe exit temperature.
                     # Use LMTD: Q = U·π·D·L·LMTD, exact for the NTU bypass path.
@@ -208,6 +246,8 @@ class BaseSolver(ABC):
             heat_wall_loss_kw=q_wall_w / 1000.0,
             shaft_work_kw=w_shaft_w / 1000.0,
             joule_thomson_kw=e_jt_w / 1000.0,
+            potential_energy_kw=e_pot_w / 1000.0,
+            enthalpy_basis="real" if real_basis else "sensible",
         )
 
     @staticmethod

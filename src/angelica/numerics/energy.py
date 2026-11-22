@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 from angelica.closures.convection_scheme import ConvectionScheme
+from angelica.closures.gravity import GRAVITY_M_PER_S2
 from angelica.core.state import FittingState, HeatSourceState, NetworkState, PipeState, PumpState
 
 
@@ -34,11 +35,118 @@ def _load_scipy():
     return sp, spla
 
 
+def fluid_enthalpy(fluid_model, link_state, pressure_pa: float, temperature_c: float) -> float | None:
+    """Specific enthalpy (J/kg) of the fluid in a link, or None when the fluid
+    model has no enthalpy (incompressible liquids, black-oil)."""
+    if hasattr(fluid_model, "enthalpy_for_link"):
+        return fluid_model.enthalpy_for_link(link_state, pressure_pa, temperature_c)
+    if hasattr(fluid_model, "enthalpy_j_per_kg"):
+        return fluid_model.enthalpy_j_per_kg(pressure_pa, temperature_c)
+    return None
+
+
+def pipe_enthalpy_sources(ps, fluid_model, cp: float, T_ref: float = 20.0) -> tuple[float, float]:
+    """(Joule-Thomson, potential-energy) sources of a pipe in W, + heats the fluid.
+
+    The temperature equation transports ṁ·cp·T with the link heat capacity
+    ``cp``; the first law along the pipe is ṁ·Δh = −Q_wall − ṁ·g·Δz.  The part
+    of Δh that ṁ·cp·ΔT does not carry is returned as a source:
+
+        S_JT  = −ṁ·{[h(P_out, T_out) − h(P_in, T_in)] − cp·(T_out − T_in)}
+        S_pot = −ṁ·g·Δz                                  (flow direction)
+
+    For a real gas S_JT is the Joule-Thomson cooling (friction heating is
+    included through the actual outlet pressure) together with the real-gas
+    heat-capacity departure; for a mixture with phase change it also carries
+    latent heat.  T_out is the pipe's exit temperature from the previous
+    energy solve (the inlet temperature on the first), so at convergence the
+    first law holds exactly.  Zero for fluids without an enthalpy model.
+    """
+    if not isinstance(ps, PipeState):
+        return 0.0, 0.0
+    mdot = abs(float(ps.mass_flow_kg_per_s))
+    if mdot < 1e-30:
+        return 0.0, 0.0
+    up, down = (ps.start_node, ps.end_node) if ps.mass_flow_kg_per_s >= 0.0 else (ps.end_node, ps.start_node)
+    P_up, P_down = up.pressure_pa, down.pressure_pa
+    if P_up is None or P_down is None:
+        return 0.0, 0.0
+    T_in = up.temperature_c if up.temperature_c is not None else T_ref
+    T_out = ps.exit_temperature_c if ps.exit_temperature_c is not None else T_in
+    h_in = fluid_enthalpy(fluid_model, ps, float(P_up), T_in)
+    if h_in is None:
+        return 0.0, 0.0
+    h_out = fluid_enthalpy(fluid_model, ps, float(P_down), T_out)
+    if h_out is None:
+        return 0.0, 0.0
+    dz = ps.component.height_change_m * (1.0 if ps.mass_flow_kg_per_s >= 0.0 else -1.0)
+    return -mdot * ((h_out - h_in) - cp * (T_out - T_in)), -mdot * GRAVITY_M_PER_S2 * dz
+
+
 def solve_energy_system(
     network_state: NetworkState,
     fluid_model,
     convection_scheme: ConvectionScheme,
     T_ref: float = 20.0,
+    pipe_enthalpy_terms: bool = True,
+    max_source_iterations: int = 30,
+    source_tolerance_k: float = 2e-3,
+) -> tuple[dict[int, float], dict[int, float]]:
+    """Steady energy equation, with the pipe enthalpy sources made consistent.
+
+    The Joule-Thomson / latent-heat source of a pipe depends on its exit
+    temperature.  With the flow field fixed, the energy system is re-solved
+    with updated sources until node and exit temperatures change by less than
+    ``source_tolerance_k`` — cheap compared with a hydraulic solve, and it
+    keeps the outer (hydraulics ↔ temperature) loop from crawling.  Node
+    temperatures on the network state are restored afterwards; the caller
+    applies (and relaxes) the returned ones.
+    """
+    saved = {nid: node.temperature_c for nid, node in network_state.nodes.items()}
+    try:
+        result = _solve_energy_once(network_state, fluid_model, convection_scheme, T_ref, pipe_enthalpy_terms)
+        has_sources = pipe_enthalpy_terms and any(
+            isinstance(ps, PipeState) and (ps.jt_source_w != 0.0 or ps.gravity_source_w != 0.0)
+            for ps in network_state.components
+        )
+        if not has_sources or not _has_enthalpy(fluid_model):
+            return result
+        for _ in range(max_source_iterations - 1):
+            node_temps, _means = result
+            exits_before = [getattr(ps, "exit_temperature_c", None) for ps in network_state.components]
+            change = 0.0
+            for nid, T_new in node_temps.items():
+                node = network_state.nodes[nid]
+                if not node.is_thermal_inlet:
+                    if node.temperature_c is not None:
+                        change = max(change, abs(T_new - node.temperature_c))
+                    node.temperature_c = T_new
+            result = _solve_energy_once(network_state, fluid_model, convection_scheme, T_ref, pipe_enthalpy_terms)
+            for ps, before in zip(network_state.components, exits_before):
+                after = getattr(ps, "exit_temperature_c", None)
+                if before is not None and after is not None:
+                    change = max(change, abs(after - before))
+            if change < source_tolerance_k:
+                break
+        return result
+    finally:
+        for nid, T in saved.items():
+            network_state.nodes[nid].temperature_c = T
+
+
+_SOURCE_RELAXATION = 0.5
+
+
+def _has_enthalpy(fluid_model) -> bool:
+    return hasattr(fluid_model, "enthalpy_for_link") or hasattr(fluid_model, "enthalpy_j_per_kg")
+
+
+def _solve_energy_once(
+    network_state: NetworkState,
+    fluid_model,
+    convection_scheme: ConvectionScheme,
+    T_ref: float = 20.0,
+    pipe_enthalpy_terms: bool = True,
 ) -> tuple[dict[int, float], dict[int, float]]:
     """Solve the steady-state energy equation for the pipe network.
 
@@ -52,6 +160,11 @@ def solve_energy_system(
       - is_thermal_inlet = True       → Dirichlet: T = T_prescribed
       - thermal_gradient_dc_per_m = g → Neumann: dT/dx = g at boundary face
       - neither                        → junction mixing equation (≈ zero gradient)
+
+    For fluids with an enthalpy model (compressible gas, compositional EOS)
+    and ``pipe_enthalpy_terms=True``, pipes carry the Joule-Thomson and
+    potential-energy sources of ``pipe_enthalpy_sources`` (stored on the pipe
+    state for the global energy balance).
 
     The Neumann BC modifies the pipe FV at the boundary face:
       - removes diffusive coupling to the junction node
@@ -115,7 +228,7 @@ def solve_energy_system(
 
     # NTU of pipes solved with the analytical single-segment path, used to
     # report their length-averaged temperature.
-    ntu_paths: dict[int, tuple[float, float]] = {}   # pipe_idx → (NTU, T_amb)
+    ntu_paths: dict[int, tuple[float, float, float]] = {}   # pipe_idx → (NTU, T_amb_eff, S/|ṁcp|)
 
     # ── FV equations for pipe internal nodes ──────────────────────────────
     for pipe_idx, ps in enumerate(pipe_states):
@@ -147,6 +260,17 @@ def solve_energy_system(
         F = mdot * cp          # convective strength (W/K), signed
         D = k_fl * A / dx      # diffusive conductance (W/K)
 
+        # Joule-Thomson and potential-energy sources (W), spread along the pipe
+        if pipe_enthalpy_terms and isinstance(ps, PipeState):
+            jt_new, ps.gravity_source_w = pipe_enthalpy_sources(ps, fluid_model, cp, T_ref)
+            # Under-relaxed: with phase change the source falls steeply as the
+            # exit temperature rises (latent heat), and the plain fixed point
+            # alternates around the solution.
+            ps.jt_source_w += _SOURCE_RELAXATION * (jt_new - ps.jt_source_w)
+        elif isinstance(ps, PipeState):
+            ps.jt_source_w = ps.gravity_source_w = 0.0
+        S_pipe = ps.jt_source_w + ps.gravity_source_w if isinstance(ps, PipeState) else 0.0
+
         # ── Analytical NTU path for single-segment pipes ───────────────────
         # For pipes with n_thermal_segments=1 the FV discretisation places the
         # sole interior node at the midpoint, causing exit temperatures to
@@ -156,15 +280,23 @@ def solve_energy_system(
                 and ps.component.n_thermal_segments == 1
                 and abs(F) > 1e-30):
             ntu = U * math.pi * D_pipe * L / abs(F)
-            ntu_paths[pipe_idx] = (ntu, T_amb)
             decay = math.exp(-ntu) if ntu > 0.0 else 1.0
+            # A uniform source S shifts the ambient temperature the fluid relaxes
+            # to by S/(U·π·D·L); without wall exchange it adds S/(ṁ·cp).
+            if ntu > 0.0:
+                T_amb_eff = T_amb + S_pipe / (U * math.pi * D_pipe * L)
+                rhs_val = (1.0 - decay) * T_amb_eff
+            else:
+                T_amb_eff = T_amb
+                rhs_val = S_pipe / abs(F)
+            ntu_paths[pipe_idx] = (ntu, T_amb_eff, S_pipe / abs(F))
             # The sole interior node (offset + 0) represents the pipe exit.
             internal_row = offset
             upstream_col = (node_index[ps.start_node.node_id] if F > 0.0
                             else node_index[ps.end_node.node_id])
             add(internal_row, internal_row, 1.0)
             add(internal_row, upstream_col, -decay)
-            rhs[internal_row] = (1.0 - decay) * T_amb
+            rhs[internal_row] = rhs_val
             continue
 
         # Moukalled source linearisation: S = Sc + Sp·T_P, Sp ≤ 0.
@@ -178,6 +310,8 @@ def solve_energy_system(
         # Fixed power source (heater/cooler): Sc += Q/n_internal, Sp_extra = 0
         if isinstance(ps, HeatSourceState) and n_internal > 0:
             Sc += ps.component.power_w / n_internal
+        if S_pipe != 0.0 and n_internal > 0:
+            Sc += S_pipe / n_internal
 
         a_W_conv, a_E_conv = convection_scheme.face_coefficients(F, D)
 
@@ -241,6 +375,26 @@ def solve_energy_system(
     explicit_inflow_total: dict[int, float] = dict.fromkeys(range(N_nodes), 0.0)
     explicit_rhs: dict[int, float] = dict.fromkeys(range(N_nodes), 0.0)
 
+    # Enthalpy-consistent mixing.  Each link transports ṁ·cp_link·T, and cp
+    # differs from link to link (pressure, temperature, phase split), so a
+    # mixing balance of ṁ·cp·T makes T jump at a node where the fluid merely
+    # passes from one pipe into the next.  For fluids with an enthalpy model
+    # each stream is written as h ≈ cp·T + [h(T*) − cp·T*] about its previous
+    # temperature T*; the bracketed offsets go to the right-hand side, so the
+    # junction conserves real enthalpy, Σ ṁ·h_in = Σ ṁ·h_out, at convergence.
+    use_offsets = pipe_enthalpy_terms and _has_enthalpy(fluid_model)
+
+    def _offset(link, P: float | None, T_star: float, cp_w: float) -> float:
+        if not use_offsets or P is None:
+            return 0.0
+        h = fluid_enthalpy(fluid_model, link, float(P), T_star)
+        return 0.0 if h is None else h - cp_w * T_star
+
+    # Streams entering each node (link, |ṁ|, cp): at a node with no outflow
+    # (a sink) the fluid leaving the network is the arriving fluid at the node
+    # temperature, so its offset balances the arriving one.
+    arriving: dict[int, list[tuple[Any, float, float]]] = {i: [] for i in range(N_nodes)}
+
     for pipe_idx, ps in enumerate(pipe_states):
         n_segs = max(ps.component.n_thermal_segments, 2)
         n_internal = n_segs - 1
@@ -262,10 +416,19 @@ def solve_energy_system(
             upstream_col = offset + n_internal - 1 if n_internal > 0 else junction_start_row
             inflow[junction_end_row].append((upstream_col, abs_mdot_cp))
             outflow_total[junction_start_row] += abs_mdot_cp
+            up_node, down_node, up_row, down_row = ps.start_node, ps.end_node, junction_start_row, junction_end_row
         else:
             upstream_col = offset + 0 if n_internal > 0 else junction_end_row
             inflow[junction_start_row].append((upstream_col, abs_mdot_cp))
             outflow_total[junction_end_row] += abs_mdot_cp
+            up_node, down_node, up_row, down_row = ps.end_node, ps.start_node, junction_end_row, junction_start_row
+        if use_offsets:
+            T_up_star = up_node.temperature_c if up_node.temperature_c is not None else T_ref
+            T_ex = getattr(ps, "exit_temperature_c", None)
+            T_ex_star = T_ex if T_ex is not None else T_up_star
+            explicit_rhs[up_row] += abs(mdot) * _offset(ps, up_node.pressure_pa, T_up_star, cp)
+            explicit_rhs[down_row] -= abs(mdot) * _offset(ps, down_node.pressure_pa, T_ex_star, cp)
+            arriving[down_row].append((ps, abs(mdot), cp))
 
     # ── passthrough devices (fittings, pumps) ────────────────────────────
     # Fittings — adiabatic, no shaft work:
@@ -292,6 +455,19 @@ def solve_energy_system(
             outflow_total[up_idx]           += abs_mdot_cp
             explicit_inflow_total[down_idx] += abs_mdot_cp_out
             explicit_rhs[down_idx]          -= abs_mdot_cp_out * dt.T_out
+            if use_offsets:
+                m_abs = abs(dt.mdot)
+                explicit_rhs[up_idx] += m_abs * _offset(dev, dt.up_node.pressure_pa, dt.T_up, dt.cp_up)
+                explicit_rhs[down_idx] -= m_abs * _offset(dev, dt.down_node.pressure_pa, dt.T_out, dt.cp_out)
+                arriving[down_idx].append((dev, m_abs, dt.cp_out))
+
+    def _sink_offset(nid: int, row: int) -> float:
+        """Offset of the fluid leaving the network at a node with no outflow."""
+        if not use_offsets or outflow_total[row] > 1e-30:
+            return 0.0
+        node = network_state.nodes[nid]
+        T_star = node.temperature_c if node.temperature_c is not None else T_ref
+        return sum(m * _offset(link, node.pressure_pa, T_star, cp_w) for link, m, cp_w in arriving[row])
 
     thermal_inlet_map = {}
     for node in network_state.nodes.values():
@@ -339,7 +515,7 @@ def solve_energy_system(
                     add(row, row, -denom)
                     for col, weight in inflow[row]:
                         add(row, col, weight)
-                    rhs[row] = explicit_rhs[row]
+                    rhs[row] = explicit_rhs[row] + _sink_offset(nid, row)
 
         else:
             # Mixing equation (default for junctions and unspecified boundary nodes)
@@ -353,7 +529,7 @@ def solve_energy_system(
                 add(row, row, -denom)
                 for col, weight in inflow[row]:
                     add(row, col, weight)
-                rhs[row] = explicit_rhs[row]
+                rhs[row] = explicit_rhs[row] + _sink_offset(nid, row)
 
     # ── solve ─────────────────────────────────────────────────────────────
     A_mat = sp.csr_matrix((vals, (rows, cols)), shape=(N_total, N_total))
@@ -375,11 +551,15 @@ def solve_energy_system(
                 # Analytical path: the interior node is the exit, so use the exact
                 # length average T_amb + (T_in − T_amb)·(1 − e^−NTU)/NTU for
                 # property evaluation instead of the (colder) exit temperature.
-                ntu, T_amb_p = ntu_paths[pipe_idx]
+                ntu, T_amb_p, dT_src = ntu_paths[pipe_idx]
                 up_id = ps.start_node.node_id if ps.mass_flow_kg_per_s >= 0.0 else ps.end_node.node_id
                 T_in_p = float(T_vec[node_index[up_id]])
-                factor = (1.0 - math.exp(-ntu)) / ntu if ntu > 1e-12 else 1.0
-                component_mean_temps[pipe_idx] = T_amb_p + (T_in_p - T_amb_p) * factor
+                if ntu > 1e-12:
+                    factor = (1.0 - math.exp(-ntu)) / ntu
+                    component_mean_temps[pipe_idx] = T_amb_p + (T_in_p - T_amb_p) * factor
+                else:
+                    # No wall exchange: the source makes the profile linear.
+                    component_mean_temps[pipe_idx] = T_in_p + 0.5 * dT_src
             else:
                 component_mean_temps[pipe_idx] = float(np.mean(T_vec[offset:offset + n_internal]))
         else:
@@ -428,7 +608,6 @@ def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState |
     down_node = dev.end_node   if mdot >= 0.0 else dev.start_node
     T_up = up_node.temperature_c if up_node.temperature_c is not None else T_ref
     cp = fluid_model.specific_heat_for_link(_LinkAtTemperature(dev, T_up))
-    has_enthalpy = hasattr(fluid_model, "enthalpy_j_per_kg")
 
     _p_up   = getattr(up_node,   "pressure_pa", None)
     _p_down = getattr(down_node, "pressure_pa", None)
@@ -436,23 +615,34 @@ def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState |
     P_up   = _p_up   if _p_up   is not None else _p_ref
     P_down = _p_down if _p_down is not None else _p_ref
 
+    h_up = fluid_enthalpy(fluid_model, dev, P_up, T_up)
     if isinstance(dev, PumpState):
         rho = fluid_model.density_for_link(dev)
         w_shaft = (P_down - P_up) / rho
-        if has_enthalpy:
-            h_out = fluid_model.enthalpy_j_per_kg(P_up, T_up) + w_shaft
-            T_out = fluid_model.temperature_from_enthalpy(h_out, P_down, T_guess_c=T_up)
-            cp_out = fluid_model._specific_heat_fn(P_down, T_out)
+        if h_up is not None:
+            T_out = _temperature_from_enthalpy(fluid_model, dev, h_up + w_shaft, P_down, T_up)
+            cp_out = _specific_heat_at(fluid_model, dev, P_down, T_out)
         else:
             T_out = T_up + w_shaft / cp
             cp_out = cp
         return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_out, cp_out, "pump")
-    if has_enthalpy:
-        h_in = fluid_model.enthalpy_j_per_kg(P_up, T_up)
-        T_out = fluid_model.temperature_from_enthalpy(h_in, P_down, T_guess_c=T_up)
-        cp_out = fluid_model._specific_heat_fn(P_down, T_out)
+    if h_up is not None:
+        T_out = _temperature_from_enthalpy(fluid_model, dev, h_up, P_down, T_up)
+        cp_out = _specific_heat_at(fluid_model, dev, P_down, T_out)
         return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_out, cp_out, "isenthalpic")
     return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_up, cp, "passthrough")
+
+
+def _temperature_from_enthalpy(fluid_model, link, h: float, P: float, T_guess: float) -> float:
+    if hasattr(fluid_model, "temperature_from_enthalpy_for_link"):
+        return fluid_model.temperature_from_enthalpy_for_link(link, h, P, T_guess_c=T_guess)
+    return fluid_model.temperature_from_enthalpy(h, P, T_guess_c=T_guess)
+
+
+def _specific_heat_at(fluid_model, link, P: float, T: float) -> float:
+    if hasattr(fluid_model, "specific_heat_at"):
+        return fluid_model.specific_heat_at(link, P, T)
+    return fluid_model._specific_heat_fn(P, T)
 
 
 class _LinkAtTemperature:

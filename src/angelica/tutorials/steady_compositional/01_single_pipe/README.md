@@ -55,11 +55,15 @@ EOS flash preview (thermo library)
 
 Converged:         True
 Outer iterations:  4
-Mass flow:       15.5745 kg/s
-Velocity @ inlet:  10.76 m/s
-Velocity @ outlet: 62.01 m/s  (gas expands as P drops)
+Mass flow:       16.2940 kg/s
+Velocity @ inlet:  11.25 m/s
+Velocity @ outlet: 64.87 m/s  (gas expands as P drops)
 Global mass balance error: 0.0000 %
 ```
 
 Gas velocity increases nearly sixfold from inlet to outlet because the density
-drops ~6:1 while mass flow is conserved.
+drops ~6:1 while mass flow is conserved.  The expansion from 100 to 20 bar
+also cools the gas by Joule-Thomson effect: from 60 °C it reaches the outlet
+at about 12 °C (an adiabatic expansion alone would give 22 °C; the rest is
+heat lost to the 15 °C surroundings and the late, steep pressure drop near
+the outlet).

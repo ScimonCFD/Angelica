@@ -26,6 +26,7 @@ class PressureChangerState:
     velocity_m_per_s: float = 0.0
     mass_flow_kg_per_s: float = 0.0
     coupling: float = 0.0
+    zs: tuple[float, ...] = ()        # mole fractions carried by the link (compositional runs)
 
     @property
     def area_m2(self) -> float:
@@ -42,8 +43,10 @@ class PipeState(PressureChangerState):
     friction_factor: float | None = None
     reynolds: float = 0.0
     temperature_c: float | None = None
-    zs: tuple[float, ...] = ()
     exit_temperature_c: float | None = None   # fluid temperature leaving the pipe (flow direction)
+    # Enthalpy-balance sources set by the energy solve (W, + heats the fluid):
+    jt_source_w: float = 0.0        # −ṁ·[h(T̄, P_out) − h(T̄, P_in)]: Joule-Thomson
+    gravity_source_w: float = 0.0   # −ṁ·g·Δz: potential energy (flow direction)
 
 
 @dataclass
@@ -63,7 +66,6 @@ class HeatSourceState(PressureChangerState):
     component: HeatSource
     reynolds: float = 0.0
     temperature_c: float | None = None
-    zs: tuple[float, ...] = ()
     exit_temperature_c: float | None = None
 
 

@@ -4,16 +4,16 @@ Source: 30 bar, 20 °C   Sink: 60 bar
 ── Peng-Robinson (real gas) ──
   Converged: True
   Node 1 (source):            30.00 bar    20.000 °C
-  Node 2 (upstream compr.):   29.91 bar    19.884 °C
-  Node 3 (downstream compr.): 60.27 bar    69.345 °C
-  Node 4 (export sink):       60.00 bar    66.098 °C
+  Node 2 (upstream compr.):   29.91 bar    19.851 °C
+  Node 3 (downstream compr.): 60.27 bar    69.308 °C
+  Node 4 (export sink):       60.00 bar    66.344 °C
 
   ṁ:                          15.046 kg/s
-  ΔP compressor:              +30.367 bar
-  ΔT compressor:              +49.461 °C
-  ρ_avg (solver):             32.905 kg/m³
-  Shaft work w = ΔP/ρ_avg:   92,287 J/kg
-  Δh = h_out − h_in:         92,369 J/kg  (≈ w by construction)
+  ΔP compressor:              +30.368 bar
+  ΔT compressor:              +49.457 °C
+  ρ_avg (solver):             32.911 kg/m³
+  Shaft work w = ΔP/ρ_avg:   92,273 J/kg
+  Δh = h_out − h_in:         92,356 J/kg  (≈ w by construction)
 
 ── Ideal gas               ──
   Converged: True

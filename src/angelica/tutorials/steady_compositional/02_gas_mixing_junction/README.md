@@ -42,17 +42,20 @@ python tutorials/steady_compositional/02_gas_mixing_junction/run.py
 
 ```
 Converged:         True
-Outer iterations:  4
+Outer iterations:  5
 
   Node    P (bar)    T (°C)
-     3     71.567     62.62   ← junction pressure from SIMPLE
-     4     25.000     45.06
+     3     69.726     36.21   ← junction pressure from SIMPLE
+     4     25.000      7.60
 
-Blended composition in pipe_C (mass-weighted):
-  methane   : 77.79 mol%
-  ethane    : 16.95 mol%
-  propane   : 5.25 mol%
+Blended composition in pipe_C (molar-flow weighted):
+                solver   by hand
+  methane   :  79.48    79.48  mol%
+  ethane    :  15.71    15.71  mol%
+  propane   :   4.81     4.81  mol%
 ```
 
-The blend is weighted by the mass flows of pipes A and B, which differ
-because of the pressure and diameter difference between the two inlet pipes.
+The streams mix by molar flow, ṁ/MW: the lean gas from A (≈ 17.7 g/mol)
+carries more moles per kilogram than the rich gas from B (≈ 23.1 g/mol), so
+weighting the mole fractions by mass flow would not conserve the components.
+The expansion to 25 bar cools the gas (Joule-Thomson) on the way to the outlet.

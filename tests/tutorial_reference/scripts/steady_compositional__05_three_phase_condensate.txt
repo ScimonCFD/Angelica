@@ -21,22 +21,22 @@ Converged:  True
 
  Node    P (bar)    T (°C)
     1     80.000    110.00
-    2     59.153     28.99
-    3     30.000     16.28
+    2     58.598     35.69
+    3     30.000     14.41
 
 Pipe             T_in    T_out     V gas    L HCliq        FW  Phase state
 ---------------------------------------------------------------------------
-Pipe:pipe_A    110.00    28.99    0.6321     0.2990    0.0689  Gas + HC liq + Free water
-Pipe:pipe_B     28.99    16.28    0.6058     0.3245    0.0697  Gas + HC liq + Free water
+Pipe:pipe_A    110.00    35.69    0.6638     0.2678    0.0684  Gas + HC liq + Free water
+Pipe:pipe_B     35.69    14.41    0.6081     0.3222    0.0697  Gas + HC liq + Free water
 
 Gas phase composition  y_i  (within gas phase):
   Pipe             methane      ethane     propane    n-butane   n-pentane    n-hexane
-  Pipe:pipe_A       0.7451      0.1074      0.0805      0.0420      0.0159      0.0092
-  Pipe:pipe_B       0.7999      0.1041      0.0632      0.0238      0.0064      0.0026
+  Pipe:pipe_A       0.7269      0.1092      0.0858      0.0476      0.0191      0.0115
+  Pipe:pipe_B       0.7986      0.1044      0.0638      0.0241      0.0065      0.0027
 
 HC liquid phase composition  x_i  (within HC liquid phase):
   Pipe             methane      ethane     propane    n-butane   n-pentane    n-hexane
-  Pipe:pipe_A       0.2671      0.1078      0.1646      0.1789      0.1337      0.1479
-  Pipe:pipe_B       0.2024      0.1139      0.1902      0.2022      0.1422      0.1492
+  Pipe:pipe_A       0.2564      0.1035      0.1612      0.1811      0.1396      0.1582
+  Pipe:pipe_B       0.2005      0.1133      0.1901      0.2029      0.1430      0.1501
 
-Global mass balance error: 0.0002 %
+Global mass balance error: 0.0003 %

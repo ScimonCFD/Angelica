@@ -56,20 +56,20 @@ Converged:         True
 Outer iterations:  6
 
   Node  Label             P (bar)    T (°C)
-     3  Junction 3         69.925     63.51
-     4  Junction 4         69.799     62.59   ← slightly lower than Node 3
+     3  Junction 3         67.533     41.83
+     4  Junction 4         67.231     31.18   ← slightly lower than Node 3
 
 Pipe          ṁ (kg/s)    Q (m³/h)  Direction
-pipe_D          0.4186      25.275  ** 3 → 4 **   ← loop flow direction confirmed
+pipe_D          0.6476      40.207  ** 3 → 4 **   ← loop flow direction confirmed
 
 Compositions at junction and outlet nodes (mol%):
 Component         Node 3      Node 4  Node 5 (out)
-methane            90.00       60.95         74.27
-ethane              8.00       29.31         19.53
-propane             2.00        9.75          6.19
+methane            90.00       61.74         76.03
+ethane              8.00       28.73         18.25
+propane             2.00        9.54          5.73
 
-Global mass balance error: 0.0001 %
+Global mass balance error: 0.0000 %
 ```
 
-The small loop flow (0.42 kg/s vs ~12 kg/s from each source) is
+The small loop flow (0.65 kg/s vs ~12 kg/s from each source) is
 determined entirely by the pressure imbalance around the loop.

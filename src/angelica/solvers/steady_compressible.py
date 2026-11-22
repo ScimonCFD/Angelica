@@ -30,12 +30,18 @@ class CompressibleSolverSettings:
             junction nodes (K).
         temperature_relaxation: Under-relaxation factor for temperature updates
             (1.0 = no relaxation).
+        pipe_enthalpy_terms: Joule-Thomson cooling and potential energy along
+            pipes, with enthalpy-conserving junctions (default True).  False
+            drops them, for comparison with the pre-1.18 model; the energy
+            balance is still computed with real enthalpy, so it then shows
+            what that model leaves out.
     """
 
     max_density_iterations: int = 50
     density_rel_tolerance: float = 1e-4
     temperature_tolerance_k: float = 0.01
     temperature_relaxation: float = 1.0
+    pipe_enthalpy_terms: bool = True
 
 
 class SteadyCompressibleSolver(BaseSolver):
@@ -147,7 +153,8 @@ class SteadyCompressibleSolver(BaseSolver):
                 outer_turb_final.append(turb_metrics[-1])
 
             new_node_temps, pipe_mean_temps = solve_energy_system(
-                network_state, fluid_model, self.convection_scheme, T_ref=T_init
+                network_state, fluid_model, self.convection_scheme, T_ref=T_init,
+                pipe_enthalpy_terms=self.compressible_settings.pipe_enthalpy_terms,
             )
 
             max_delta_t = 0.0
@@ -193,7 +200,8 @@ class SteadyCompressibleSolver(BaseSolver):
         if turb_metrics:
             outer_turb_final.append(turb_metrics[-1])
         final_node_temps, final_pipe_mean_temps = solve_energy_system(
-            network_state, fluid_model, self.convection_scheme, T_ref=T_init
+            network_state, fluid_model, self.convection_scheme, T_ref=T_init,
+            pipe_enthalpy_terms=self.compressible_settings.pipe_enthalpy_terms,
         )
         for nid, T_new in final_node_temps.items():
             if not network_state.nodes[nid].is_thermal_inlet:

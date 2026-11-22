@@ -6,22 +6,22 @@ Outer iterations:  6
   Node  Label             P (bar)    T (°C)
      1  Source A          120.000     70.00
      2  Source B          110.000     60.00
-     3  Junction 3         69.925     63.51
-     4  Junction 4         69.799     62.59
-     5  Outlet             20.000     41.21
+     3  Junction 3         67.533     41.83
+     4  Junction 4         67.231     31.18
+     5  Outlet             20.000      2.93
 
 Pipe          ṁ (kg/s)    Q (m³/h)  Direction
-pipe_A         11.6415     600.913  
-pipe_B         12.8311     437.766  
-pipe_C         11.2230    1241.212  
-pipe_D          0.4186      25.275  ** 3 → 4 **
-pipe_E         13.2496    1049.910  
+pipe_A         12.0850     606.640  
+pipe_B         13.7029     436.207  
+pipe_C         11.4376    1160.179  
+pipe_D          0.6476      40.207  ** 3 → 4 **
+pipe_E         14.3504     920.121  
 
 Compositions at junction and outlet nodes (mol%):
 Component         Node 3      Node 4  Node 5 (out)
 --------------------------------------------------
-methane            90.00       60.95         74.27
-ethane              8.00       29.31         19.53
-propane             2.00        9.75          6.19
+methane            90.00       61.74         76.03
+ethane              8.00       28.73         18.25
+propane             2.00        9.54          5.73
 
-Global mass balance error: 0.0001 %
+Global mass balance error: 0.0000 %

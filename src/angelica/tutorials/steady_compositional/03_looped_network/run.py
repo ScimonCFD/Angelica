@@ -96,14 +96,14 @@ m_A = flows.get("pipe_A", 0.0)
 m_B = flows.get("pipe_B", 0.0)
 
 def blend(streams):
-    """Mass-weighted mole-fraction blend of [(mdot, zs), ...]."""
-    total = sum(m for m, _ in streams if m > 0)
+    """Molar-flow-weighted blend of [(mdot, zs), ...]: each stream carries
+    ṁ/MW(z) moles per second (the solver mixes the same way)."""
+    mws = result.component_mws
+    moles = [(m / sum(z * mw for z, mw in zip(zs, mws)), zs) for m, zs in streams if m > 0]
+    total = sum(n for n, _ in moles)
     if total <= 0:
         return None
-    return tuple(
-        sum(m * z[i] for m, z in streams if m > 0) / total
-        for i in range(len(streams[0][1]))
-    )
+    return tuple(sum(n * z[i] for n, z in moles) / total for i in range(len(streams[0][1])))
 
 # Node 3: fed by pipe_A; pipe_D may bring additional gas if it flows 4→3
 if m_D >= 0:

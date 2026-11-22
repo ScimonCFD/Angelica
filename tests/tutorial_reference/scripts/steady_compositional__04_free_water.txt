@@ -29,13 +29,13 @@ Converged:  True
 
  Node    P (bar)    T (°C)
     1     80.000     50.00
-    2     58.883     19.20
-    3     20.000     15.14
+    2     58.660     14.92
+    3     20.000     10.04
 
   Pipe  mdot (kg/s)      VF   free water   water (kg/h est.)
 -----------------------------------------------------------------
-Pipe:pipe_A       9.3005   0.880      11.962%         3808.85 kg/h
-Pipe:pipe_B       9.3005   0.880      11.959%         3808.16 kg/h
+Pipe:pipe_A       9.3802   0.880      11.964%         3842.39 kg/h
+Pipe:pipe_B       9.3802   0.880      11.971%         3844.33 kg/h
 
 Note: 'free water' is the mole fraction of the feed that is liquid
 water at each pipe's average P and T.  The mass flow estimate uses

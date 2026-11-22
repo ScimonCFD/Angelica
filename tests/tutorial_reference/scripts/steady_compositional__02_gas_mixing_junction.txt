@@ -1,22 +1,23 @@
 =================================================================
 Case:              Compositional Gas Mixing Junction
 Converged:         True
-Outer iterations:  4
+Outer iterations:  5
 
   Node    P (bar)    T (°C)
      1    120.000     70.00
      2    110.000     60.00
-     3     71.567     62.62
-     4     25.000     45.06
+     3     69.726     36.21
+     4     25.000      7.60
 
 Pipe          ṁ (kg/s)    Q (m³/h)
-pipe_A         11.5046     588.075
-pipe_B          7.8911     262.549
-pipe_C         19.3958    1734.160
+pipe_A         11.8951     590.522
+pipe_B          8.3559     259.888
+pipe_C         20.2510    1596.201
 
-Blended composition in pipe_C (mass-weighted):
-  methane   : 77.79 mol%
-  ethane    : 16.95 mol%
-  propane   : 5.25 mol%
+Blended composition in pipe_C (molar-flow weighted):
+                solver   by hand
+  methane   :  79.48    79.48  mol%
+  ethane    :  15.71    15.71  mol%
+  propane   :   4.81     4.81  mol%
 
 Global mass balance error: 0.0001 %

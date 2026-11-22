@@ -72,6 +72,22 @@ def _cache_key_pt(P: float, T: float) -> tuple[float, float]:
     return float(round(P / _P_STEP_PA) * _P_STEP_PA), round(T, _T_DIGITS)
 
 
+@lru_cache(maxsize=8192)
+def _tp_flash(
+    component_names: tuple[str, ...],
+    pressure_pa: float,
+    temperature_c: float,
+    zs: tuple[float, ...],
+    eos_name: str = "PR",
+):
+    """thermo PT-flash result, shared by every property of a state (density,
+    phase split, enthalpy, phase compositions) so each state is flashed once.
+    Exceptions (single-component stability failures) are not cached and
+    propagate to the caller's fallback."""
+    flash_obj = _get_flash_obj(component_names, eos_name)
+    return flash_obj.flash(T=temperature_c + 273.15, P=pressure_pa, zs=list(zs))
+
+
 # ── Viscosity ─────────────────────────────────────────────────────────────────
 # thermo evaluates gas viscosity with low-pressure mixing rules only (no
 # pressure dependence), returns a 1e-5 Pa·s placeholder when a dense
@@ -243,7 +259,7 @@ def _hc_phase_split(
     const, corr = flash_obj.constants, flash_obj.correlations
     T_K = temperature_c + 273.15
     try:
-        res = flash_obj.flash(T=T_K, P=pressure_pa, zs=list(zs))
+        res = _tp_flash(component_names, pressure_pa, temperature_c, zs, eos_name)
     except ZeroDivisionError:
         Psat = _wilson_psat(const.Tcs[0], const.Pcs[0], const.omegas[0], T_K)
         is_gas = T_K >= const.Tcs[0] or pressure_pa <= Psat
@@ -299,7 +315,7 @@ def _hc_phase_compositions(
     flash_obj = _get_flash_obj(component_names, eos_name)
     T_K = temperature_c + 273.15
     try:
-        res = flash_obj.flash(T=T_K, P=pressure_pa, zs=list(zs))
+        res = _tp_flash(component_names, pressure_pa, temperature_c, zs, eos_name)
     except ZeroDivisionError:
         const  = flash_obj.constants
         Psat   = _wilson_psat(const.Tcs[0], const.Pcs[0], const.omegas[0], T_K)
@@ -425,7 +441,7 @@ def _flash_properties(
     # ── standard HC-only path (no water) ─────────────────────────────────────
     flash_obj = _get_flash_obj(component_names, eos_name)
     try:
-        res = flash_obj.flash(T=T_K, P=pressure_pa, zs=list(zs))
+        res = _tp_flash(component_names, pressure_pa, temperature_c, zs, eos_name)
     except ZeroDivisionError:
         # thermo's Michelsen stability test divides by N-1=0 for single-component
         # mixtures.  Determine phase via Wilson Psat and evaluate the EOS phase
@@ -460,6 +476,99 @@ def _flash_properties(
     VF  = float(res.VF) if res.VF is not None else 0.0
 
     return (max(rho, 0.001), max(mu, 1e-10), max(Cp, 1.0), max(k, 1e-6), VF, 0.0)
+
+
+_CP_WATER = 4182.0
+
+
+def _water_liquid_enthalpy(temperature_c: float, pressure_pa: float) -> float:
+    """Liquid water, J/kg (0 °C, 1 atm reference): cp·T + (P − P_atm)/ρ."""
+    return _CP_WATER * temperature_c + (pressure_pa - _ATM_PA) / water_liquid_density_kg_m3(temperature_c + 273.15)
+
+
+def _water_latent_heat(temperature_c: float) -> float:
+    """Latent heat of vaporisation of water, J/kg (linear fit, within ~1.5 %
+    of steam tables from 0 to 150 °C)."""
+    return 2.501e6 - 2369.0 * temperature_c
+
+
+def _hc_enthalpy(component_names, pressure_pa, temperature_c, zs, eos_name) -> float:
+    """Equilibrium specific enthalpy (J/kg) of an HC-only feed, from thermo."""
+    flash_obj = _get_flash_obj(component_names, eos_name)
+    T_K = temperature_c + 273.15
+    try:
+        res = _tp_flash(component_names, pressure_pa, temperature_c, zs, eos_name)
+        return float(res.H()) / float(res.MW()) * 1000.0
+    except ZeroDivisionError:
+        const = flash_obj.constants
+        Psat = _wilson_psat(const.Tcs[0], const.Pcs[0], const.omegas[0], T_K)
+        parent = flash_obj.gas if (T_K >= const.Tcs[0] or pressure_pa <= Psat) else flash_obj.liquid
+        phase = parent.to(T=T_K, P=pressure_pa, zs=[1.0])
+        phase.constants = parent.constants
+        phase.correlations = parent.correlations
+        return float(phase.H()) / float(const.MWs[0]) * 1000.0
+
+
+@lru_cache(maxsize=8192)
+def _mixture_enthalpy(
+    component_names: tuple[str, ...],
+    pressure_pa: float,
+    temperature_c: float,
+    zs: tuple[float, ...],
+    eos_name: str = "PR",
+) -> float:
+    """Equilibrium specific enthalpy of the feed, J/kg.
+
+    Hydrocarbons: thermo's EOS flash enthalpy (includes the latent heat of
+    condensation and the real-gas departure).  Free water (immiscible model):
+    liquid water at cp·T + ΔP/ρ, water vapour carried by the gas at the liquid
+    enthalpy plus the latent heat.  The reference state is arbitrary but fixed
+    for a given composition, so enthalpy differences — all the energy balance
+    uses — are meaningful.
+    """
+    water_idx = find_water_index(component_names)
+    if water_idx is None:
+        return _hc_enthalpy(component_names, pressure_pa, temperature_c, zs, eos_name)
+    z_w = zs[water_idx]
+    hc_names = tuple(n for i, n in enumerate(component_names) if i != water_idx)
+    hc_zs_raw = tuple(z for i, z in enumerate(zs) if i != water_idx)
+    sum_hc = sum(hc_zs_raw)
+    h_wl = _water_liquid_enthalpy(temperature_c, pressure_pa)
+    if sum_hc < 1e-10 or not hc_names:
+        return h_wl
+    hc_zs = tuple(z / sum_hc for z in hc_zs_raw)
+    VF_hc = _flash_properties(hc_names, pressure_pa, temperature_c, hc_zs, eos_name)[4]
+    n_wl, n_wv = free_water_split(z_w, VF_hc, sum_hc, temperature_c + 273.15, pressure_pa)
+    MWs = _get_flash_obj(hc_names, eos_name).constants.MWs
+    m_hc = sum_hc * sum(z * mw for z, mw in zip(hc_zs, MWs))
+    m_wl, m_wv = n_wl * WATER_MW, n_wv * WATER_MW
+    h_hc = _hc_enthalpy(hc_names, pressure_pa, temperature_c, hc_zs, eos_name)
+    h_wv = h_wl + _water_latent_heat(temperature_c)
+    return (m_hc * h_hc + m_wl * h_wl + m_wv * h_wv) / (m_hc + m_wl + m_wv)
+
+
+@lru_cache(maxsize=1024)
+def _reference_enthalpy(component_names: tuple[str, ...], zs: tuple[float, ...], eos_name: str = "PR") -> float:
+    """Mixture enthalpy (J/kg) of the hydrocarbons as an ideal gas at 0 °C and
+    the water as liquid at 0 °C (see ``_mixture_enthalpy`` for the basis)."""
+    water_idx = find_water_index(component_names)
+    if water_idx is not None:
+        hc_names = tuple(n for i, n in enumerate(component_names) if i != water_idx)
+        hc_raw = tuple(z for i, z in enumerate(zs) if i != water_idx)
+        z_w = zs[water_idx]
+    else:
+        hc_names, hc_raw, z_w = component_names, zs, 0.0
+    sum_hc = sum(hc_raw)
+    if sum_hc < 1e-10 or not hc_names:
+        return 0.0
+    hc_zs = [z / sum_hc for z in hc_raw]
+    flash_obj = _get_flash_obj(hc_names, eos_name)
+    gas = flash_obj.gas.to(T=273.15, P=1.0, zs=hc_zs)          # 1 Pa: ideal gas
+    gas.constants, gas.correlations = flash_obj.gas.constants, flash_obj.gas.correlations
+    MW_hc = sum(z * mw for z, mw in zip(hc_zs, flash_obj.constants.MWs))
+    h_hc = float(gas.H()) / MW_hc * 1000.0
+    m_hc, m_w = sum_hc * MW_hc, z_w * WATER_MW
+    return m_hc * h_hc / (m_hc + m_w)                            # water reference is 0
 
 
 @lru_cache(maxsize=2048)
@@ -659,6 +768,76 @@ class CompositionalFluid(FluidModel):
             return self._props(link_state)[5]
         except RuntimeError:
             return 0.0
+
+    # ── enthalpy (energy balance: Joule-Thomson, latent heat) ─────────────────
+
+    def _rounded(self, link_state, pressure_pa: float, temperature_c: float):
+        P_r, T_r = _cache_key_pt(pressure_pa, temperature_c)
+        zs_r = tuple(round(z, _ZS_DIGITS) for z in self._get_zs(link_state))
+        return P_r, T_r, zs_r
+
+    def enthalpy_for_link(self, link_state, pressure_pa: float, temperature_c: float) -> float:
+        """Equilibrium specific enthalpy (J/kg) of the link's mixture at (P, T).
+
+        Rounded far finer than the property cache (1 Pa, 1e-6 K): h enters the
+        energy balance through differences, and a 1 mK step in T would leave a
+        staircase that stalls the energy iteration."""
+        zs_r = tuple(round(z, _ZS_DIGITS) for z in self._get_zs(link_state))
+        P_r = float(round(pressure_pa))
+        T_r = round(temperature_c, 6)
+        return _mixture_enthalpy(self.component_names, P_r, T_r, zs_r, self.eos_name)
+
+    def reference_enthalpy_for_link(self, link_state) -> float:
+        """Enthalpy (J/kg, same basis as ``enthalpy_for_link``) of the link's
+        mixture as an ideal gas at 0 °C — liquid water at 0 °C for free water —
+        the reference of the global energy balance (additive by mass, so mixing
+        streams does not shift it)."""
+        zs_r = tuple(round(z, _ZS_DIGITS) for z in self._get_zs(link_state))
+        return _reference_enthalpy(self.component_names, zs_r, self.eos_name)
+
+    def specific_heat_at(self, link_state, pressure_pa: float, temperature_c: float) -> float:
+        """Heat capacity (J/kg·K) of the link's mixture at (P, T), as in
+        ``specific_heat_for_link``."""
+        P_r, T_r, zs_r = self._rounded(link_state, pressure_pa, temperature_c)
+        return _flash_properties(self.component_names, P_r, T_r, zs_r, self.eos_name)[2]
+
+    def temperature_from_enthalpy_for_link(
+        self, link_state, enthalpy_j_per_kg: float, pressure_pa: float, T_guess_c: float = 20.0,
+    ) -> float:
+        """Invert h(P, T) = enthalpy at constant composition (secant steps
+        safeguarded by bisection, since h has kinks at phase boundaries)."""
+        def f(T: float) -> float:
+            return self.enthalpy_for_link(link_state, pressure_pa, T) - enthalpy_j_per_kg
+
+        lo, hi = T_guess_c - 5.0, T_guess_c + 5.0
+        f_lo, f_hi = f(lo), f(hi)
+        for _ in range(40):                       # widen until the root is bracketed
+            if f_lo * f_hi <= 0.0:
+                break
+            if abs(f_lo) < abs(f_hi):
+                lo -= 2.0 * (hi - lo)
+                f_lo = f(lo)
+            else:
+                hi += 2.0 * (hi - lo)
+                f_hi = f(hi)
+        else:
+            return T_guess_c
+        for _ in range(60):
+            T = hi - f_hi * (hi - lo) / (f_hi - f_lo) if f_hi != f_lo else 0.5 * (lo + hi)
+            if not (lo < T < hi):
+                T = 0.5 * (lo + hi)
+            f_T = f(T)
+            if abs(f_T) < 1e-3 or hi - lo < 1e-5:
+                return T
+            if f_lo * f_T <= 0.0:
+                hi, f_hi = T, f_T
+                if abs(f_lo) > 2.0 * abs(f_T):        # Illinois step against stagnation
+                    f_lo *= 0.5
+            else:
+                lo, f_lo = T, f_T
+                if abs(f_hi) > 2.0 * abs(f_T):
+                    f_hi *= 0.5
+        return 0.5 * (lo + hi)
 
     def beggs_brill_phase_properties(self, link_state) -> tuple[float, float, float, float, float, float]:
         """``(C_L, rho_l, rho_g, mu_l, mu_g, sigma_l)`` at the link's mean P, T, z

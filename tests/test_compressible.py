@@ -624,3 +624,95 @@ class QuantitativeBenchmarks(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PipeEnthalpyBalanceTests(unittest.TestCase):
+    """Joule-Thomson and potential energy along pipes (v1.18.0).
+
+    For an adiabatic pipe the first law gives h_in = h_out + g·Δz: an expanding
+    real gas cools (Joule-Thomson), friction heating is included because the
+    outlet pressure is the real one, and lifting the gas costs g·Δz.
+    """
+
+    def _methane(self):
+        eos = PengRobinsonEOS(molecular_weight_kg_per_mol=_M_CH4, critical_temperature_k=_TC_CH4,
+                              critical_pressure_pa=_PC_CH4, acentric_factor=_W_CH4)
+        return CompressibleFluid.from_constants(eos, viscosity_pa_s=1.2e-5,
+                                                specific_heat_j_per_kg_k=2400.0,
+                                                thermal_conductivity_w_per_m_k=0.04,
+                                                reference_pressure_pa=60e5)
+
+    def _case(self, dz=0.0, segments=1, U=0.0):
+        return NetworkCase(
+            name="adiabatic methane pipe", fluid_model=self._methane(),
+            pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=80e5),),
+            pressure_outlets=(PressureBoundary(node_id=2, pressure_pa=50e5),),
+            thermal_inlets=(ThermalBoundary(node_id=1, temperature_c=40.0, bc_type="fixed_temperature"),),
+            components=(Pipe(start_node=1, end_node=2, diameter_m=0.2, length_m=20_000.0,
+                             absolute_roughness_m=4.6e-5, height_change_m=dz, n_thermal_segments=segments,
+                             heat_transfer_coefficient_w_per_m2k=U, ambient_temperature_c=10.0),),
+        )
+
+    def _check_first_law(self, dz, segments, tol_k):
+        case = self._case(dz, segments)
+        res = _benchmark_solver().solve(case)
+        self.assertTrue(res.converged)
+        f = case.fluid_model
+        T_out = res.node_temperatures_c[2]
+        h_in = f.enthalpy_j_per_kg(80e5, 40.0)
+        # outlet temperature that satisfies h_out = h_in − g·Δz
+        T_exact = f.temperature_from_enthalpy(h_in - 9.81 * dz, 50e5, T_guess_c=T_out)
+        self.assertLess(T_out, 40.0 - 5.0)                    # clear JT cooling over 30 bar
+        self.assertAlmostEqual(T_out, T_exact, delta=tol_k)
+        self.assertLess(res.global_energy_balance.energy_error_pct, 0.01)
+        return res
+
+    def test_adiabatic_horizontal_pipe_is_isenthalpic(self):
+        res = self._check_first_law(0.0, 1, 0.01)
+        self.assertLess(res.global_energy_balance.joule_thomson_kw, 0.0)
+        self.assertEqual(res.global_energy_balance.potential_energy_kw, 0.0)
+
+    def test_adiabatic_horizontal_pipe_fv_segments(self):
+        self._check_first_law(0.0, 20, 0.01)
+
+    def test_adiabatic_riser_conserves_h_plus_gz(self):
+        res = self._check_first_law(800.0, 1, 0.01)
+        m = res.component_flows[0].mass_flow_kg_per_s
+        self.assertAlmostEqual(res.global_energy_balance.potential_energy_kw,
+                               -m * 9.81 * 800.0 / 1000.0, delta=1e-6)
+
+    def test_heat_loss_and_jt_together_close_the_balance(self):
+        for seg in (1, 10):
+            res = _benchmark_solver().solve(self._case(200.0, seg, U=3.0))
+            self.assertLess(res.global_energy_balance.energy_error_pct, 0.01)
+            self.assertGreater(res.global_energy_balance.heat_wall_loss_kw, 0.0)
+
+    def test_ideal_gas_horizontal_pipe_has_no_jt(self):
+        eos = IdealGasEOS(molecular_weight_kg_per_mol=_M_CH4)
+        fluid = CompressibleFluid.from_constants(eos, viscosity_pa_s=1.2e-5,
+                                                 specific_heat_j_per_kg_k=2400.0,
+                                                 thermal_conductivity_w_per_m_k=0.04)
+        case = self._case()
+        case = NetworkCase(name=case.name, fluid_model=fluid, pressure_inlets=case.pressure_inlets,
+                           pressure_outlets=case.pressure_outlets, thermal_inlets=case.thermal_inlets,
+                           components=case.components)
+        res = _benchmark_solver().solve(case)
+        self.assertAlmostEqual(res.node_temperatures_c[2], 40.0, places=6)
+        self.assertEqual(res.global_energy_balance.joule_thomson_kw, 0.0)
+
+
+class PipeEnthalpyTermsSwitchTests(unittest.TestCase):
+    def test_switch_off_restores_constant_temperature_adiabatic_pipe(self):
+        case = PipeEnthalpyBalanceTests()._case()
+        solver = SteadyCompressibleSolver(
+            hydraulic_settings=SolverSettings(pressure_correction_abs_tolerance_pa=10.0,
+                                              velocity_loop_method="secant"),
+            compressible_settings=CompressibleSolverSettings(max_density_iterations=30,
+                                                             density_rel_tolerance=1e-5,
+                                                             pipe_enthalpy_terms=False),
+        )
+        res = solver.solve(case)
+        self.assertAlmostEqual(res.node_temperatures_c[2], 40.0, places=6)
+        self.assertEqual(res.global_energy_balance.joule_thomson_kw, 0.0)
+        # real-enthalpy balance exposes the missing Joule-Thomson cooling
+        self.assertGreater(res.global_energy_balance.energy_error_pct, 1.0)

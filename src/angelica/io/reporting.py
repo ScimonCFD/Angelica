@@ -274,9 +274,23 @@ def _write_balance_rows_csv(writer, result) -> None:
         writer.writerow(["Heat sources",      round(geb.heat_sources_kw, 6),   "kW"])
         writer.writerow(["Heat wall loss",    round(geb.heat_wall_loss_kw, 6), "kW"])
         writer.writerow(["Shaft work",        round(geb.shaft_work_kw, 6),     "kW"])
-        writer.writerow(["Joule-Thomson term", round(geb.joule_thomson_kw, 6), "kW"])
+        writer.writerow([_jt_label(geb), round(geb.joule_thomson_kw, 6), "kW"])
+        writer.writerow(["Potential energy",  round(geb.potential_energy_kw, 6), "kW"])
+        writer.writerow(["Enthalpy basis", _basis_label(geb), ""])
         writer.writerow(["Energy balance error (kW)", round(geb.energy_error_kw, 9), "kW"])
         writer.writerow(["Energy balance error (%)",  round(geb.energy_error_pct, 6), "%"])
+
+
+def _jt_label(geb) -> str:
+    if getattr(geb, "enthalpy_basis", "sensible") == "real":
+        return "Joule-Thomson term (included in enthalpy)"
+    return "Joule-Thomson term"
+
+
+def _basis_label(geb) -> str:
+    if getattr(geb, "enthalpy_basis", "sensible") == "real":
+        return "real enthalpy h(P,T), reference: ideal gas at 0 °C"
+    return "sensible heat m·cp·T, reference: 0 °C"
 
 
 def _write_balance_sheet(workbook, result) -> None:
@@ -296,7 +310,9 @@ def _write_balance_sheet(workbook, result) -> None:
         ws.append(["Heat sources",      round(geb.heat_sources_kw, 6),   "kW"])
         ws.append(["Heat wall loss",    round(geb.heat_wall_loss_kw, 6), "kW"])
         ws.append(["Shaft work",        round(geb.shaft_work_kw, 6),     "kW"])
-        ws.append(["Joule-Thomson term", round(geb.joule_thomson_kw, 6), "kW"])
+        ws.append([_jt_label(geb), round(geb.joule_thomson_kw, 6), "kW"])
+        ws.append(["Potential energy",  round(geb.potential_energy_kw, 6), "kW"])
+        ws.append(["Enthalpy basis", _basis_label(geb), None])
         ws.append(["Energy balance error (kW)", round(geb.energy_error_kw, 9), "kW"])
         ws.append(["Energy balance error (%)",  round(geb.energy_error_pct, 6), "%"])
 

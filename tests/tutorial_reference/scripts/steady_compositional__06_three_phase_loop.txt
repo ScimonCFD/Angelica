@@ -6,37 +6,37 @@ Converged:  True
 --------------------------------------------------
     1  Source A (rich)             80.00    110.00
     7  Source B (lean)             75.00     50.00
-    2  Ring N2 (A entry)           58.69     78.11
-    4  Ring N4 (B entry)           60.86     35.35
-    3  Ring N3 (plant tap)         41.72     36.34
-    5  Ring N5 (power tap)         52.76     22.21
-    6  Gas plant                   30.00     33.38
-    8  Power station               40.00     21.00
+    2  Ring N2 (A entry)           58.96     78.44
+    4  Ring N4 (B entry)           61.01     29.95
+    3  Ring N3 (plant tap)         42.22     32.43
+    5  Ring N5 (power tap)         53.17     17.17
+    6  Gas plant                   30.00     24.94
+    8  Power station               40.00     11.33
 
 Pipe          ṁ (kg/s)     T_in    T_out   V gas  L HCliq   W free  Phase state
 ----------------------------------------------------------------------------------
-feed_A          31.433   110.00    78.11   0.820    0.117   0.0625  Gas + HC liq + Free water
-feed_B          21.435    50.00    35.35   1.000    0.000   0.0000  Gas
-ring_north      22.966    78.11    36.34   0.712    0.220   0.0679  Gas + HC liq + Free water
-ring_east        9.609    35.35    36.34   1.000    0.000   0.0000  Gas
-ring_west        8.467    78.11    22.21   0.641    0.289   0.0691  Gas + HC liq + Free water
-ring_south      11.826    35.35    22.21   1.000    0.000   0.0000  Gas
-to_plant        32.575    36.34    33.38   0.816    0.136   0.0481  Gas + HC liq + Free water
-to_power        20.292    22.21    21.00   0.879    0.092   0.0287  Gas + HC liq + Free water
+feed_A          30.854   110.00    78.44   0.843    0.096   0.0611  Gas + HC liq + Free water
+feed_B          21.481    50.00    29.95   1.000    0.000   0.0000  Gas
+ring_north      22.622    78.44    32.43   0.726    0.207   0.0674  Gas + HC liq + Free water
+ring_east        9.694    29.95    32.43   1.000    0.000   0.0000  Gas
+ring_west        8.233    78.44    17.17   0.662    0.269   0.0688  Gas + HC liq + Free water
+ring_south      11.787    29.95    17.17   1.000    0.000   0.0000  Gas
+to_plant        32.316    32.43    24.94   0.845    0.115   0.0400  Gas + HC liq + Free water
+to_power        20.020    17.17    11.33   0.913    0.067   0.0204  Gas + HC liq + Free water
 
 Source split (mass):
-  Source A  31.43 kg/s → plant 73.1%, power station 26.9%
-  Source B  21.43 kg/s → plant 44.8%, power station 55.2%
+  Source A  30.85 kg/s → plant 73.3%, power station 26.7%
+  Source B  21.48 kg/s → plant 45.1%, power station 54.9%
 
 Delivered stream (overall mole fractions):
   Customer         ṁ (kg/s)   methane    ethane   propane  n-butane  n-pentan  n-hexane     water
-  Gas plant           32.58     0.653     0.088     0.079     0.059     0.035     0.035     0.049
-  Power station       20.29     0.754     0.077     0.059     0.039     0.021     0.021     0.029
+  Gas plant           32.32     0.695     0.083     0.071     0.051     0.029     0.029     0.041
+  Power station       20.02     0.796     0.072     0.051     0.031     0.015     0.015     0.021
 
 Delivered phase split (molar):
   Customer           Gas   HC liq  Free water
-  Gas plant        0.816    0.136      0.0481
-  Power station    0.879    0.092      0.0287
+  Gas plant        0.845    0.115      0.0400
+  Power station    0.913    0.067      0.0204
 
   • The gas plant sits closer (hydraulically) to Source A and receives the
     richer, wetter blend; the other customer gets a leaner, drier gas.

@@ -1,5 +1,77 @@
 # Changelog
 
+## [1.18.0] — 2026-11-22
+
+### New: Joule-Thomson cooling, latent heat and potential energy along pipes
+
+The pipe energy equation of the compressible and compositional solvers had
+no pressure term: a real gas expanding 30 bar along a pipe stayed at constant
+temperature apart from wall heat loss, and lifting it cost nothing.  Pipes
+now carry the source
+
+    S = −ṁ·{[h(P_out, T_out) − h(P_in, T_in)] − cp·(T_out − T_in)} − ṁ·g·Δz
+
+so that ṁ·Δh = −Q_wall − ṁ·g·Δz holds exactly.  S contains the
+Joule-Thomson cooling (friction heating included through the real outlet
+pressure), the real-gas heat-capacity departure, and — for compositional
+fluids — the latent heat of condensation.  The exit temperature in S is
+lagged and iterated inside the energy solve (under-relaxed, since latent heat
+makes the plain fixed point alternate), so the outer loop does not slow down.
+
+  - `CompositionalFluid` gains an enthalpy model (`enthalpy_for_link`:
+    thermo's EOS flash enthalpy for the hydrocarbons, liquid water and water
+    vapour with latent heat for free water), `temperature_from_enthalpy_for_link`
+    and `specific_heat_at`.  Compositional valves and chokes are now
+    isenthalpic (they were pass-through).
+  - Junctions conserve real enthalpy: each stream is linearised as
+    h ≈ cp·T + [h(T*) − cp·T*].  This removes a temperature jump of up to
+    1.9 K that the ṁ·cp·T mixing produced wherever the fluid passed from one
+    pipe into the next with a different cp (compositional tutorials 05/06).
+  - Global energy balance: for fluids with an enthalpy model it is computed
+    with real enthalpy h(P, T) above the ideal gas at 0 °C
+    (`GlobalEnergyBalance.enthalpy_basis = "real"`), with a new
+    `potential_energy_kw` term; `joule_thomson_kw` is then informational.  The
+    error percentage refers to the largest term of the balance.
+  - `CompressibleSolverSettings.pipe_enthalpy_terms` /
+    `CompositionalSolverSettings.pipe_enthalpy_terms` (default True) switch
+    the new terms off for comparison.
+  - Exports list the potential-energy term and the enthalpy basis.
+  - Validation: adiabatic PR-methane pipes (80 → 50 bar, level and with an
+    800 m rise, 1 and 20 thermal segments) reproduce h_out = h_in − g·Δz
+    within 0.001 K; adiabatic compositional pipes (a single-phase gas
+    100 → 20 bar, and a rich gas condensing to VF = 0.92 at 80 → 40 bar,
+    level and with a 500 m rise) match thermo's PH flash within 0.001 K; a
+    compositional valve matches the PH flash of its inlet state.
+
+### Fixed
+
+  - **Compositional mixing by molar flow.**  Junctions mixed mole fractions
+    weighted by mass flow; with streams of different molar mass (a lean gas
+    at 17.7 g/mol and a rich gas at 23.1 g/mol in tutorial 02) that does not
+    conserve the components: methane downstream was 77.8 % instead of 79.5 %.
+    Tutorials 02 and 03 computed their own mass-weighted blend; they now show
+    the solver's composition and a by-hand molar check.
+  - **Compositions propagate through every link type.**  Valves, chokes and
+    pumps in compositional networks used the fluid's default composition and
+    cut the propagation: everything downstream of a choke saw the default.
+  - **One flash per state.**  Density, phase split, enthalpy and phase
+    compositions now share one cached thermo flash; compositional runs are
+    faster than before despite the extra enthalpy work (tutorial 06: 24 s →
+    21 s).
+
+Tutorial results that change (references regenerated):
+  - Compressible 04 (hill crossing): trunk 147.6 → 147.9 kg/s (the gas
+    cools while climbing and warms descending).
+  - Compressible 05 (valve): the gas reaches the valve at 37.1 °C instead of
+    39.2 °C (Joule-Thomson in the upstream pipe); the valve drop itself is
+    unchanged (−2.62 K).
+  - Compressible 06 (compressor): export temperature 66.10 → 66.34 °C.
+  - Compositional 01–07: Joule-Thomson cooling and latent heat everywhere.
+    Examples: tutorial 01 outlet 40.5 → 11.8 °C (100 → 20 bar; an adiabatic
+    expansion alone gives 22.3 °C); tutorial 02 outlet 45.1 → 7.6 °C;
+    tutorial 05 mid-line 29.0 → 40.0 °C (latent heat slows the cooling);
+    tutorial 07 Beggs-Brill flow 25.54 → 25.67 kg/s.
+
 ## [1.17.0] — 2026-11-22
 
 ### New: erosional velocity check (API RP 14E)

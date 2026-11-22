@@ -14,12 +14,12 @@ Outer iterations:  4
 
   Node    P (bar)    T (°C)
      1    100.000     60.00
-     2     20.000     40.51
+     2     20.000     11.80
 
-Mass flow:       15.5745 kg/s
-Volumetric flow: 1148.61 m³/h  (at pipe conditions)
+Mass flow:       16.2940 kg/s
+Volumetric flow: 1098.29 m³/h  (at pipe conditions)
 
-Velocity @ inlet:  10.76 m/s
-Velocity @ outlet: 62.01 m/s  (gas expands as P drops)
+Velocity @ inlet:  11.25 m/s
+Velocity @ outlet: 64.87 m/s  (gas expands as P drops)
 
 Global mass balance error: 0.0000 %

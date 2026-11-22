@@ -35,6 +35,11 @@ class CompositionalSolverSettings:
             updates (1.0 = no relaxation).  Values below 1.0 damp composition
             oscillations in looped networks with mixing junctions; 0.5 is a
             safe starting point when a 2-cycle is observed.
+        pipe_enthalpy_terms: Joule-Thomson cooling, latent heat and potential
+            energy along pipes, with enthalpy-conserving junctions (default
+            True).  False drops them, for comparison with the pre-1.18 model
+            (valves stay isenthalpic); the energy balance is still computed
+            with real enthalpy, so it then shows what that model leaves out.
     """
 
     max_outer_iterations: int = 50
@@ -42,6 +47,7 @@ class CompositionalSolverSettings:
     temperature_tolerance_k: float = 0.01
     temperature_relaxation: float = 1.0
     composition_relaxation: float = 1.0
+    pipe_enthalpy_terms: bool = True
 
 
 class SteadyCompositionalSolver(BaseSolver):
@@ -111,13 +117,16 @@ class SteadyCompositionalSolver(BaseSolver):
         default_zs: tuple[float, ...],
         node_zs_prev: dict[int, tuple[float, ...]] | None = None,
         relaxation: float = 1.0,
+        component_mws: tuple[float, ...] | None = None,
     ) -> dict[int, tuple[float, ...]]:
         """Propagate inlet mole fractions through the network and write to PipeState.zs.
 
         Seeded at inlet nodes from ``case.inlet_composition_bcs``, compositions
         are propagated downstream following the current mass-flow field.  At
-        each junction the incoming streams are mixed by molar-flow-weighted
-        average.  Pipes unreachable from an inlet node retain ``default_zs``.
+        each junction the incoming streams are mixed by molar flow, ṁ/MW(z)
+        (mixing mole fractions by mass flow does not conserve the species when
+        the streams' molar masses differ).  Pipes unreachable from an inlet
+        node retain ``default_zs``.
 
         When ``relaxation < 1.0`` and ``node_zs_prev`` is supplied, the newly
         computed junction composition is blended with the value from the
@@ -137,11 +146,9 @@ class SteadyCompositionalSolver(BaseSolver):
             inlet_ids.add(ibc.node_id)
 
         n_comp = len(default_zs)
-        pipe_states = [
-            (idx, ps)
-            for idx, ps in enumerate(network_state.components)
-            if isinstance(ps, (PipeState, HeatSourceState))
-        ]
+        # Every link type carries the fluid: pipes, heat sources, valves,
+        # chokes and pumps (a fitting must not cut the propagation).
+        pipe_states = list(enumerate(network_state.components))
 
         # ── fixed-point iteration over junction mixing ────────────────────────
         for _ in range(len(network_state.nodes) + 1):
@@ -156,6 +163,9 @@ class SteadyCompositionalSolver(BaseSolver):
                     up_id, down_id = ps.end_node.node_id, ps.start_node.node_id
                     mdot = -mdot
                 z_up = node_zs.get(up_id, default_zs)
+                if component_mws:
+                    mw = sum(z * m for z, m in zip(z_up, component_mws))
+                    mdot = mdot / mw if mw > 0.0 else mdot     # molar flow (kmol/s)
                 incoming[down_id].append((mdot, z_up))
 
             for nid, contributions in incoming.items():
@@ -253,10 +263,9 @@ class SteadyCompositionalSolver(BaseSolver):
             if isinstance(ps, (PipeState, HeatSourceState)):
                 ps.temperature_c = T_init
 
-        # ── initialise per-pipe compositions ─────────────────────────────────
+        # ── initialise per-link compositions ─────────────────────────────────
         for ps in network_state.components:
-            if isinstance(ps, (PipeState, HeatSourceState)):
-                ps.zs = default_zs
+            ps.zs = default_zs
 
         # ── outer loop ────────────────────────────────────────────────────────
         density_history:      list[float] = []
@@ -283,6 +292,7 @@ class SteadyCompositionalSolver(BaseSolver):
                     network_state, case, default_zs,
                     node_zs_prev=node_zs_outer,
                     relaxation=settings.composition_relaxation,
+                    component_mws=fluid.component_mws,
                 )
 
             old_densities = [fluid.density_for_link(link) for link in network_state.components]
@@ -302,7 +312,8 @@ class SteadyCompositionalSolver(BaseSolver):
                 outer_turb_final.append(turb_metrics[-1])
 
             new_node_temps, pipe_mean_temps = solve_energy_system(
-                network_state, fluid, self.convection_scheme, T_ref=T_init
+                network_state, fluid, self.convection_scheme, T_ref=T_init,
+                pipe_enthalpy_terms=settings.pipe_enthalpy_terms,
             )
 
             max_delta_t = 0.0
@@ -351,7 +362,8 @@ class SteadyCompositionalSolver(BaseSolver):
         if turb_metrics:
             outer_turb_final.append(turb_metrics[-1])
         final_node_temps, final_pipe_mean_temps = solve_energy_system(
-            network_state, fluid, self.convection_scheme, T_ref=T_init
+            network_state, fluid, self.convection_scheme, T_ref=T_init,
+            pipe_enthalpy_terms=settings.pipe_enthalpy_terms,
         )
         for nid, T_new in final_node_temps.items():
             if not network_state.nodes[nid].is_thermal_inlet:
@@ -394,7 +406,7 @@ class SteadyCompositionalSolver(BaseSolver):
                 )
             )
 
-        # Derive per-node compositions (mass-flow-weighted mix of incoming pipes).
+        # Derive per-node compositions (molar-flow-weighted mix of incoming links).
         _incoming: dict[int, list] = {}
         for link in network_state.components:
             _zs = getattr(link, "zs", ())
@@ -402,7 +414,8 @@ class SteadyCompositionalSolver(BaseSolver):
                 continue
             _mdot = link.mass_flow_kg_per_s
             _nid = link.end_node.node_id if _mdot >= 0.0 else link.start_node.node_id
-            _incoming.setdefault(_nid, []).append((abs(_mdot), tuple(_zs)))
+            _mw = sum(z * m for z, m in zip(_zs, fluid.component_mws))
+            _incoming.setdefault(_nid, []).append((abs(_mdot) / _mw if _mw > 0 else abs(_mdot), tuple(_zs)))
         node_compositions: dict[int, tuple] = {}
         for _nid, _arr in _incoming.items():
             _tot = sum(m for m, _ in _arr)

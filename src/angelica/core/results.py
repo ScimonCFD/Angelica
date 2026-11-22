@@ -75,10 +75,13 @@ class GlobalEnergyBalance:
         heat_sources_kw  > 0 : heat ADDED to the fluid (heaters, positive power_w)
         heat_wall_loss_kw > 0 : heat LEAVING the fluid to the environment
         shaft_work_kw    > 0 : work ADDED by pumps / compressors
-        joule_thomson_kw     : change of ṁ·cp·T across isenthalpic valves
-                               (< 0 when a real gas cools on expansion)
+        joule_thomson_kw     : change of ṁ·cp·T at constant enthalpy across
+                               valves and along pipes (< 0 when a real gas
+                               cools on expansion); part of the balance only
+                               with enthalpy_basis = "sensible"
+        potential_energy_kw  : −Σ ṁ·g·Δz along pipes (< 0 when lifting)
         energy_error_kw ≈ 0  : residual of
-                               (Ė_in + Q_src + W_shaft + Ė_JT − Q_wall − Ė_out)
+                               (Ė_in + Q_src + W_shaft + Ė_JT + Ė_pot − Q_wall − Ė_out)
     """
 
     enthalpy_in_kw: float       # Σ ṁ × cp × T at inlet boundary nodes
@@ -86,17 +89,32 @@ class GlobalEnergyBalance:
     heat_sources_kw: float      # Σ power_w for all HeatSource links
     heat_wall_loss_kw: float    # Σ U·π·D·L·(T_pipe − T_amb) for all pipes
     shaft_work_kw: float = 0.0  # Σ pump / compressor work on the fluid
-    joule_thomson_kw: float = 0.0  # Σ ṁ·Δ(cp·T) across isenthalpic devices
+    joule_thomson_kw: float = 0.0  # Σ ṁ·Δ(cp·T) at constant h (valves and pipes)
+    potential_energy_kw: float = 0.0  # −Σ ṁ·g·Δz along pipes (enthalpy-based fluids)
+    # "sensible": fluxes are ṁ·cp·T (liquids, black-oil); "real": fluxes are the
+    # fluid's enthalpy ṁ·h(P, T) above the ideal gas at 0 °C (compressible gas,
+    # compositional EOS).  With real enthalpy the Joule-Thomson effect is part
+    # of h, so joule_thomson_kw is reported for information only.
+    enthalpy_basis: str = "sensible"
 
     @property
     def energy_error_kw(self) -> float:
         """Residual of the global first-law balance (should be ≈ 0)."""
+        jt = self.joule_thomson_kw if self.enthalpy_basis == "sensible" else 0.0
         return (self.enthalpy_in_kw + self.heat_sources_kw + self.shaft_work_kw
-                + self.joule_thomson_kw - self.heat_wall_loss_kw - self.enthalpy_out_kw)
+                + jt + self.potential_energy_kw
+                - self.heat_wall_loss_kw - self.enthalpy_out_kw)
 
     @property
     def energy_error_pct(self) -> float:
+        """Residual as a percentage of the largest flux.  With real enthalpy the
+        boundary fluxes depend on the reference state (they can be small next
+        to the heat exchanged or the Joule-Thomson effect), so every term of
+        the balance is considered."""
         ref = max(abs(self.enthalpy_in_kw), abs(self.enthalpy_out_kw), 1e-30)
+        if self.enthalpy_basis == "real":
+            ref = max(ref, abs(self.heat_sources_kw), abs(self.heat_wall_loss_kw),
+                      abs(self.shaft_work_kw), abs(self.joule_thomson_kw), abs(self.potential_energy_kw))
         return 100.0 * abs(self.energy_error_kw) / ref
 
 

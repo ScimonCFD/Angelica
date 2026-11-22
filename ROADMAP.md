@@ -83,7 +83,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - 1.2 **Done in v1.16.0.** Per-segment report: holdup, flow pattern, superficial velocities,
   mixture velocity, liquid inventory; shown in the GUI link results.
 - 1.3 **Done in v1.17.0.** Erosional velocity ratio (API RP 14E) per link, with a GUI warning.
-- 1.4 Joule-Thomson cooling along pipes (compressible and compositional).
+- 1.4 **Done in v1.18.0.** Joule-Thomson cooling along pipes (compressible and compositional).
   Found while doing 1.1: the pipe energy equation has no JT term (only
   valves/fittings are isenthalpic), so a gas line expanding 25 bar stays at
   constant temperature apart from wall heat loss — PIPEPHASE includes it.
@@ -213,4 +213,25 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   - Observation: black-oil tutorial 06 runs at ~4.9× V_e (≈ 490 kg/s through
     its lines). Left unchanged — tutorials show physics, not sizing — but
     worth revisiting when the validation manual (8.4) is written.
+- **1.4 Joule-Thomson / latent heat / potential energy (v1.18.0).** Lagged
+  enthalpy-difference source per pipe (exact at convergence), inner energy
+  iteration (relaxation 0.5), enthalpy-conserving junction offsets, real-
+  enthalpy global balance. Validated: adiabatic pipes vs exact first law
+  (PR methane) and vs thermo PH flash (compositional, incl. condensation and
+  elevation) within 0.001 K.
+  - Found and fixed on the way: (a) ṁ·cp·T junction mixing made T jump up to
+    1.9 K between consecutive pipes in compositional runs; (b) compositions
+    mixed by mass instead of molar flow (methane 77.8 vs 79.5 % in tutorial
+    02); (c) valves/chokes/pumps did not carry or propagate compositions;
+    (d) compositional valves were pass-through (no JT).
+  - First attempt (real-gas cp in `specific_heat_for_link`) was abandoned:
+    with a P-dependent cp the ṁ·cp·T junctions jump; the enthalpy offsets are
+    the right fix.
+  - Decision: the new terms are on by default (they complete the first law,
+    not an optional model) with a settings switch to turn them off. Black-oil
+    and incompressible liquids are unchanged (no enthalpy model): liquid
+    friction heating and black-oil JT remain unmodelled — candidates for a
+    later item.
+  - Pending: kinetic energy (≈1 K at 65 m/s in compositional tutorial 01) is
+    not in the balance.
 

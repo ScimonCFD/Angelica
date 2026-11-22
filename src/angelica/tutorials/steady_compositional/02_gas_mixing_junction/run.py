@@ -120,20 +120,24 @@ print()
 # ── Composition at junction: molar-flow-weighted blend ────────────────────────
 m_A = flows.get("pipe_A", 0.0)
 m_B = flows.get("pipe_B", 0.0)
-m_tot = m_A + m_B
 
-if m_tot > 0:
-    # Mole fractions are propagated inside the solver's PipeState.zs, but we
-    # can also compute the expected blended composition analytically from the
-    # individual mass flows and feed compositions.
-    # (Assumes similar MWs for the two gases so mass ≈ molar weighting.)
-    z_blend = tuple(
-        (m_A * z_a + m_B * z_b) / m_tot
-        for z_a, z_b in zip(ZS_A, ZS_B)
-    )
-    print("Blended composition in pipe_C (mass-weighted):")
-    for comp, z in zip(COMPONENTS, z_blend):
-        print(f"  {comp:10s}: {z*100:.2f} mol%")
+if m_A + m_B > 0:
+    # The solver mixes the streams by molar flow, ṁ/MW: the lean gas from A
+    # (≈ 17.7 g/mol) and the rich gas from B (≈ 23.1 g/mol) carry different
+    # numbers of moles per kilogram, so mass-weighting the mole fractions
+    # would not conserve the components.
+    mws = result.component_mws
+
+    def molar_flow(m, zs):
+        return m / sum(z * mw for z, mw in zip(zs, mws))
+
+    n_A, n_B = molar_flow(m_A, ZS_A), molar_flow(m_B, ZS_B)
+    z_check = tuple((n_A * z_a + n_B * z_b) / (n_A + n_B) for z_a, z_b in zip(ZS_A, ZS_B))
+    z_solver = next(cf.zs for cf in result.component_flows if cf.label.endswith("pipe_C"))
+    print("Blended composition in pipe_C (molar-flow weighted):")
+    print(f"  {'':10s}  {'solver':>8}  {'by hand':>8}")
+    for comp, z, zc in zip(COMPONENTS, z_solver, z_check):
+        print(f"  {comp:10s}: {z*100:6.2f}   {zc*100:6.2f}  mol%")
     print()
 
 print(f"Global mass balance error: {result.global_balance.mass_error_pct:.4f} %")

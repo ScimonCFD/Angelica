@@ -566,7 +566,7 @@ class TestCompositionalBeggsBrillSolver:
 
         class _Link:
             start_node, end_node = _Node(60e5), _Node(50e5)
-            temperature_c = res.node_temperatures_c[2]
+            temperature_c = 0.5 * (res.node_temperatures_c[1] + res.node_temperatures_c[2])
             zs = tuple(self.Z)
 
         CL, rl, rg, ml, mg, sig = case.fluid_model.beggs_brill_phase_properties(_Link())
@@ -614,3 +614,84 @@ class TestGasLiquidSurfaceTension:
         c = _get_flash_obj(("n-dodecane",), "PR").constants
         mw = c.MWs[0]
         assert _parachors(c)[0] == pytest.approx(-11.4 + 3.23 * mw - 0.0022 * mw * mw)
+
+
+class TestCompositionalPipeFirstLaw:
+    """Adiabatic compositional pipes reproduce thermo's PH flash (v1.18.0):
+    h(P_out, T_out) = h(P_in, T_in) − g·Δz, including condensation."""
+
+    RICH = ["methane", "ethane", "propane", "n-butane", "n-pentane", "n-hexane"]
+    Z_RICH = [x / 0.98 for x in (0.78, 0.08, 0.05, 0.03, 0.02, 0.02)]
+
+    def _solve(self, names, z, P1, P2, T1, dz=0.0, seg=10):
+        from angelica.core.case import ThermalBoundary
+        case = NetworkCase(
+            name="adiabatic", fluid_model=CompositionalFluid(names, z),
+            pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=P1),),
+            pressure_outlets=(PressureBoundary(node_id=2, pressure_pa=P2),),
+            thermal_inlets=(ThermalBoundary(node_id=1, temperature_c=T1, bc_type="fixed_temperature"),),
+            components=(Pipe(start_node=1, end_node=2, diameter_m=0.15, length_m=10_000.0,
+                             absolute_roughness_m=4.6e-5, height_change_m=dz, n_thermal_segments=seg),),
+        )
+        return SteadyCompositionalSolver().solve(case)
+
+    def _ph_flash_T(self, names, z, P1, P2, T1, dz=0.0):
+        from angelica.properties.compositional_fluid import _get_flash_obj
+        f = _get_flash_obj(tuple(names), "PR")
+        r1 = f.flash(T=T1 + 273.15, P=P1, zs=list(z))
+        r2 = f.flash(P=P2, H=r1.H() - 9.81 * dz * r1.MW() / 1000.0, zs=list(z))
+        return r2.T - 273.15, r2.VF
+
+    @pytest.mark.parametrize("seg", [1, 10])
+    def test_single_phase_gas_expansion(self, seg):
+        names, z = ["methane", "ethane"], [0.8, 0.2]
+        res = self._solve(names, z, 100e5, 20e5, 60.0, seg=seg)
+        T_ph, _ = self._ph_flash_T(names, z, 100e5, 20e5, 60.0)
+        assert res.converged
+        assert res.node_temperatures_c[2] == pytest.approx(T_ph, abs=0.01)      # ≈ 22.3 °C
+        assert res.global_energy_balance.energy_error_pct < 0.01
+
+    @pytest.mark.parametrize("dz", [0.0, 500.0])
+    def test_condensing_expansion_and_lift(self, dz):
+        res = self._solve(self.RICH, self.Z_RICH, 80e5, 40e5, 30.0, dz=dz)
+        T_ph, vf = self._ph_flash_T(self.RICH, self.Z_RICH, 80e5, 40e5, 30.0, dz)
+        assert 0.85 < vf < 0.95                                                   # two-phase outlet
+        assert res.node_temperatures_c[2] == pytest.approx(T_ph, abs=0.01)
+        assert res.global_energy_balance.energy_error_pct < 0.01
+        if dz:
+            m = res.component_flows[0].mass_flow_kg_per_s
+            assert res.global_energy_balance.potential_energy_kw == pytest.approx(-m * 9.81 * dz / 1e3, rel=1e-9)
+
+    def test_valve_is_isenthalpic_and_carries_composition(self):
+        """Pipe – valve – pipe: the valve outlet satisfies the PH flash of its
+        inlet state, and the inlet composition (not the fluid default) reaches
+        the downstream pipe through the valve."""
+        from angelica.core.case import InletCompositionBC, ThermalBoundary
+        from angelica.core.components import Fitting
+        from angelica.properties.compositional_fluid import _get_flash_obj
+        z_in = tuple(self.Z_RICH)
+        default = (0.9, 0.05, 0.03, 0.01, 0.005, 0.005)
+        case = NetworkCase(
+            name="valve", fluid_model=CompositionalFluid(self.RICH, default),
+            pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=80e5),),
+            pressure_outlets=(PressureBoundary(node_id=4, pressure_pa=40e5),),
+            thermal_inlets=(ThermalBoundary(node_id=1, temperature_c=40.0, bc_type="fixed_temperature"),),
+            inlet_composition_bcs=(InletCompositionBC(node_id=1, zs=z_in),),
+            components=(
+                Pipe(start_node=1, end_node=2, diameter_m=0.15, length_m=1000.0, absolute_roughness_m=4.6e-5),
+                Fitting(start_node=2, end_node=3, diameter_m=0.15, loss_coefficient=400.0),
+                Pipe(start_node=3, end_node=4, diameter_m=0.15, length_m=1000.0, absolute_roughness_m=4.6e-5),
+            ),
+        )
+        res = SteadyCompositionalSolver().solve(case)
+        assert res.converged
+        assert res.component_flows[2].zs == pytest.approx(z_in, abs=1e-6)
+        P2, P3 = res.node_pressures_pa[2], res.node_pressures_pa[3]
+        T2, T3 = res.node_temperatures_c[2], res.node_temperatures_c[3]
+        assert P2 - P3 > 10e5                                   # a real throttling drop
+        f = _get_flash_obj(tuple(self.RICH), "PR")
+        h2 = f.flash(T=T2 + 273.15, P=P2, zs=list(z_in)).H()
+        T3_ph = f.flash(P=P3, H=h2, zs=list(z_in)).T - 273.15
+        assert T3 == pytest.approx(T3_ph, abs=0.02)
+        assert T3 < T2 - 3.0
+        assert res.global_energy_balance.energy_error_pct < 0.01
