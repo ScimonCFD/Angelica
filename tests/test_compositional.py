@@ -588,7 +588,12 @@ class TestCompositionalBeggsBrillSolver:
 class TestGasLiquidSurfaceTension:
     """Macleod-Sugden σ with parachors and Peneloux-translated densities (v1.16.0)."""
 
-    # Measured surface tension against air at 20 °C (mN/m), CRC Handbook.
+    # Surface tension of n-alkanes at 20 °C (mN/m), CRC Handbook values
+    # WRITTEN FROM MEMORY — not read in a source, so this is a regression
+    # guard, NOT a validation.  Results obtained (v1.16.0): pentane 15.37
+    # (−3.9 %), hexane 17.83 (−3.1 %), heptane 19.49 (−3.0 %), octane 20.51
+    # (−5.0 %), decane 23.62 (−0.8 %).  The 6 % tolerance was set after seeing
+    # these results; it only detects a change of model.
     @pytest.mark.parametrize("name, measured", [
         ("n-pentane", 16.0), ("n-hexane", 18.4), ("n-heptane", 20.1), ("n-octane", 21.6), ("n-decane", 23.8),
     ])
@@ -618,7 +623,17 @@ class TestGasLiquidSurfaceTension:
 
 class TestCompositionalPipeFirstLaw:
     """Adiabatic compositional pipes reproduce thermo's PH flash (v1.18.0):
-    h(P_out, T_out) = h(P_in, T_in) − g·Δz, including condensation."""
+    h(P_out, T_out) = h(P_in, T_in) − g·Δz, including condensation.
+
+    Standing: CONSISTENCY check against an independent calculation (thermo's
+    PH flash), not a measurement.  Errors obtained: ≤ 0.001 K.  Tolerance
+    0.01 K = outer-loop temperature tolerance.  Absolute balance bound: the
+    residual must be below ṁ·cp·0.01 K."""
+
+    @staticmethod
+    def _abs_balance_ok(res, cp=2500.0):
+        m = max(abs(cf.mass_flow_kg_per_s) for cf in res.component_flows)
+        return abs(res.global_energy_balance.energy_error_kw) < m * cp * 0.01 / 1000.0
 
     RICH = ["methane", "ethane", "propane", "n-butane", "n-pentane", "n-hexane"]
     Z_RICH = [x / 0.98 for x in (0.78, 0.08, 0.05, 0.03, 0.02, 0.02)]
@@ -650,6 +665,7 @@ class TestCompositionalPipeFirstLaw:
         assert res.converged
         assert res.node_temperatures_c[2] == pytest.approx(T_ph, abs=0.01)      # ≈ 22.3 °C
         assert res.global_energy_balance.energy_error_pct < 0.01
+        assert self._abs_balance_ok(res)
 
     @pytest.mark.parametrize("dz", [0.0, 500.0])
     def test_condensing_expansion_and_lift(self, dz):
@@ -658,6 +674,7 @@ class TestCompositionalPipeFirstLaw:
         assert 0.85 < vf < 0.95                                                   # two-phase outlet
         assert res.node_temperatures_c[2] == pytest.approx(T_ph, abs=0.01)
         assert res.global_energy_balance.energy_error_pct < 0.01
+        assert self._abs_balance_ok(res)
         if dz:
             m = res.component_flows[0].mass_flow_kg_per_s
             assert res.global_energy_balance.potential_energy_kw == pytest.approx(-m * 9.81 * dz / 1e3, rel=1e-9)
@@ -695,3 +712,4 @@ class TestCompositionalPipeFirstLaw:
         assert T3 == pytest.approx(T3_ph, abs=0.02)
         assert T3 < T2 - 3.0
         assert res.global_energy_balance.energy_error_pct < 0.01
+        assert self._abs_balance_ok(res)

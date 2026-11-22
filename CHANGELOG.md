@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.19.1] — 2026-11-22
+
+Corrections after review of v1.13.3–v1.19.0.
+
+### Fixed
+  - **Hydrates: gas dissolved in the water.**  The water activity is now
+    lowered by the dissolved hydrate formers (Henry's law, NIST WebBook
+    constants; Poynting factor neglected).  Without it CO2 formation
+    pressures came out about 15–30 % low (≈ 2 K) above 277 K — a correction
+    the v1.19.0 notes should have stated.  CO2 at its lower quadruple point:
+    −1.2 %.  Effect on hydrocarbon gases is small (≤ 2 %; tutorial 08 hydrate
+    temperatures move by 0.1 K).
+  - Hydrate report: a pipe end where no hydrate is stable above 0 °C now
+    leaves `hydrate_temperature_c` / `hydrate_subcooling_k` as None instead
+    of reporting −T as a "subcooling".
+
+### Documentation and tests
+  - Hydrate validation status stated in the module docstring: quadruple
+    points of CH4, C2H6, C3H8 and CO2 within 7.3 % / 0.8 K (values from a
+    secondary source); pure methane above 288 K and natural-gas mixtures are
+    not validated against measurements.
+  - Validation tests state the standing of their data (source / secondary /
+    memory), the errors obtained and the origin of each tolerance.  Hydrate
+    pressure tolerance: 11 %, the published accuracy of the method
+    (previously 8 %, chosen after the results).
+  - `GlobalEnergyBalance.energy_error_pct`: the real-enthalpy basis
+    (compressible, compositional, since v1.18.0) divides by the largest term
+    of the balance, so its percentages are not comparable with the
+    sensible-heat basis; first-law tests also bound the absolute residual by
+    ṁ·cp·0.01 K.
+
 ## [1.19.0] — 2026-11-22
 
 ### New: gas-hydrate formation curve and hydrate risk per pipe

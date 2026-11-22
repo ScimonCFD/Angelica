@@ -13,7 +13,8 @@ The same line is solved bare (U = 15 W/m²K) and insulated (U = 1.5 W/m²K).
 Hydrate model
 -------------
 van der Waals–Platteeuw with Munck et al. (1988) Langmuir constants, PR
-fugacities, liquid-water branch (≥ 0 °C), pure water (no inhibitor).  Every
+fugacities, water activity lowered by the dissolved gas (Henry's law),
+liquid-water branch (≥ 0 °C), no inhibitor.  Every
 compositional pipe reports ``hydrate_temperature_c`` and
 ``hydrate_subcooling_k = T_hydrate − T_fluid`` (> 0: inside the hydrate
 region) at its colder end.

@@ -33,12 +33,22 @@ values as tabulated by Dongre et al. 2022, Sci. Rep. 12, 16688, Table 1).
 Liquid basis: Δh0_L = Δh0 − 6009.5 J/mol (ice fusion), Δv0_L = Δv0 + 1.6 cm³/mol.
 Δcp from Holder & Hand (1982), as given by Dongre et al. (2022), Eq. 7.
 
+Validation status
+-----------------
+Quadruple points of CH4, C2H6, C3H8 and CO2 (Sloan & Koh values seen through
+a secondary source): within 7.3 % in pressure at Q1 and 0.8 K at Q2.  Pure
+methane above 288 K and natural-gas mixtures are NOT validated (no measured
+data were accessible).  CO2 is checked at Q1 only (−1.2 %); without the
+dissolved-gas correction (before v1.19.1) CO2 formation pressures came out
+15–30 % low, about 2 K.
+
 Scope and limitations
 ---------------------
 - Liquid water–hydrate–gas (Lw-H-V and Lw-H-Lhc) only, T ≥ 273.15 K; the
   ice branch is not implemented.
-- Pure water: no inhibitors and no gas solubility correction (x_w = 1), which
-  over-predicts the formation pressure by a few percent at high pressure.
+- Pure water, no inhibitors.  The hydrate formers dissolved in the water
+  lower its activity (x_w < 1, Henry's law with NIST constants, no Poynting
+  correction); this matters most for CO2 (x_CO2 ≈ 0.02–0.03).
 - Structure H and heavy guests (C5+) are not hydrate formers here; they only
   dilute the gas and lower the formers' fugacities.
 """
@@ -82,6 +92,33 @@ _MUNCK = {
     "124-38-9":  ((0.2474, 3410), (42.46, 2813), (0.0845, 3615), (851.0, 2025)),   # CO2
 }
 HYDRATE_FORMER_CAS = frozenset(_MUNCK)
+
+# Henry's-law solubility in water, NIST Chemistry WebBook (R. Sander's
+# compilation, NIST SRD 69): k_H(T) = k°_H·exp(D·(1/T − 1/298.15)),
+# k°_H in mol/(kg·bar), D = d ln k_H / d(1/T) in K.  For each gas the most
+# frequent entry that has a temperature dependence.
+_HENRY = {
+    "74-82-8": (0.0014, 1600.0),     # methane
+    "74-84-0": (0.0019, 2300.0),     # ethane
+    "74-98-6": (0.0015, 2700.0),     # propane
+    "75-28-5": (0.00081, 2700.0),    # isobutane
+    "106-97-8": (0.0012, 3100.0),    # n-butane
+    "7727-37-9": (0.00065, 1300.0),  # nitrogen
+    "124-38-9": (0.034, 2400.0),     # CO2
+}
+_M_WATER = 0.018015                   # kg/mol
+
+
+def water_mole_fraction(T: float, fug_atm: dict[str, float]) -> float:
+    """Mole fraction of water in the aqueous liquid with the dissolved hydrate
+    formers: molality m_j = k_H,j(T)·f_j (Henry), x_w = (1/M_w) / (1/M_w + Σ m_j).
+    The Poynting factor exp(−v̄_j^∞·P/RT) is neglected (no sourced partial
+    molar volumes); it would lower the solubility by about 5–7 % at 5 MPa."""
+    m_total = 0.0
+    for cas, f_atm in fug_atm.items():
+        k0, D = _HENRY.get(cas, (0.0, 0.0))
+        m_total += k0 * math.exp(D * (1.0 / T - 1.0 / 298.15)) * f_atm * 1.01325
+    return (1.0 / _M_WATER) / (1.0 / _M_WATER + m_total)
 
 
 def _langmuir(cas: str, structure: int, cavity: int, T: float) -> float:
@@ -166,7 +203,7 @@ def _formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: float,
         def F(lnP: float) -> float:
             P = math.exp(lnP)
             fug = _former_fugacities(names, zs, T, P, eos_name)
-            return _dmu_water_liquid(st, T, P) - _dmu_water_hydrate(si, T, fug)
+            return _dmu_water_liquid(st, T, P, water_mole_fraction(T, fug)) - _dmu_water_hydrate(si, T, fug)
 
         # Step up in ln P (×1.25) until the first sign change: at very high
         # pressure the Δv·P term can make the empty lattice stable again, so
@@ -227,7 +264,7 @@ def _formation_temperature(names: tuple[str, ...], zs: tuple[float, ...], P: flo
     for si, st in enumerate(STRUCTURES):
         def G(T: float) -> float:
             fug = _former_fugacities(names, zs, T, P, eos_name)
-            return _dmu_water_liquid(st, T, P) - _dmu_water_hydrate(si, T, fug)
+            return _dmu_water_liquid(st, T, P, water_mole_fraction(T, fug)) - _dmu_water_hydrate(si, T, fug)
 
         g_lo = G(T_lo0)
         if g_lo > 0.0:

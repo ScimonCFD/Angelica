@@ -632,7 +632,18 @@ class PipeEnthalpyBalanceTests(unittest.TestCase):
     For an adiabatic pipe the first law gives h_in = h_out + g·Δz: an expanding
     real gas cools (Joule-Thomson), friction heating is included because the
     outlet pressure is the real one, and lifting the gas costs g·Δz.
+
+    Standing: CONSISTENCY check against the exact first law with the fluid's
+    own enthalpy (not a measurement).  Errors obtained (v1.18.0): ≤ 0.001 K
+    on 11–14 K of cooling.  Tolerance 0.01 K = the outer-loop temperature
+    tolerance.  The energy balance is also checked in absolute terms: its
+    residual must be below the heat of 0.01 K on the whole flow (ṁ·cp·0.01 K).
     """
+
+    @staticmethod
+    def _abs_balance_ok(res, cp=2400.0):
+        m = max(abs(cf.mass_flow_kg_per_s) for cf in res.component_flows)
+        return abs(res.global_energy_balance.energy_error_kw) < m * cp * 0.01 / 1000.0
 
     def _methane(self):
         eos = PengRobinsonEOS(molecular_weight_kg_per_mol=_M_CH4, critical_temperature_k=_TC_CH4,
@@ -665,6 +676,7 @@ class PipeEnthalpyBalanceTests(unittest.TestCase):
         self.assertLess(T_out, 40.0 - 5.0)                    # clear JT cooling over 30 bar
         self.assertAlmostEqual(T_out, T_exact, delta=tol_k)
         self.assertLess(res.global_energy_balance.energy_error_pct, 0.01)
+        self.assertTrue(self._abs_balance_ok(res))
         return res
 
     def test_adiabatic_horizontal_pipe_is_isenthalpic(self):
@@ -685,6 +697,7 @@ class PipeEnthalpyBalanceTests(unittest.TestCase):
         for seg in (1, 10):
             res = _benchmark_solver().solve(self._case(200.0, seg, U=3.0))
             self.assertLess(res.global_energy_balance.energy_error_pct, 0.01)
+            self.assertTrue(self._abs_balance_ok(res))
             self.assertGreater(res.global_energy_balance.heat_wall_loss_kw, 0.0)
 
     def test_ideal_gas_horizontal_pipe_has_no_jt(self):

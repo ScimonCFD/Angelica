@@ -321,8 +321,11 @@ class TestInclinationCorrection(unittest.TestCase):
     ρ_L = 47.61, ρ_g = 5.88 lbm/ft³, μ_L = 0.97 cP, μ_g = 0.016 cP,
     σ_L = 8.41 dyn/cm (the data set of Brill & Mukherjee's worked examples).
     Expected values are hand-calculated step by step from the published
-    equations below; H_L(90°) = 0.574 also agrees with the value recalled
-    from Brill & Mukherjee (1999) Example 4.2, not checked against the book.
+    equations below (coefficients cross-checked against the whitson wiki
+    tables — READ IN A SECONDARY SOURCE).  This is a consistency check of the
+    implementation, not a validation against measurements.  H_L(90°) = 0.574
+    also agrees with the value recalled FROM MEMORY from Brill & Mukherjee
+    (1999) Example 4.2 — not counted as validation.
     """
 
     FT, LB = 0.3048, 16.0185

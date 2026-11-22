@@ -115,7 +115,13 @@ class GlobalEnergyBalance:
         """Residual as a percentage of the largest flux.  With real enthalpy the
         boundary fluxes depend on the reference state (they can be small next
         to the heat exchanged or the Joule-Thomson effect), so every term of
-        the balance is considered."""
+        the balance is considered.
+
+        The two bases are not comparable: for the same residual in kW, the
+        "real" percentage (largest of all terms) is usually smaller than a
+        "sensible" one (largest boundary flux).  Judge accuracy by
+        ``energy_error_kw`` against the heat of a small temperature change of
+        the flow, e.g. ṁ·cp·0.01 K."""
         ref = max(abs(self.enthalpy_in_kw), abs(self.enthalpy_out_kw), 1e-30)
         if self.enthalpy_basis == "real":
             ref = max(ref, abs(self.heat_sources_kw), abs(self.heat_wall_loss_kw),

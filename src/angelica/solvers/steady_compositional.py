@@ -209,8 +209,9 @@ class SteadyCompositionalSolver(BaseSolver):
     @staticmethod
     def _hydrate_report(link, fluid, node_temperatures) -> dict:
         """Hydrate formation temperature and subcooling at the pipe end where
-        the fluid is coldest relative to the formation curve (empty for links
-        that are not pipes or carry no hydrate former)."""
+        the fluid is coldest relative to the formation curve.  Empty (fields
+        stay None) for links that are not pipes, carry no hydrate former, or
+        where no hydrate is stable above 0 °C at either end's pressure."""
         from angelica.properties.hydrate import hydrate_formation_temperature
         if not isinstance(link, PipeState) or abs(link.mass_flow_kg_per_s) < 1e-12:
             return {}
@@ -224,13 +225,11 @@ class SteadyCompositionalSolver(BaseSolver):
                 pt = hydrate_formation_temperature(fluid.component_names, zs, float(node.pressure_pa),
                                                    fluid.eos_name)
                 if pt is None:
-                    sub, t_h, st = T - 0.0, None, ""     # no hydrate above 0 °C here
-                    sub = -sub
-                else:
-                    sub, t_h, st = pt.temperature_c - T, pt.temperature_c, pt.structure
+                    continue                  # no hydrate stable above 0 °C at this end
+                sub = pt.temperature_c - T
                 if not worst or sub > worst["hydrate_subcooling_k"]:
-                    worst = {"hydrate_subcooling_k": sub, "hydrate_temperature_c": t_h,
-                             "hydrate_structure": st}
+                    worst = {"hydrate_subcooling_k": sub, "hydrate_temperature_c": pt.temperature_c,
+                             "hydrate_structure": pt.structure}
         except Exception:      # a check must never break a converged solve
             return {}
         return worst

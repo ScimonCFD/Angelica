@@ -92,7 +92,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   isenthalpic temperature, and the global energy balance still closes.
 
 ### Stage 2 — flow assurance (item 3)
-- 2.1 **Done in v1.19.0.** Hydrate curve by van der Waals–Platteeuw (sI and sII, published
+- 2.1 **Done in v1.19.0 (validation partly open — see log).** Hydrate curve by van der Waals–Platteeuw (sI and sII, published
   Parrish-Prausnitz / Munck parameters). *Done when:* pure CH4, C2H6, C3H8,
   CO2 and at least two natural-gas mixtures fall within about 1 K of the
   experimental data over 273–295 K; larger errors are reported, not tuned away.
@@ -138,6 +138,24 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - 8.3 ESP; completion pressure drops; slug volumes.
 - 8.4 Validation manual in the docs.
 
+### Order of work (maintainer review, 2026-11-22)
+
+The objective is PIPEPHASE's main use — oil and gas gathering networks with
+wells — so the remaining stages are worked in this order:
+
+1. **Black-oil brought level** (new item B): Joule-Thomson and friction
+   heating in black-oil pipes; hydrate check from the gas gravity (or an
+   equivalent composition) with the same outputs as compositional.
+2. Stage 3 — well correlations: Hagedorn-Brown and Gray selectable in
+   `Well`; then Duns-Ros and Mukherjee-Brill.
+3. Stage 4 — wells: tubing temperature profile, Fetkovich and gas IPR,
+   `Well` with compositional fluids, gas lift.
+4. Stage 5 — equipment: separator, compressor, pressure regulator, heater
+   by outlet temperature.
+5. Stage 7 — tools: oil-field units, sensitivity studies in the GUI,
+   calibration factors.
+6. The rest: inhibitors (2.3), detailed heat transfer (stage 6), stage 8.
+
 ## 4. Standing rules
 
 - No parameter is tuned to make a validation pass. A mismatch is explained
@@ -148,6 +166,19 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - A vertical two-phase riser as a plain network pipe does not converge
   (multivalued J-curve); wells go through the `Well` component.
 - PyPI publication is the last step and is decided by the maintainer.
+- (Review 2026-11-22) No tag before the full check passes in both
+  environments (ruff, mypy, pytest with thermo 0.5 and 0.6).
+- One release per finished roadmap item; bugs found on the way go into
+  the same release under "Fixed".
+- Every new feature works in black-oil as well as compositional unless it
+  is physically impossible — then the reason is recorded.
+- Validation data are labelled in the tests: read in the source, read in a
+  secondary source, or from memory. Memory does not count as validation.
+- Each validation test states the error obtained and where its tolerance
+  comes from (data uncertainty, published accuracy of the method); a
+  tolerance is never relaxed to make a test pass.
+- At the end of each stage the log summarises: validated against data read
+  in a source / validated only by internal consistency / not validated.
 
 ## 5. Progress log
 
@@ -250,4 +281,38 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
     1297 (Handa & Tse) — documented in the CHANGELOG with both errors.
   - Pending: ice branch (T < 0 °C); inhibitors (2.3); gas solubility in
     water (x_w < 1).
+
+### 2026-11-22 — Review corrections (v1.19.1)
+
+Maintainer review of v1.13.3–v1.19.0. Done:
+- **CO2 hydrates.** Cause confirmed: dissolved gas ignored (x_w = 1).
+  Added Henry's-law water activity with NIST WebBook constants (Sander
+  compilation, READ IN SOURCE; no Poynting factor — no sourced partial molar
+  volumes). CO2 Q1: −1.2 % (was −1.2 % → before the fix the memory-based
+  points at 277–283 K were 14–29 % low; those points are from memory and do
+  not count). Methane Q1 +7.3 %.
+- `_hydrate_report` returns None when no hydrate is stable above 0 °C
+  (it used to report −T as "subcooling").
+- Tests: hydrate, surface-tension and Beggs-Brill validation tests now state
+  the standing of their data and the errors obtained. The hydrate tolerance
+  (11 % in pressure) is the published accuracy of vdW-P + Munck for single
+  guests (Antunes et al. 2018, read in source), replacing the 8 % chosen
+  after seeing a 6.7 % result. The surface-tension test is labelled a
+  regression guard (CRC values from memory; 6 % chosen after the results).
+- Energy balance: docstring explains that real-basis and sensible-basis
+  percentages are not comparable; first-law tests also bound the absolute
+  residual by ṁ·cp·0.01 K.
+- **Still open — data needed from the maintainer:** measured Lw-H-V points
+  for pure methane 273–295 K, CO2 above 278 K, and two natural-gas mixtures.
+  Tried: Nature Sci. Rep. 2020 and ScienceDirect Results in Engineering 2022
+  (login/403), MDPI Energies 2025 and Crystals 2021 (403), Deaton & Frost
+  1946 (PRCI members only). A full copy of Sloan & Koh found on a course web
+  page was not used (unclear licence).
+
+Summary for stage 2 so far:
+- Validated against data read in a source: none for hydrates (the
+  quadruple points came through a secondary-source summary).
+- Validated by consistency: Henry solubility ordering, structure switch
+  with propane, curve/inverse consistency.
+- Not validated: methane above 288 K, CO2 above 273 K, all mixtures.
 

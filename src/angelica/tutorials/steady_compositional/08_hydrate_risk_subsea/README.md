@@ -11,29 +11,31 @@ Fluid (mol %): methane 81, ethane 6, propane 3, n-butane 1, water 9.
 ## Hydrate model
 
 van der Waals–Platteeuw with the Munck et al. (1988) Langmuir constants,
-Peng-Robinson fugacities, liquid-water branch (T ≥ 0 °C), pure water (no
-inhibitor). Validated against the measured quadruple points of methane,
-ethane and propane hydrates (within 0.8 K). Every compositional pipe reports
+Peng-Robinson fugacities, water activity lowered by the dissolved gas
+(Henry's law), liquid-water branch (T ≥ 0 °C), no inhibitor. Checked
+against the quadruple points of methane, ethane, propane and CO2 hydrates
+(within 7.3 % in pressure, 0.8 K); natural-gas mixtures are not yet
+validated against measurements. Every compositional pipe reports
 `hydrate_temperature_c` and `hydrate_subcooling_k = T_hydrate − T_fluid`
 (positive: inside the hydrate region) at its colder end. The GUI draws the
 hydrate curve on the phase envelope and labels the links at risk.
 
 ## Results
 
-Hydrate curve: 6.9 bar at 0 °C, 31.7 bar at 12 °C, 119 bar at 20 °C
+Hydrate curve: 6.9 bar at 0 °C, 32.0 bar at 12 °C, 124 bar at 20 °C
 (structure II — the 3 % propane lowers the formation pressure to about a
 quarter of pure methane's).
 
 | | Bare line | Insulated line |
 |---|---|---|
 | Arrival temperature | 1.1 °C | 19.5 °C |
-| Hydrate temperature at arrival | 16.4 °C | 16.4 °C |
+| Hydrate temperature at arrival | 16.3 °C | 16.3 °C |
 | First section at risk | km 5–10 | none |
 
 The bare line cools to the seabed temperature within about 10 km — and
 below it towards shore, because the expanding gas also cools by
 Joule-Thomson effect — and runs up to 15 K inside the hydrate region. The
-insulated line arrives 3 K above the hydrate temperature.
+insulated line arrives 3.2 K above the hydrate temperature.
 
 The GUI file reproduces the bare line.
 
