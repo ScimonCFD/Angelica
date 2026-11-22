@@ -20,7 +20,7 @@ import math
 from dataclasses import dataclass
 from functools import lru_cache
 
-from .beggs_brill import beggs_brill_gradient, phase_properties_from_pvt
+from .beggs_brill import beggs_brill_gradient, phase_properties_from_pvt, surface_tension_from_pvt
 from .well_inflow import mass_per_oil_sc_m3
 
 _PA_PER_BAR = 1.0e5
@@ -85,10 +85,13 @@ def tubing_wellhead_pressure(
     ds = L / n_seg
 
     def gradient(P: float) -> float:
-        C_L, rho_l, rho_g, mu_l, mu_g = phase_properties_from_pvt(fluid.pvt(P, T))
+        pvt = fluid.pvt(P, T)
+        C_L, rho_l, rho_g, mu_l, mu_g = phase_properties_from_pvt(pvt)
+        sigma = surface_tension_from_pvt(pvt, float(fluid.api_gravity))
         rho_ns = C_L * rho_l + (1.0 - C_L) * rho_g
         v_m = m_dot / (rho_ns * area)
-        return beggs_brill_gradient(v_m, C_L, rho_l, rho_g, mu_l, mu_g, D, roughness, theta).dP_dz_total
+        return beggs_brill_gradient(v_m, C_L, rho_l, rho_g, mu_l, mu_g, D, roughness, theta,
+                                    sigma).dP_dz_total
 
     P = p_wf
     for _ in range(n_seg):

@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.14.0] — 2026-11-22
+
+### Fixed: Beggs-Brill inclination correction now follows the published correlation
+
+The holdup correction for inclined flow used constant coefficients
+(C = 0.924 segregated, 0.685 intermittent uphill; no correction downhill).
+Those numbers are the Payne et al. (1979) holdup multipliers, not the
+Beggs-Brill C.  The correction is now the original one:
+
+    ψ = 1 + C·[sin(1.8θ) − ⅓·sin³(1.8θ)],
+    C = (1 − λ_L)·ln(e·λ_L^f·N_LV^g·N_Fr^h) ≥ 0,
+
+with the uphill (segregated, intermittent; C = 0 distributed) and downhill
+coefficient sets, and the liquid velocity number N_LV = v_sL·(ρ_L/gσ)^¼.
+Downhill flow now holds less liquid than the no-slip content, as it should,
+and the transition region weights the corrected segregated and intermittent
+holdups.
+
+  - New `angelica.properties.surface_tension`: Baker-Swerdloff gas–oil (dead
+    oil, live-oil pressure factor) and gas–water surface tension, used for
+    N_LV in black-oil cases.
+  - `BeggsBrillCorrelation(payne_correction=True)` applies the Payne et al.
+    multipliers (0.924 uphill, 0.685 downhill); GUI option
+    "Beggs-Brill + Payne holdup correction".
+  - `BeggsBrillState` reports N_LV.
+  - Validation: step-by-step hand calculation of the 6-in. vertical case of
+    Brill & Mukherjee's worked examples (v_sL 3.97 ft/s, v_sg 3.86 ft/s):
+    λ_L = 0.507, N_Fr = 3.81, N_LV = 11.87, intermittent, C clamped to 0,
+    H_L = 0.574, 0.215 psi/ft; and the same case at −45° (H_L = 0.304).
+
+Tutorial results that change (references regenerated):
+  - Black-oil 12 (wells with 2 km tubing at 72°): the old constant C raised
+    the uphill holdup by about 20 % in intermittent flow.  With the published
+    C the tubing column is lighter; total oil 628.7 → 717.8 m³/d, Well 1
+    497 → 547 m³/d, Well 2 132 → 170 m³/d; Well 3 is still dead.
+  - Horizontal Beggs-Brill cases (black-oil 08, 09) are unchanged.
+
 ## [1.13.4] — 2026-11-22
 
 ### Fixed: mixture density of compositional fluids with free water

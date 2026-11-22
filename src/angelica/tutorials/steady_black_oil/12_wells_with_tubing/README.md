@@ -37,14 +37,14 @@ maximum the well is dead and produces nothing.
 
 | Well | P_wh (MPa) | P_wf (MPa) | Oil (m³/d) | |
 |---|---|---|---|---|
-| 1 | 3.73 | 16.26 | 497 | producing |
-| 2 | 2.47 | 18.71 | 132 | producing |
-| 3 | 2.42 | — | 0 | dead: column heavier than P_r |
+| 1 | 4.08 | 15.18 | 547 | producing |
+| 2 | 2.69 | 17.74 | 170 | producing |
+| 3 | 2.62 | — | 0 | dead: column heavier than P_r |
 
 The network converges in 4 outer iterations.  Well 1's deliverability curve
-rises from 11.19 MPa (static) to 11.67 MPa at 66 m³/d before falling — gas
+rises from 11.19 MPa (static) to 11.43 MPa at 76 m³/d before falling — gas
 lightens the column at low rates.  Larger tubing raises total production:
-488 m³/d (50.3 mm), 581 m³/d (62.0 mm), 629 m³/d (76.2 mm).
+505 m³/d (50.3 mm), 629 m³/d (62.0 mm), 718 m³/d (76.2 mm).
 
 The tubing is isothermal at the reservoir temperature.  The GUI file
 reproduces the 3.0 in case.

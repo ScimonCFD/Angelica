@@ -175,6 +175,9 @@ class NetSimGui:
         "beggs_brill": {
             "name": "Beggs-Brill (two-phase, black-oil)",
         },
+        "beggs_brill_payne": {
+            "name": "Beggs-Brill + Payne holdup correction (black-oil)",
+        },
     }
     VELOCITY_LOOP_METHOD_LIBRARY = {
         "fixed_point": {

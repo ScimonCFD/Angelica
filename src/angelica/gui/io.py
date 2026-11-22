@@ -830,13 +830,15 @@ def build_solver_from_scene(scene: CanvasScene):
         turbulent_pipe_correlation = PanhandleAPipeCorrelation()
     elif pressure_drop_model_key == "panhandle_b":
         turbulent_pipe_correlation = PanhandleBPipeCorrelation()
-    elif pressure_drop_model_key == "beggs_brill":
+    elif pressure_drop_model_key in ("beggs_brill", "beggs_brill_payne"):
         if scene.physics_mode != "black_oil":
             raise ValueError(
                 "The Beggs-Brill pressure-drop model needs black-oil PVT. "
                 "Switch the physics mode to Black-oil or choose another model."
             )
-        turbulent_pipe_correlation = BeggsBrillCorrelation()
+        turbulent_pipe_correlation = BeggsBrillCorrelation(
+            payne_correction=(pressure_drop_model_key == "beggs_brill_payne")
+        )
     else:
         raise ValueError(
             f"Unsupported pipe pressure-drop model '{pressure_drop_model_key}'."

@@ -6,13 +6,32 @@ Reference
 Beggs, H.D., Brill, J.P. (1973). A Study of Two-Phase Flow in Inclined
 Pipes. Journal of Petroleum Technology, May, 607-617.
 
-Inclination correction
-----------------------
+Brill, J.P., Mukherjee, H. (1999). Multiphase Flow in Wells. SPE
+Monograph 17, §4.2.3 (flow-pattern map with the transition region of the
+revised correlation, and the equations used here).
+
+Inclination correction (original Beggs-Brill)
+---------------------------------------------
+    H_L(θ) = H_L(0)·ψ,   ψ = 1 + C·[sin(1.8θ) − ⅓·sin³(1.8θ)]
+    C = (1 − λ_L)·ln(e·λ_L^f·N_LV^g·N_Fr^h),   C ≥ 0
+    N_LV = v_sL·(ρ_L / (g·σ_L))^¼   (liquid velocity number)
+
+    uphill   segregated    e = 0.011  f = −3.768   g =  3.539   h = −1.614
+             intermittent  e = 2.96   f =  0.305   g = −0.4473  h =  0.0978
+             distributed   C = 0
+    downhill all patterns  e = 4.70   f = −0.3692  g =  0.1244  h = −0.5056
+
+θ is the angle from horizontal, negative downhill (ψ < 1: downhill flow
+holds less liquid).  In the transition region the segregated and
+intermittent holdups are each corrected, then weighted.
+
+Payne correction (optional)
+---------------------------
 Payne, W.R., Palmer, C.M., Brill, J.P. (1979). Evaluation of Inclined
 Pipe, Two-Phase Liquid Holdup and Pressure-Drop Correlations Using
-Experimental Data. JPT, Sept., 1198-1208.
-(Simplified form: constant correction factors per flow regime, no
-surface-tension term required.)
+Experimental Data. JPT, Sept., 1198-1208: Beggs-Brill over-predicts
+holdup, so H_L(θ) is multiplied by 0.924 uphill and 0.685 downhill.
+Enabled with ``BeggsBrillCorrelation(payne_correction=True)``.
 
 Physics
 -------
@@ -104,62 +123,82 @@ def flow_regime(C_L: float, N_Fr: float) -> tuple[str, float]:
 
 # ── Liquid holdup ─────────────────────────────────────────────────────────────
 
-def holdup_horizontal(C_L: float, N_Fr: float) -> float:
-    """No-slip-corrected liquid holdup H_L(0) for horizontal flow.
+_HOLDUP_COEFFS = {
+    "segregated":   (0.98,  0.4846, 0.0868),
+    "intermittent": (0.845, 0.5351, 0.0173),
+    "distributed":  (1.065, 0.5824, 0.0609),
+}
+_INCLINATION_UPHILL = {
+    "segregated":   (0.011, -3.768, 3.539, -1.614),
+    "intermittent": (2.96, 0.305, -0.4473, 0.0978),
+}
+_INCLINATION_DOWNHILL = (4.70, -0.3692, 0.1244, -0.5056)
+_PAYNE_UPHILL = 0.924
+_PAYNE_DOWNHILL = 0.685
 
-    Beggs-Brill (1973) correlations per flow regime.
-    H_L(0) is constrained to [C_L, 1] (cannot be less than input fraction).
-    """
+
+def _holdup_horizontal_pattern(pattern: str, C_L: float, N_Fr: float) -> float:
+    a, b, c = _HOLDUP_COEFFS[pattern]
+    HL0 = a * C_L ** b / max(N_Fr ** c, 1e-30)
+    return max(min(HL0, 1.0), C_L)          # H_L(0) ≥ λ_L
+
+
+def holdup_horizontal(C_L: float, N_Fr: float) -> float:
+    """Horizontal liquid holdup H_L(0) (Beggs-Brill 1973), H_L(0) ∈ [C_L, 1]."""
     if C_L <= 0.0:
         return 0.0
     if C_L >= 1.0:
         return 1.0
+    regime, A = flow_regime(C_L, N_Fr)
+    if regime == "transition":
+        return (A * _holdup_horizontal_pattern("segregated", C_L, N_Fr)
+                + (1.0 - A) * _holdup_horizontal_pattern("intermittent", C_L, N_Fr))
+    return _holdup_horizontal_pattern(regime, C_L, N_Fr)
 
+
+def inclination_factor(pattern: str, C_L: float, N_Fr: float, N_LV: float, theta_rad: float) -> float:
+    """Beggs-Brill inclination factor ψ for one flow pattern (θ > 0 uphill)."""
+    if abs(theta_rad) < 1e-9 or C_L <= 0.0 or C_L >= 1.0:
+        return 1.0
+    if theta_rad > 0.0:
+        if pattern not in _INCLINATION_UPHILL:
+            return 1.0                          # distributed uphill: C = 0
+        e, f, g, h = _INCLINATION_UPHILL[pattern]
+    else:
+        e, f, g, h = _INCLINATION_DOWNHILL
+    arg = e * C_L ** f * max(N_LV, 1e-12) ** g * max(N_Fr, 1e-12) ** h
+    C = (1.0 - C_L) * math.log(arg) if arg > 0.0 else 0.0
+    C = max(C, 0.0)
+    s18 = math.sin(1.8 * theta_rad)
+    return 1.0 + C * (s18 - s18 ** 3 / 3.0)
+
+
+def liquid_holdup(
+    C_L: float, N_Fr: float, N_LV: float, theta_rad: float, payne_correction: bool = False,
+) -> float:
+    """In-situ liquid holdup H_L(θ): Beggs-Brill with inclination correction."""
+    if C_L <= 0.0:
+        return 0.0
+    if C_L >= 1.0:
+        return 1.0
     regime, A = flow_regime(C_L, N_Fr)
 
-    if regime == "segregated":
-        HL0 = 0.98 * C_L ** 0.4846 / max(N_Fr ** 0.0868, 1e-30)
-    elif regime == "intermittent":
-        HL0 = 0.845 * C_L ** 0.5351 / max(N_Fr ** 0.0173, 1e-30)
-    elif regime == "distributed":
-        HL0 = 1.065 * C_L ** 0.5824 / max(N_Fr ** 0.0609, 1e-30)
-    else:  # transition
-        HL_seg = 0.98  * C_L ** 0.4846 / max(N_Fr ** 0.0868, 1e-30)
-        HL_int = 0.845 * C_L ** 0.5351 / max(N_Fr ** 0.0173, 1e-30)
-        HL_seg = max(min(HL_seg, 1.0), C_L)
-        HL_int = max(min(HL_int, 1.0), C_L)
-        return A * HL_seg + (1.0 - A) * HL_int
+    def _pattern(p: str) -> float:
+        return (_holdup_horizontal_pattern(p, C_L, N_Fr)
+                * inclination_factor(p, C_L, N_Fr, N_LV, theta_rad))
 
-    return max(min(HL0, 1.0), C_L)
+    if regime == "transition":
+        HL = A * _pattern("segregated") + (1.0 - A) * _pattern("intermittent")
+    else:
+        HL = _pattern(regime)
+    if payne_correction and abs(theta_rad) > 1e-9:
+        HL *= _PAYNE_UPHILL if theta_rad > 0.0 else _PAYNE_DOWNHILL
+    return max(min(HL, 1.0), 1e-9)
 
 
-def holdup_inclined(HL0: float, C_L: float, N_Fr: float, theta_rad: float) -> float:
-    """Apply Payne et al. (1979) inclination correction to H_L(0).
-
-    Uses simplified constant correction factors (no surface tension required).
-    For uphill (θ > 0): holdup is reduced from vertical predictions.
-    For downhill (θ < 0): no correction applied (conservative — holdup = H_L(0)).
-    """
-    if abs(theta_rad) < 1e-6 or C_L <= 0.0 or C_L >= 1.0:
-        return HL0
-
-    regime, _ = flow_regime(C_L, N_Fr)
-
-    if theta_rad > 0.0:  # uphill
-        if regime == "segregated":
-            k = 0.924
-        elif regime == "intermittent":
-            k = 0.685
-        else:  # distributed or transition
-            return HL0
-        # Sinusoidal angle weighting (Beggs-Brill original form)
-        sin_angle = math.sin(1.8 * theta_rad)
-        psi = 1.0 + k * (sin_angle - sin_angle ** 3 / 3.0)
-        HL = HL0 * psi
-    else:  # downhill: conservative — use H_L(0)
-        return HL0
-
-    return max(min(HL, 1.0), C_L)
+def liquid_velocity_number(v_sl: float, rho_l: float, sigma_l: float) -> float:
+    """N_LV = v_sL·(ρ_L/(g·σ_L))^¼ (dimensionless, SI units)."""
+    return abs(v_sl) * (rho_l / (_G * max(sigma_l, 1e-6))) ** 0.25
 
 
 # ── Two-phase friction factor ─────────────────────────────────────────────────
@@ -202,6 +241,7 @@ class BeggsBrillState:
     holdup: float          # H_L — in-situ liquid holdup
     C_L: float             # no-slip liquid content
     N_Fr: float            # mixture Froude number
+    N_LV: float            # liquid velocity number
     rho_ns: float          # no-slip density (kg/m³)
     rho_s: float           # in-situ (slip) density (kg/m³)
     f_n: float             # no-slip friction factor
@@ -221,6 +261,8 @@ def beggs_brill_gradient(
     D: float,
     roughness: float,
     theta_rad: float,
+    sigma_l: float = 0.030,
+    payne_correction: bool = False,
 ) -> BeggsBrillState:
     """Compute the Beggs-Brill pressure gradient at a given mixture velocity.
 
@@ -235,6 +277,8 @@ def beggs_brill_gradient(
     D         : pipe inner diameter (m)
     roughness : absolute wall roughness (m)
     theta_rad : pipe inclination angle (rad), positive = uphill
+    sigma_l   : gas-liquid surface tension (N/m), for N_LV
+    payne_correction : multiply H_L by 0.924 uphill / 0.685 downhill
 
     Returns
     -------
@@ -248,8 +292,8 @@ def beggs_brill_gradient(
 
     # ── Flow regime and holdup ─────────────────────────────────────────────
     N_Fr = v_m ** 2 / (_G * max(D, 1e-6))
-    HL0  = holdup_horizontal(C_L, N_Fr)
-    HL   = holdup_inclined(HL0, C_L, N_Fr, theta_rad)
+    N_LV = liquid_velocity_number(C_L * v_m, rho_l, sigma_l)
+    HL   = liquid_holdup(C_L, N_Fr, N_LV, theta_rad, payne_correction)
 
     regime, _ = flow_regime(C_L, N_Fr)
 
@@ -269,7 +313,7 @@ def beggs_brill_gradient(
     dP_total = dP_f + dP_g
 
     return BeggsBrillState(
-        regime=regime, holdup=HL, C_L=C_L, N_Fr=N_Fr,
+        regime=regime, holdup=HL, C_L=C_L, N_Fr=N_Fr, N_LV=N_LV,
         rho_ns=rho_ns, rho_s=rho_s,
         f_n=f_n, f_tp=f_tp,
         dP_dz_friction=dP_f,
@@ -307,6 +351,21 @@ def phase_properties_from_pvt(pvt) -> tuple[float, float, float, float, float]:
     return C_L, rho_l, rho_g, mu_l, mu_g
 
 
+def surface_tension_from_pvt(pvt, api_gravity: float) -> float:
+    """Liquid surface tension (N/m) for a black-oil PVT state: Baker-Swerdloff
+    oil and gas-water values, no-slip volume average."""
+    from angelica.properties.surface_tension import (
+        liquid_surface_tension,
+        oil_surface_tension,
+        water_surface_tension,
+    )
+    return liquid_surface_tension(
+        oil_surface_tension(api_gravity, pvt.temperature_c, pvt.pressure_pa),
+        water_surface_tension(pvt.temperature_c, pvt.pressure_pa),
+        pvt.holdup_oil, pvt.holdup_water,
+    )
+
+
 # ── PressureDropCorrelation implementation ────────────────────────────────────
 
 class BeggsBrillCorrelation(PressureDropCorrelation):
@@ -332,24 +391,32 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
     -----------
     - Requires a ``BlackOilFluid`` (or compatible fluid with ``.pvt(P, T)``).
       Falls back to no-slip single-phase Colebrook-White otherwise.
-    - Inclination correction uses Payne et al. simplified factors (no
-      surface-tension term); accuracy may be reduced for steep angles.
     - Acceleration pressure drop (small, <1% for most pipelines) is omitted.
+    - Friction uses the Churchill (1977) form of the rough-pipe Moody chart
+      for the no-slip friction factor, as in the "BBM" variant.
+
+    Parameters
+    ----------
+    payne_correction : multiply the holdup by 0.924 uphill and 0.685
+        downhill (Payne et al. 1979).  Off by default (original correlation).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, payne_correction: bool = False) -> None:
         self._fluid = None
         self._warned_fallback = False
+        self.payne_correction = bool(payne_correction)
 
     def set_fluid(self, fluid) -> None:
         """Update the fluid model used to extract phase-fraction data."""
         self._fluid = fluid
 
-    def _phase_properties(self, pipe_state) -> tuple[float, float, float, float, float]:
-        """Return (C_L, rho_l, rho_g, mu_l, mu_g) at midpoint conditions."""
+    def _phase_properties(self, pipe_state) -> tuple[float, float, float, float, float, float]:
+        """Return (C_L, rho_l, rho_g, mu_l, mu_g, sigma_l) at midpoint conditions."""
         fluid = self._fluid
         if fluid is not None and hasattr(fluid, "fluid_for_link"):
             fluid = fluid.fluid_for_link(pipe_state)  # per-inlet composition wrapper
+        if fluid is not None and hasattr(fluid, "beggs_brill_phase_properties"):
+            return fluid.beggs_brill_phase_properties(pipe_state)
         if fluid is None or not hasattr(fluid, "pvt"):
             if not self._warned_fallback:
                 warnings.warn(
@@ -358,7 +425,7 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
                     stacklevel=2,
                 )
                 self._warned_fallback = True
-            return 1.0, 850.0, 1.2, 1e-3, 1.5e-5  # all-liquid fallback
+            return 1.0, 850.0, 1.2, 1e-3, 1.5e-5, 0.030  # all-liquid fallback
 
         # Midpoint pressure
         P_s = getattr(getattr(pipe_state, "start_node", None), "pressure_pa", None)
@@ -374,7 +441,9 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
 
         T_avg = float(pipe_state.temperature_c) if pipe_state.temperature_c is not None else 20.0
 
-        return phase_properties_from_pvt(fluid.pvt(P_avg, T_avg))
+        pvt = fluid.pvt(P_avg, T_avg)
+        return (*phase_properties_from_pvt(pvt),
+                surface_tension_from_pvt(pvt, float(getattr(fluid, "api_gravity", 35.0))))
 
     def _solve_vm(
         self,
@@ -389,6 +458,7 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
         roughness: float,
         theta_rad: float,
         v0: float,
+        sigma_l: float = 0.030,
     ) -> tuple[float, float, float]:
         """Fixed-point iteration to find v_m such that ΔP_friction = net_driving.
 
@@ -403,7 +473,7 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
 
         for _ in range(60):
             st = beggs_brill_gradient(v_m, C_L, rho_l, rho_g, mu_l, mu_g,
-                                      D, roughness, theta_rad)
+                                      D, roughness, theta_rad, sigma_l, self.payne_correction)
             f_tp_last = st.f_tp
             HL_last   = st.holdup
             # ΔP_f = f_tp · rho_ns · v² · L / (2·D)  →  v = √(2·D·ΔP / (f_tp·rho_ns·L))
@@ -443,7 +513,7 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
         h         = pipe_state.component.height_change_m
         theta_rad = math.asin(max(-1.0, min(1.0, h / max(L, 1e-6))))
 
-        C_L, rho_l, rho_g, mu_l, mu_g = self._phase_properties(pipe_state)
+        C_L, rho_l, rho_g, mu_l, mu_g, sigma_l = self._phase_properties(pipe_state)
 
         v0 = max(abs(pipe_state.velocity_m_per_s), _MIN_VELOCITY)
 
@@ -451,7 +521,8 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
             """Friction-available pressure drop for flow in ``direction``
             (+1: start → end).  Gravity uses the holdup of that flow direction."""
             st = beggs_brill_gradient(v0, C_L, rho_l, rho_g, mu_l, mu_g,
-                                      D, roughness, direction * theta_rad)
+                                      D, roughness, direction * theta_rad,
+                                      sigma_l, self.payne_correction)
             return direction * delta_p - st.dP_dz_gravity * L, st
 
         # Try the direction the pressure difference points to first.  If it
@@ -469,7 +540,7 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
 
         v_m, f_tp, _HL = self._solve_vm(
             net_driving, C_L, rho_l, rho_g, mu_l, mu_g,
-            D, L, roughness, sign * theta_rad, v0,
+            D, L, roughness, sign * theta_rad, v0, sigma_l,
         )
 
         pipe_state.velocity_m_per_s = sign * v_m

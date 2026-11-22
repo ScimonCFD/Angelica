@@ -312,3 +312,99 @@ class TestBeggsBrillIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestInclinationCorrection(unittest.TestCase):
+    """Original Beggs-Brill inclination correction (v1.14.0).
+
+    Case: 6-in. vertical/inclined tubing, v_sL = 3.97 ft/s, v_sg = 3.86 ft/s,
+    ρ_L = 47.61, ρ_g = 5.88 lbm/ft³, μ_L = 0.97 cP, μ_g = 0.016 cP,
+    σ_L = 8.41 dyn/cm (the data set of Brill & Mukherjee's worked examples).
+    Expected values are hand-calculated step by step from the published
+    equations below; H_L(90°) = 0.574 also agrees with the value recalled
+    from Brill & Mukherjee (1999) Example 4.2, not checked against the book.
+    """
+
+    FT, LB = 0.3048, 16.0185
+    D = 6 * 0.0254
+    VSL, VSG = 3.97 * 0.3048, 3.86 * 0.3048
+    RL, RG = 47.61 * 16.0185, 5.88 * 16.0185
+    MUL, MUG, SIG, EPS = 0.97e-3, 0.016e-3, 8.41e-3, 0.00006 * 0.3048
+
+    def _st(self, deg, payne=False):
+        vm = self.VSL + self.VSG
+        return beggs_brill_gradient(vm, self.VSL / vm, self.RL, self.RG, self.MUL, self.MUG,
+                                    self.D, self.EPS, math.radians(deg), self.SIG, payne)
+
+    def _hand(self, deg):
+        vm = self.VSL + self.VSG
+        lam = self.VSL / vm
+        nfr = vm ** 2 / (9.81 * self.D)
+        nlv = self.VSL * (self.RL / (9.81 * self.SIG)) ** 0.25
+        hl0 = 0.845 * lam ** 0.5351 / nfr ** 0.0173          # intermittent
+        if deg > 0:
+            C = (1 - lam) * math.log(2.96 * lam ** 0.305 * nlv ** -0.4473 * nfr ** 0.0978)
+        else:
+            C = (1 - lam) * math.log(4.70 * lam ** -0.3692 * nlv ** 0.1244 * nfr ** -0.5056)
+        C = max(C, 0.0)
+        s = math.sin(math.radians(1.8 * deg))
+        return lam, nfr, nlv, hl0 * (1 + C * (s - s ** 3 / 3))
+
+    def test_dimensionless_groups(self):
+        lam, nfr, nlv, _ = self._hand(90)
+        st = self._st(90)
+        self.assertAlmostEqual(lam, 0.507, places=3)
+        self.assertAlmostEqual(st.N_Fr, nfr, places=9)
+        self.assertAlmostEqual(st.N_LV, nlv, places=9)
+        self.assertAlmostEqual(nlv, 11.87, places=2)
+        self.assertEqual(st.regime, "intermittent")
+
+    def test_vertical_upflow_C_clamped_to_zero(self):
+        st = self._st(90)
+        self.assertAlmostEqual(st.holdup, self._hand(90)[3], places=9)
+        self.assertAlmostEqual(st.holdup, 0.574, places=3)
+        # Pressure gradient: elevation + friction, about 0.215 psi/ft
+        self.assertAlmostEqual(st.dP_dz_total / 6894.757 * self.FT, 0.215, places=3)
+
+    def test_downhill_reduces_holdup(self):
+        st = self._st(-45)
+        expected = self._hand(-45)[3]
+        self.assertAlmostEqual(st.holdup, expected, places=9)
+        self.assertAlmostEqual(expected, 0.304, places=3)
+        self.assertLess(st.holdup, st.C_L)        # downhill liquid runs faster than gas
+
+    def test_payne_factors(self):
+        self.assertAlmostEqual(self._st(90, True).holdup, 0.924 * self._st(90).holdup, places=12)
+        self.assertAlmostEqual(self._st(-45, True).holdup, 0.685 * self._st(-45).holdup, places=12)
+        self.assertAlmostEqual(self._st(0, True).holdup, self._st(0).holdup, places=12)
+
+    def test_segregated_uphill_coefficients(self):
+        from angelica.closures.beggs_brill import inclination_factor
+        lam, nfr, nlv, th = 0.05, 0.002, 0.5, math.radians(5)
+        C = max((1 - lam) * math.log(0.011 * lam ** -3.768 * nlv ** 3.539 * nfr ** -1.614), 0.0)
+        s = math.sin(1.8 * th)
+        self.assertAlmostEqual(inclination_factor("segregated", lam, nfr, nlv, th),
+                               1 + C * (s - s ** 3 / 3), places=12)
+        self.assertEqual(inclination_factor("distributed", lam, nfr, nlv, th), 1.0)
+
+
+class TestSurfaceTension(unittest.TestCase):
+    def test_baker_swerdloff_dead_oil(self):
+        from angelica.properties.surface_tension import dead_oil_surface_tension
+        self.assertAlmostEqual(dead_oil_surface_tension(30.0, 20.0) * 1e3, 39 - 0.2571 * 30, places=6)
+        self.assertAlmostEqual(dead_oil_surface_tension(30.0, 37.7778) * 1e3, 37.5 - 0.2571 * 30, places=4)
+        mid = dead_oil_surface_tension(30.0, 28.8889) * 1e3          # 84 °F
+        self.assertAlmostEqual(mid, 0.5 * (39 + 37.5) - 0.2571 * 30, places=3)
+
+    def test_live_oil_decreases_with_pressure_and_floors(self):
+        from angelica.properties.surface_tension import oil_surface_tension
+        s1 = oil_surface_tension(35.0, 60.0, 10e5)
+        s2 = oil_surface_tension(35.0, 60.0, 100e5)
+        self.assertLess(s2, s1)
+        self.assertAlmostEqual(oil_surface_tension(35.0, 60.0, 400e5), 1e-3)
+
+    def test_water(self):
+        from angelica.properties.surface_tension import water_surface_tension
+        p = 14.7 / 0.000145037738
+        self.assertAlmostEqual(water_surface_tension(20.0, p) * 1e3, 75 - 1.108 * 14.7 ** 0.349, places=3)
+        self.assertLess(water_surface_tension(100.0, p), water_surface_tension(20.0, p))

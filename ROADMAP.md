@@ -72,6 +72,9 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   wells and temperature-dependent properties in the GUI sections.
 
 ### Stage 1 — multiphase flow where it is missing (items 1, 2, 21)
+- 1.0 Beggs-Brill inclination correction per the published correlation
+  (added after review: the code used the Payne multipliers as C).  **Done
+  in v1.14.0.**
 - 1.1 Beggs-Brill for compositional fluids, using per-phase flash properties
   (three-phase: oil and free water combined as the liquid).
   *Done when:* black-oil and compositional runs with matched phase properties
@@ -141,4 +144,32 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 
 ## 5. Progress log
 
-(empty)
+### 2026-11-22 — Stage 0 and first Stage 1 fixes
+
+- **0.1 Round ticks (v1.13.3).** `angelica.gui.plot_axes` (1-2-5 steps);
+  phase-envelope axes use it. Checked visually on a lean gas and a rich
+  condensate envelope.
+- **0.2 Website guide (with v1.13.3).** GUI sections rewritten from the code:
+  case types, material dialogs per mode, all eight devices with their
+  availability, link context menu (profiles, phase envelope), unit system
+  (inputs follow the selected units — the old guide said SI only), results
+  on the canvas.
+- **Found while starting 1.1 — three-phase density bug (v1.13.4).** With
+  free water the bulk density used the feed molar mass for both HC phases:
+  15–18 % low in gas-condensate flow. Fixed (mass over volume, per-phase
+  molar mass); trace-water test reproduces the dry EOS density exactly.
+  Compositional tutorials 04/05/06 changed (CHANGELOG).
+- **1.0 Beggs-Brill inclination (v1.14.0).** Replaced the constant C by the
+  published C(λ_L, N_LV, N_Fr) with uphill/downhill coefficient sets; added
+  Baker-Swerdloff / gas-water surface tension; Payne multipliers as an
+  option (GUI too).
+  - Validation: the coefficient tables were cross-checked against the
+    whitson wiki Beggs-Brill page. No published worked example could be
+    retrieved (Brill & Mukherjee not accessible); the tests use a
+    step-by-step hand calculation of their 6-in. vertical data set
+    (H_L = 0.574, which matches the value I recall from their Example 4.2 —
+    **unverified**).
+  - Tutorial 12 changed: +14 % oil (lighter tubing column).
+  - Decision: original Beggs-Brill stays the default; Payne is opt-in.
+  - Pending: acceleration term (E_k) still omitted; no-slip friction uses
+    Churchill (rough Moody) rather than the smooth-pipe Beggs-Brill form.
