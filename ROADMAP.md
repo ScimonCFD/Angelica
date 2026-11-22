@@ -288,9 +288,9 @@ Maintainer review of v1.13.3–v1.19.0. Done:
 - **CO2 hydrates.** Cause confirmed: dissolved gas ignored (x_w = 1).
   Added Henry's-law water activity with NIST WebBook constants (Sander
   compilation, READ IN SOURCE; no Poynting factor — no sourced partial molar
-  volumes). CO2 Q1: −1.2 % (was −1.2 % → before the fix the memory-based
-  points at 277–283 K were 14–29 % low; those points are from memory and do
-  not count). Methane Q1 +7.3 %.
+  volumes). CO2 Q1 now −1.2 %. Before the fix the model was 14–29 % low
+  against CO2 points at 277–283 K, but those points are from memory and do
+  not count as validation. Methane Q1 +7.3 %.
 - `_hydrate_report` returns None when no hydrate is stable above 0 °C
   (it used to report −T as "subcooling").
 - Tests: hydrate, surface-tension and Beggs-Brill validation tests now state
