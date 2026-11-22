@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.13.1] — 2026-11-22
+
+  - `python -m angelica.gui` now starts the GUI (the guide documented it, but
+    the package had no `__main__.py`).
+  - Compressible tutorial 05 (Joule-Thomson valve) gained a module docstring.
+  - Website: corrected install command (the `[gui]` extra is needed for
+    `angelica-gui`; there is no `[excel]` extra), dependencies (numpy, scipy,
+    thermo), capabilities (gas equations, Beggs-Brill, chokes, check valves,
+    wells, compositional EOS), roadmap (black-oil and compositional are live),
+    black-oil demo results, and the guide's tutorial list (all 43 cases; it
+    still described 15 with the old numbering).
+
 ## [1.13.0] — 2026-11-22
 
 ### New: `Well` component — reservoir inflow plus production tubing

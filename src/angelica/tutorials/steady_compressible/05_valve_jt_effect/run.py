@@ -1,3 +1,13 @@
+"""
+Tutorial 05 — Joule-Thomson cooling across a valve
+==================================================
+
+Methane at 70 bar and 40 °C flows through 500 m of pipe, a throttling valve
+(K = 50) and another 500 m of pipe to 50 bar.  A valve is isenthalpic: with a
+real-gas equation of state (Peng-Robinson) the gas cools by about 2.6 °C as it
+expands across the valve, while an ideal gas — whose enthalpy depends on
+temperature only — shows no temperature change.
+"""
 from __future__ import annotations
 
 import sys
