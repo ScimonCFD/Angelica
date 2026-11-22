@@ -149,41 +149,61 @@ def _wilson_psat(Tc: float, Pc: float, omega: float, T_K: float) -> float:
     return Pc * math.exp(5.373 * (1.0 + omega) * (1.0 - Tc / T_K))
 
 
-@lru_cache(maxsize=512)
-def _hc_phase_densities(
+@lru_cache(maxsize=2048)
+def _hc_phase_split(
     component_names: tuple[str, ...],
     pressure_pa: float,
     temperature_c: float,
     zs: tuple[float, ...],
     eos_name: str = "PR",
-) -> tuple[float, float, float]:
-    """Return (rho_gas kg/m³, rho_liq kg/m³, VF –) for an HC-only PT flash.
+) -> tuple[float, float, float, float, float, float, float]:
+    """Per-phase properties of an HC-only PT flash.
 
-    Temporary helper for three-phase volumetric density mixing in the
-    free-water path.  When the mixture is single-phase the unused density is a
-    placeholder — its volume fraction will be zero in the mixing formula.
+    Returns ``(beta_g, rho_g, rho_l, MW_g, MW_l, mu_g, mu_l)``: the vapour mole
+    fraction and, for each phase, mass density (kg/m³), molar mass (g/mol) and
+    viscosity (Pa·s).  When two phases coexist the lighter one is the vapour
+    (thermo can label both alike near the critical point).  A single-phase
+    result repeats its properties in both slots, with ``beta_g`` 1 or 0.
     """
     flash_obj = _get_flash_obj(component_names, eos_name)
+    const, corr = flash_obj.constants, flash_obj.correlations
     T_K = temperature_c + 273.15
     try:
         res = flash_obj.flash(T=T_K, P=pressure_pa, zs=list(zs))
     except ZeroDivisionError:
-        const  = flash_obj.constants
-        Psat   = _wilson_psat(const.Tcs[0], const.Pcs[0], const.omegas[0], T_K)
+        Psat = _wilson_psat(const.Tcs[0], const.Pcs[0], const.omegas[0], T_K)
         is_gas = T_K >= const.Tcs[0] or pressure_pa <= Psat
         parent = flash_obj.gas if is_gas else flash_obj.liquid
-        phase  = parent.to(T=T_K, P=pressure_pa, zs=[1.0])
-        phase.constants    = parent.constants
+        phase = parent.to(T=T_K, P=pressure_pa, zs=[1.0])
+        phase.constants = parent.constants
         phase.correlations = parent.correlations
         rho = max(float(phase.rho_mass()), 0.001)
-        return (rho, rho, 1.0 if is_gas else 0.0)
+        mu = max(_phase_viscosity(phase, T_K, pressure_pa, const, corr), 1e-10)
+        MW = float(const.MWs[0])
+        return (1.0 if is_gas else 0.0, rho, rho, MW, MW, mu, mu)
 
-    VF = float(res.VF) if res.VF is not None else 0.0
-    gas_ph = getattr(res, "gas", None)
-    liq_ph = getattr(res, "liquid0", None)
-    rho_gas = max(float(gas_ph.rho_mass()), 0.001) if gas_ph is not None and VF > 1e-10 else 0.001
-    rho_liq = max(float(liq_ph.rho_mass()), 0.001) if liq_ph is not None and VF < 1.0 - 1e-10 else 0.001
-    return (rho_gas, rho_liq, VF)
+    phases = list(res.phases)
+    if len(phases) == 1:
+        ph = phases[0]
+        rho = max(float(ph.rho_mass()), 0.001)
+        mu = max(_phase_viscosity(ph, T_K, pressure_pa, const, corr), 1e-10)
+        MW = float(ph.MW())
+        beta_g = 1.0 if _gas_like(ph, T_K, const) else 0.0
+        return (beta_g, rho, rho, MW, MW, mu, mu)
+
+    i_g = min(range(len(phases)), key=lambda i: phases[i].rho_mass())
+    i_l = 1 - i_g if len(phases) == 2 else max(range(len(phases)), key=lambda i: phases[i].rho_mass())
+    gas, liq = phases[i_g], phases[i_l]
+    beta_g = float(res.betas[i_g])
+    return (
+        beta_g,
+        max(float(gas.rho_mass()), 0.001),
+        max(float(liq.rho_mass()), 0.001),
+        float(gas.MW()),
+        float(liq.MW()),
+        max(_phase_viscosity(gas, T_K, pressure_pa, const, corr, True), 1e-10),
+        max(_phase_viscosity(liq, T_K, pressure_pa, const, corr, False), 1e-10),
+    )
 
 
 @lru_cache(maxsize=512)
@@ -282,26 +302,23 @@ def _flash_properties(
         # Water phase split (immiscible-water model)
         n_wl, n_wv = free_water_split(z_w, VF_hc, sum_hc, T_K, pressure_pa)
 
-        # Three-phase volumetric density: φ_gas·ρ_gas + φ_HCliq·ρ_HCliq + φ_water·ρ_water
-        # (temporary — approximates HC-phase MW as feed MW; replace when main solver done)
-        rho_gas_hc, rho_liq_hc, _ = _hc_phase_densities(
+        # Three-phase density = total mass / total volume, per mole of feed.
+        # Each HC phase uses its own molar mass (the vapour is much lighter
+        # than the feed, the condensate much heavier); water vapour travels
+        # in the gas at the gas molar volume.
+        beta_g, rho_gas_hc, rho_liq_hc, MW_g, MW_l, _, _ = _hc_phase_split(
             hc_names, pressure_pa, temperature_c, hc_zs_norm, eos_name
         )
         rho_wl = water_liquid_density_kg_m3(T_K)
-        MWs_hc = _get_flash_obj(hc_names, eos_name).constants.MWs
-        MW_hc  = sum(z * mw for z, mw in zip(hc_zs_norm, MWs_hc))
 
-        n_gas_hc = VF_hc * sum_hc
-        n_liq_hc = (1.0 - VF_hc) * sum_hc
-        V_gas    = n_gas_hc * MW_hc / (1000.0 * rho_gas_hc)
-        V_liq    = n_liq_hc * MW_hc / (1000.0 * rho_liq_hc)
+        n_gas_hc = beta_g * sum_hc
+        n_liq_hc = (1.0 - beta_g) * sum_hc
+        V_gas    = (n_gas_hc + n_wv) * MW_g / (1000.0 * rho_gas_hc)
+        V_liq    = n_liq_hc * MW_l / (1000.0 * rho_liq_hc)
         V_wat    = n_wl * WATER_MW / (1000.0 * rho_wl)
         V_tot    = V_gas + V_liq + V_wat
-        bulk_rho = (
-            (V_gas * rho_gas_hc + V_liq * rho_liq_hc + V_wat * rho_wl) / V_tot
-            if V_tot > 1e-30
-            else hc_rho
-        )
+        mass     = (n_gas_hc * MW_g + n_liq_hc * MW_l + (n_wl + n_wv) * WATER_MW) / 1000.0
+        bulk_rho = mass / V_tot if V_tot > 1e-30 else hc_rho
 
         # Overall vapour fraction: HC vapour + water vapour (moles per mole of feed)
         bulk_VF = VF_hc * sum_hc + n_wv

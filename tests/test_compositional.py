@@ -445,3 +445,42 @@ class TestGasViscosityPressureDependence:
         mu = cfm._flash_properties(names, 50e5, 30.0, tuple(zs), "PR")[1]
         assert abs(mu - expected) / expected < 1e-9
         assert mu_g < mu < mu_l
+
+
+class TestThreePhaseDensity:
+    """Bulk density with free water = total mass / total volume, each HC phase
+    at its own molar mass (v1.13.4)."""
+
+    HC = ("methane", "ethane", "propane", "n-butane", "n-pentane", "n-hexane")
+    Z = (0.70, 0.08, 0.07, 0.05, 0.03, 0.03)
+
+    def _norm(self, z):
+        s = sum(z)
+        return tuple(x / s for x in z)
+
+    @pytest.mark.parametrize("P, T", [(60e5, 20.0), (40e5, 30.0), (20e5, 20.0)])
+    def test_trace_water_reproduces_dry_eos_density(self, P, T):
+        from angelica.properties.compositional_fluid import _flash_properties
+        z = self._norm(self.Z)
+        dry = _flash_properties(self.HC, P, T, z, "PR")[0]
+        wet = _flash_properties(self.HC + ("water",), P, T, tuple(x * (1 - 1e-9) for x in z) + (1e-9,), "PR")[0]
+        assert wet == pytest.approx(dry, rel=1e-6)
+
+    def test_mass_over_volume_with_free_water(self):
+        from angelica.properties.compositional_fluid import _flash_properties, _hc_phase_split
+        from angelica.properties.free_water import (
+            WATER_MW,
+            free_water_split,
+            water_liquid_density_kg_m3,
+        )
+        P, T, z_w = 60e5, 20.0, 0.10
+        z = self._norm(self.Z)
+        zs = tuple(x * (1 - z_w) for x in z) + (z_w,)
+        rho = _flash_properties(self.HC + ("water",), P, T, zs, "PR")[0]
+        beta, rg, rl, mg, ml, _, _ = _hc_phase_split(self.HC, P, T, z, "PR")
+        n_wl, n_wv = free_water_split(z_w, beta, 1 - z_w, T + 273.15, P)
+        ng, nl = beta * (1 - z_w), (1 - beta) * (1 - z_w)
+        mass = ng * mg + nl * ml + (n_wl + n_wv) * WATER_MW
+        vol = (ng + n_wv) * mg / rg + nl * ml / rl + n_wl * WATER_MW / water_liquid_density_kg_m3(T + 273.15)
+        assert rho == pytest.approx(mass / vol, rel=1e-9)
+        assert mg < sum(a * b for a, b in zip(z, (16.04, 30.07, 44.10, 58.12, 72.15, 86.18))) < ml

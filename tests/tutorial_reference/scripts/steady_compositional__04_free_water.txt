@@ -2,8 +2,8 @@
 Section 1 — PVT comparison at inlet (80 bar, 50 °C)
 -----------------------------------------------------------------
                                           Wet gas       Dry gas
-ρ  (kg/m³)                                  75.89         67.93
-μ  (Pa·s × 10⁻⁵)                           1.8264        1.3662
+ρ  (kg/m³)                                  75.87         67.93
+μ  (Pa·s × 10⁻⁵)                           1.8257        1.3662
 VF (vapour fraction)                       0.8814        1.0000
 free water (mol frac of feed)              0.1186           N/A
   → 11.86% of the feed condenses as liquid water at inlet
@@ -34,8 +34,8 @@ Converged:  True
 
   Pipe  mdot (kg/s)      VF   free water   water (kg/h est.)
 -----------------------------------------------------------------
-Pipe:pipe_A       9.3008   0.880      11.962%         3808.98 kg/h
-Pipe:pipe_B       9.3008   0.880      11.959%         3808.29 kg/h
+Pipe:pipe_A       9.3005   0.880      11.962%         3808.85 kg/h
+Pipe:pipe_B       9.3005   0.880      11.959%         3808.16 kg/h
 
 Note: 'free water' is the mole fraction of the feed that is liquid
 water at each pipe's average P and T.  The mass flow estimate uses

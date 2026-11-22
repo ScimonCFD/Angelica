@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.13.4] — 2026-11-22
+
+### Fixed: mixture density of compositional fluids with free water
+
+With water in the component list, the bulk density was assembled from phase
+volumes that used the **feed** molar mass for both hydrocarbon phases.  The
+vapour is lighter than the feed and the condensate heavier (e.g. 20 and
+47 g/mol for a 25 g/mol feed), so the density came out 15–18 % low in
+two-phase gas-condensate flow; water vapour carried in the gas was also left
+out of the mass.  The density is now total mass over total volume with each
+phase at its own molar mass (`_hc_phase_split`), and with a trace of water it
+reproduces the dry EOS density exactly (new tests).
+
+Tutorial results that change (references regenerated):
+  - Compositional 05 (three-phase condensate): mid-line pressure
+    60.59 → 59.15 bar.
+  - Compositional 06 (three-phase ring main): denser mixture, so higher
+    flows for the same pressures — source A 29.38 → 31.43 kg/s, source B
+    21.19 → 21.43 kg/s.
+  - Compositional 04 (free water, no condensate): ρ 75.89 → 75.87 kg/m³
+    (water vapour now counted).
+
 ## [1.13.3] — 2026-11-22
 
   - Phase-envelope plot: axis ticks are round 1-2-5 multiples (−200, −150, …;
