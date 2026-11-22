@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.3] — 2026-11-22
+
+  - Phase-envelope plot: axis ticks are round 1-2-5 multiples (−200, −150, …;
+    0, 20, 40 bar) instead of five equal divisions of the data range
+    (−202, −148, …).  New helper `angelica.gui.plot_axes`.
+  - ROADMAP.md: gap analysis against PIPEPHASE and the staged plan.
+
 ## [1.13.2] — 2026-11-22
 
   - Phase-envelope plot: the axes now span the envelope and the link's

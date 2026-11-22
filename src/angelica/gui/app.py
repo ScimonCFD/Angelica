@@ -43,6 +43,7 @@ from .model import (
     CanvasNode,
     CanvasScene,
 )
+from .plot_axes import nice_ticks, tick_label, tick_values
 
 
 class _SolverCancelled(Exception):
@@ -4203,12 +4204,10 @@ class NetSimGui:
         all_T = env_T + [t for t, _ in op_C]
         all_P = env_P + [p for _, p in op_C]
 
-        T_pad = max((max(all_T) - min(all_T)) * 0.08, 5.0)
-        P_pad = max(max(all_P) * 0.12, 1.0)
-        T_min_d = min(all_T) - T_pad
-        T_max_d = max(all_T) + T_pad
-        P_min_d = 0.0
-        P_max_d = max(all_P) + P_pad
+        # Small margin, then round outward to 1-2-5 multiples
+        T_pad = max((max(all_T) - min(all_T)) * 0.03, 2.0)
+        T_min_d, T_max_d, T_step = nice_ticks(min(all_T) - T_pad, max(all_T) + T_pad)
+        P_min_d, P_max_d, P_step = nice_ticks(0.0, max(max(all_P) * 1.05, 1.0))
 
         T_span = T_max_d - T_min_d or 1.0
         P_span = P_max_d - P_min_d or 1.0
@@ -4226,21 +4225,18 @@ class NetSimGui:
         )
 
         # Grid lines + tick labels
-        n_x, n_y = 5, 5
-        for i in range(n_x + 1):
-            T_val = T_min_d + i / n_x * T_span
+        for T_val in tick_values(T_min_d, T_max_d, T_step):
             x = _cx(T_val)
             canvas.create_line(x, MT, x, MT + plot_h, fill=self._t["plot_grid"])
             canvas.create_text(
-                x, MT + plot_h + 4, text=f"{T_val:.0f}", anchor="n",
+                x, MT + plot_h + 4, text=tick_label(T_val, T_step), anchor="n",
                 font=("TkDefaultFont", 8), fill=self._t["plot_text"],
             )
-        for i in range(n_y + 1):
-            P_val = P_min_d + i / n_y * P_span
+        for P_val in tick_values(P_min_d, P_max_d, P_step):
             y = _cy(P_val)
             canvas.create_line(ML, y, ML + plot_w, y, fill=self._t["plot_grid"])
             canvas.create_text(
-                ML - 6, y, text=f"{P_val:.1f}", anchor="e",
+                ML - 6, y, text=tick_label(P_val, P_step), anchor="e",
                 font=("TkDefaultFont", 8), fill=self._t["plot_text"],
             )
 
