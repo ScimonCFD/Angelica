@@ -278,6 +278,35 @@ def beggs_brill_gradient(
     )
 
 
+def phase_properties_from_pvt(pvt) -> tuple[float, float, float, float, float]:
+    """(C_L, rho_l, rho_g, mu_l, mu_g) for Beggs-Brill from a black-oil PVT state.
+
+    Liquid = oil + water (volume-weighted); C_L is the no-slip liquid content.
+    """
+    alpha_l = pvt.holdup_oil + pvt.holdup_water
+    alpha_g = pvt.holdup_gas
+
+    if alpha_l + alpha_g < 1e-9:
+        return 1.0, pvt.mixture_density_kg_per_m3, 1.2, pvt.mixture_viscosity_pa_s, 1.5e-5
+
+    C_L = alpha_l / (alpha_l + alpha_g)
+
+    # Liquid phase: volume-weighted oil + water
+    if alpha_l > 1e-9:
+        rho_l = (pvt.holdup_oil * pvt.density_oil_kg_per_m3
+                 + pvt.holdup_water * pvt.density_water_kg_per_m3) / alpha_l
+        mu_l  = (pvt.holdup_oil * pvt.viscosity_oil_pa_s
+                 + pvt.holdup_water * pvt.viscosity_water_pa_s) / alpha_l
+    else:
+        rho_l = pvt.mixture_density_kg_per_m3
+        mu_l  = pvt.mixture_viscosity_pa_s
+
+    rho_g = max(pvt.density_gas_kg_per_m3, 0.1)
+    mu_g  = max(pvt.viscosity_gas_pa_s, 1e-6)
+
+    return C_L, rho_l, rho_g, mu_l, mu_g
+
+
 # ── PressureDropCorrelation implementation ────────────────────────────────────
 
 class BeggsBrillCorrelation(PressureDropCorrelation):
@@ -345,30 +374,7 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
 
         T_avg = float(pipe_state.temperature_c) if pipe_state.temperature_c is not None else 20.0
 
-        pvt = fluid.pvt(P_avg, T_avg)
-
-        alpha_l = pvt.holdup_oil + pvt.holdup_water
-        alpha_g = pvt.holdup_gas
-
-        if alpha_l + alpha_g < 1e-9:
-            return 1.0, pvt.mixture_density_kg_per_m3, 1.2, pvt.mixture_viscosity_pa_s, 1.5e-5
-
-        C_L = alpha_l / (alpha_l + alpha_g)
-
-        # Liquid phase: volume-weighted oil + water
-        if alpha_l > 1e-9:
-            rho_l = (pvt.holdup_oil * pvt.density_oil_kg_per_m3
-                     + pvt.holdup_water * pvt.density_water_kg_per_m3) / alpha_l
-            mu_l  = (pvt.holdup_oil * pvt.viscosity_oil_pa_s
-                     + pvt.holdup_water * pvt.viscosity_water_pa_s) / alpha_l
-        else:
-            rho_l = pvt.mixture_density_kg_per_m3
-            mu_l  = pvt.mixture_viscosity_pa_s
-
-        rho_g = max(pvt.density_gas_kg_per_m3, 0.1)
-        mu_g  = max(pvt.viscosity_gas_pa_s, 1e-6)
-
-        return C_L, rho_l, rho_g, mu_l, mu_g
+        return phase_properties_from_pvt(fluid.pvt(P_avg, T_avg))
 
     def _solve_vm(
         self,

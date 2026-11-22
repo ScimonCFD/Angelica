@@ -1,5 +1,53 @@
 # Changelog
 
+## [1.13.0] — 2026-11-22
+
+### New: `Well` component — reservoir inflow plus production tubing
+
+A vertical two-phase riser solved as an ordinary network pipe does not
+converge: the Beggs-Brill holdup makes its pressure drop non-monotonic in the
+flow rate (the J-shaped tubing performance curve), so one ΔP matches several
+rates and the SIMPLE pressure correction jumps between them.  Pressure,
+temperature and composition under-relaxation (down to 0.3, with 300 inner
+and 150 outer iterations), a stable-branch velocity solver and a tangent
+coupling were all tried and did not cure it.
+
+The `Well` component solves the well the way nodal analysis does.  For each
+oil rate the IPR (linear or composite Vogel) gives the flowing bottom-hole
+pressure and the tubing is integrated upward with Beggs-Brill and the local
+black-oil PVT, giving the deliverability curve P_wh(q).  The curve is
+tabulated once per well and fluid (≈0.1 s) and the network uses its stable
+branch (dP_wh/dq < 0), a single-valued monotonic law ṁ(P_wh).  If the
+wellhead pressure exceeds the curve's maximum the well is dead (ṁ = 0, no
+injection).
+
+  - Parameters: productivity index, IPR model, tubing ID, length, vertical
+    rise, roughness, integration segments.  The tubing is isothermal at the
+    reservoir temperature.  Black-oil solver only.
+  - Validated against an independent single-phase integration (hydrostatic +
+    Haaland friction) to 0.5 %.
+  - GUI: "Well" in the black-oil palette.
+  - **Black-oil tutorial 12** (script + GUI file): three wells with 2 km
+    tubing.  The network converges in 4 outer iterations; Well 1's curve
+    rises from 11.19 to 11.67 MPa before turning over, Well 3 is dead (its
+    oil-and-water column outweighs the reservoir pressure), and tubing size
+    raises production from 488 m³/d (50.3 mm) to 629 m³/d (76.2 mm).
+
+### Fix: a network at rest never converged
+
+When every flow is zero (e.g. the only well is dead), the residual flows are
+velocity-tolerance noise and the relative nodal imbalance stayed at 100 %.
+A network whose largest nodal throughput is below 1 mg/s is now treated as
+balanced.
+
+### Internal
+
+  - `phase_properties_from_pvt()` extracted from the Beggs-Brill correlation.
+  - Tests: `tests/test_well_model.py` (9 tests: IPR inversion, single-phase
+    tubing vs independent integration, curve shape and stable branch, dead
+    wells, network operating point on the curve, black-oil-only check,
+    validation).
+
 ## [1.12.0] — 2026-11-22
 
 ### New: well inflow (IPR) and check valves

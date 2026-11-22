@@ -1,5 +1,5 @@
 from .case import FlowBoundary, InletFluidBC, NetworkCase, PressureBoundary
-from .components import CheckValve, Choke, Fitting, Pipe, PressureChanger, WellInflow
+from .components import CheckValve, Choke, Fitting, Pipe, PressureChanger, Well, WellInflow
 from .results import ComponentFlowResult, SolveResult
 from .settings import SolverSettings
 from .state import FittingState, NetworkState, NodeState, PipeState, PressureChangerState
@@ -22,5 +22,6 @@ __all__ = [
     "PressureChangerState",
     "SolveResult",
     "SolverSettings",
+    "Well",
     "WellInflow",
 ]

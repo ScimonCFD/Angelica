@@ -16,7 +16,7 @@ Network
 
   Each reservoir node is a pressure boundary at the well's shut-in pressure
   referred to the wellhead (the tubing is folded into the deliverability
-  curve, as is common in gathering-network models), with its own crude:
+  curve; tutorial 12 models the tubing explicitly), with its own crude:
 
     Well 1: 40 °API, GOR 150, WOR 0.1, P = 8.0 MPa, 80 °C, J = 25 m³/d/bar
     Well 2: 32 °API, GOR  40, WOR 0.3, P = 6.5 MPa, 65 °C, J = 20 m³/d/bar

@@ -1,0 +1,35 @@
+========================================================================
+Tutorial 12 — Wells with production tubing
+========================================================================
+
+Part A — Well 1 deliverability (3.0 in tubing, P_r = 25 MPa, P_b = 20.9 MPa)
+   q_oil (m³/d)  P_wf (MPa)  P_wh (MPa)
+              0       25.00       11.19
+             23       24.61       10.93
+             66       23.90       11.67  ← maximum P_wh (curve turns over)
+            133       22.78        9.01
+            215       21.42        7.76
+            308       19.84        6.58
+            412       17.94        5.11
+            526       15.64        3.18
+            607       13.81        1.05
+
+Part B — gathering network, 3.0 in tubing
+  Well       P_wh    P_wf       ṁ   q_oil  State
+            (MPa)   (MPa)  (kg/s)  (m³/d)
+  Well 1    3.727   16.26   6.072   497.1  producing
+  Well 2    2.468   18.71   1.834   131.6  producing
+  Well 3    2.421       —   0.000     0.0  dead: column heavier than P_r
+  Manifold 2.421 MPa  ·  oil 628.7 m³/d  ·  converged True
+
+Part C — tubing size (all wells)
+   Tubing ID  oil (m³/d)
+     50.3 mm       487.8   converged True
+     62.0 mm       580.9   converged True
+     76.2 mm       628.7   converged True
+
+  • Well 3's static oil-and-water column (25 °API, WOR 0.8, 2 000 m) weighs
+    more than its reservoir pressure: it cannot flow without artificial lift.
+  • Larger tubing reduces friction in the high-rate wells; the Well model
+    solves each well's tubing on its own, so the network converges in a
+    few outer iterations even with 2 km two-phase risers.

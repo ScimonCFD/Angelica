@@ -239,6 +239,59 @@ class WellInflow(Fitting):
 
 
 @dataclass(frozen=True)
+class Well(Fitting):
+    """Producing oil well: reservoir inflow (IPR) plus production tubing.
+
+    ``start_node`` is the reservoir (a pressure boundary at the average
+    reservoir pressure, with the reservoir temperature), ``end_node`` the
+    wellhead.  For each oil rate the flowing bottom-hole pressure follows the
+    IPR (see ``WellInflow``) and the tubing pressure drop is integrated upward
+    with Beggs-Brill and the local black-oil PVT, giving the well
+    deliverability curve P_wh(q).  The network sees the stable branch of that
+    curve (dP_wh/dq < 0, the right-hand intersection of nodal analysis); if
+    the wellhead pressure exceeds the curve's maximum the well is dead and
+    produces nothing (it never takes injection).
+
+    Parameters
+    ----------
+    productivity_index_m3_per_day_per_bar : J, stock-tank m³ oil / d / bar
+    ipr_model : "vogel" (default) or "linear"
+    diameter_m : tubing inner diameter
+    tubing_length_m : measured length of the tubing
+    tubing_height_change_m : vertical rise from bottom hole to wellhead
+        (defaults to ``tubing_length_m``, a vertical well)
+    tubing_roughness_m : absolute roughness (default 4.6e-5 m)
+    tubing_segments : integration steps along the tubing (default 25)
+
+    The tubing is taken at reservoir temperature (isothermal).  Requires
+    ``SteadyBlackOilSolver``.
+    """
+
+    productivity_index_m3_per_day_per_bar: float = float("nan")
+    ipr_model: str = "vogel"
+    tubing_length_m: float = float("nan")
+    tubing_height_change_m: float = float("nan")
+    tubing_roughness_m: float = 4.6e-5
+    tubing_segments: int = 25
+    loss_coefficient: float = 1.0   # unused; keeps the Fitting interface
+    is_well_model = True            # class attribute read by the flow models
+
+    def __post_init__(self) -> None:
+        if math.isnan(self.productivity_index_m3_per_day_per_bar) or self.productivity_index_m3_per_day_per_bar <= 0.0:
+            raise ValueError("Well requires a positive productivity_index_m3_per_day_per_bar.")
+        if self.ipr_model not in ("linear", "vogel"):
+            raise ValueError(f"Well ipr_model must be 'linear' or 'vogel' (got {self.ipr_model!r})")
+        if math.isnan(self.tubing_length_m) or self.tubing_length_m <= 0.0:
+            raise ValueError("Well requires a positive tubing_length_m.")
+        if math.isnan(self.tubing_height_change_m):
+            object.__setattr__(self, "tubing_height_change_m", self.tubing_length_m)
+        if abs(self.tubing_height_change_m) > self.tubing_length_m + 1e-9:
+            raise ValueError("Well tubing_height_change_m cannot exceed tubing_length_m.")
+        if self.tubing_segments < 2:
+            raise ValueError("Well tubing_segments must be at least 2.")
+
+
+@dataclass(frozen=True)
 class Pump(PressureChanger):
     """Centrifugal pump (or compressor) defined by a head curve.
 

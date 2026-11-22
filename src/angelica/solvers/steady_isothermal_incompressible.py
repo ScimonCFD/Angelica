@@ -378,7 +378,12 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         # dead-end branch — carry round-off-level flows; dividing by their own
         # throughput would report ~100 % imbalance forever.  Measure them
         # against the typical throughput of the network instead.
-        throughput_floor = max(1e-10, 1e-3 * max(throughput_by_node.values(), default=0.0))
+        max_throughput = max(throughput_by_node.values(), default=0.0)
+        if max_throughput < 1e-6:
+            # The whole network is at rest (e.g. its only well is dead): the
+            # remaining flows are velocity-tolerance noise, not imbalance.
+            return 0.0
+        throughput_floor = max(1e-10, 1e-3 * max_throughput)
         max_rel = 0.0
         for node_id, node_state in network_state.nodes.items():
             if node_state.is_boundary:

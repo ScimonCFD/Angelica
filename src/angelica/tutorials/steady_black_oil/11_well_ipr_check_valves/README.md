@@ -20,7 +20,8 @@ Reservoir 3 ─IPR─ WH3 ─check─ flowline 6 km, 3"  ─┘
 
 Reservoir pressures are shut-in pressures referred to the wellhead: the
 tubing is folded into each well's deliverability curve, as is common in
-gathering-network models.
+gathering-network models.  Tutorial 12 adds the production tubing with the
+`Well` component.
 
 ## Components
 

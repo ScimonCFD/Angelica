@@ -16,7 +16,7 @@ from .core.case import (
     PressureBoundary,
     ThermalBoundary,
 )
-from .core.components import CheckValve, Choke, Fitting, HeatSource, Pipe, PressureChanger, Pump, WellInflow
+from .core.components import CheckValve, Choke, Fitting, HeatSource, Pipe, PressureChanger, Pump, Well, WellInflow
 from .core.results import ComponentFlowResult, SolveResult
 from .core.settings import SolverSettings
 from .io.reporting import print_solve_result
@@ -85,5 +85,6 @@ __all__ = [
     "build_water_thermal_fluid",
     "lee_gonzalez_eakin_viscosity",
     "print_solve_result",
+    "Well",
     "WellInflow",
 ]

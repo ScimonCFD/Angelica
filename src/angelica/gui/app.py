@@ -3550,6 +3550,17 @@ class NetSimGui:
         if self.scene.physics_mode == "black_oil":
             ttk.Button(
                 palette,
+                text="Well",
+                command=lambda: self._add_component_to_link(
+                    link.link_id,
+                    "well",
+                    components_list,
+                    properties_frame,
+                ),
+                width=12,
+            ).pack(anchor="w", pady=4)
+            ttk.Button(
+                palette,
                 text="Well IPR",
                 command=lambda: self._add_component_to_link(
                     link.link_id,
@@ -3814,11 +3825,11 @@ class NetSimGui:
             if comp.component_type == "pipe":
                 canvas.create_line(x0c, y0c, x1c, y1c, fill=pipe_color, width=2)
                 legend_seen.setdefault("Pipe", (pipe_color, ()))
-            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow"):
+            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow", "well"):
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=fitting_color, width=2, dash=(6, 3))
                 legend_seen.setdefault(
                     {"fitting": "Fitting", "choke": "Choke", "check_valve": "Check valve",
-                     "well_inflow": "Well IPR"}[comp.component_type],
+                     "well_inflow": "Well IPR", "well": "Well"}[comp.component_type],
                     (fitting_color, (6, 3)))
             elif comp.component_type == "pump":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
@@ -3853,7 +3864,7 @@ class NetSimGui:
                                    fill=pipe_color)
             else:
                 lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke",
-                           "check_valve": "check", "well_inflow": "IPR"}
+                           "check_valve": "check", "well_inflow": "IPR", "well": "well"}
                 clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
                 lbl = lbl_map.get(comp.component_type, comp.component_type)
                 clr = clr_map.get(comp.component_type, fitting_color)
@@ -4528,11 +4539,11 @@ class NetSimGui:
             if comp.component_type == "pipe":
                 canvas.create_line(x0c, y0c, x1c, y1c, fill=temp_color, width=2)
                 legend_seen.setdefault("Pipe", (temp_color, ()))
-            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow"):
+            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow", "well"):
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=fitting_color, width=2, dash=(6, 3))
                 legend_seen.setdefault(
                     {"fitting": "Fitting", "choke": "Choke", "check_valve": "Check valve",
-                     "well_inflow": "Well IPR"}[comp.component_type],
+                     "well_inflow": "Well IPR", "well": "Well"}[comp.component_type],
                     (fitting_color, (6, 3)))
             elif comp.component_type == "pump":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
@@ -4565,7 +4576,7 @@ class NetSimGui:
                                    fill=temp_color)
             else:
                 lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke",
-                           "check_valve": "check", "well_inflow": "IPR"}
+                           "check_valve": "check", "well_inflow": "IPR", "well": "well"}
                 clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
                 lbl = lbl_map.get(comp.component_type, comp.component_type)
                 clr = clr_map.get(comp.component_type, fitting_color)
@@ -4669,6 +4680,23 @@ class NetSimGui:
                         ("loss_coefficient", "Loss coefficient K, open (−)")],
                 note=("Lets flow pass only from the link's start node to its end node;\n"
                       "closes when the downstream pressure is higher.  K ≈ 2 for a swing check."),
+            )
+            return
+        if component.component_type == "well":
+            unit = self._unit_label("diameter")
+            self._render_simple_component_properties(
+                component, properties_frame, link_id, components_list,
+                fields=[("productivity_index_m3_per_day_per_bar", "Productivity index J (m³/d/bar, stock-tank oil)"),
+                        ("diameter_m", f"Tubing inner diameter ({unit})"),
+                        ("tubing_length_m", "Tubing length (m)"),
+                        ("tubing_height_change_m", "Vertical rise (m) — blank: vertical well"),
+                        ("tubing_roughness_m", "Tubing roughness (m)"),
+                        ("tubing_segments", "Integration segments (−)")],
+                choices={"ipr_model": ("IPR model", ("vogel", "linear"))},
+                note=("Reservoir inflow + production tubing (Beggs-Brill, isothermal at the\n"
+                      "reservoir temperature).  Start node = reservoir (pressure boundary at P_r);\n"
+                      "end node = wellhead.  The well is dead if the wellhead pressure exceeds\n"
+                      "the maximum of its deliverability curve; it never takes injection."),
             )
             return
         if component.component_type == "well_inflow":
@@ -5272,6 +5300,8 @@ class NetSimGui:
             return f"Check valve #{display_index}"
         if component.component_type == "well_inflow":
             return f"Well IPR #{display_index}"
+        if component.component_type == "well":
+            return f"Well #{display_index}"
         return f"{component.component_type.capitalize()} #{display_index}"
 
     def _pretty_field_name(self, field_name: str) -> str:

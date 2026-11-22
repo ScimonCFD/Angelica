@@ -19,9 +19,10 @@ def check_valve_closed(link_state) -> bool:
 
 
 def _reject_well_inflow(link_state) -> None:
-    if getattr(link_state.component, "is_well_inflow", False):
+    comp = link_state.component
+    if getattr(comp, "is_well_inflow", False) or getattr(comp, "is_well_model", False):
         raise ValueError(
-            "WellInflow (IPR) links need black-oil PVT: solve the case with "
+            "WellInflow / Well links need black-oil PVT: solve the case with "
             "SteadyBlackOilSolver."
         )
 

@@ -202,6 +202,8 @@ class ChokeFlowModel(MinorLossModel):
     - ``Choke`` links: Sachdeva critical / subcritical two-phase flow;
     - ``WellInflow`` links: linear or composite-Vogel IPR
       (``angelica.closures.well_inflow``);
+    - ``Well`` links: IPR + production tubing, stable branch of the
+      deliverability curve (``angelica.closures.well_model``);
     - everything else (ordinary fittings, check valves, orifice-model chokes,
       fluids without black-oil PVT): the K-factor equation of
       ``MinorLossModel``.
@@ -223,8 +225,8 @@ class ChokeFlowModel(MinorLossModel):
         link_fluid = resolve_link_fluid(self._fluid, link_state)
         return link_fluid is not None and hasattr(link_fluid, "pvt")
 
-    def _well_fluid(self, link_state):
-        if not getattr(link_state.component, "is_well_inflow", False):
+    def _well_fluid(self, link_state, flag: str = "is_well_inflow"):
+        if not getattr(link_state.component, flag, False):
             return None
         link_fluid = resolve_link_fluid(self._fluid, link_state)
         if link_fluid is None or not hasattr(link_fluid, "pvt"):
@@ -232,6 +234,12 @@ class ChokeFlowModel(MinorLossModel):
         return link_fluid
 
     def calculate_velocity(self, link_state, delta_p, density, viscosity, tolerance=None) -> float:
+        well_model_fluid = self._well_fluid(link_state, "is_well_model")
+        if well_model_fluid is not None:
+            from .well_model import well_link_curve
+            curve = well_link_curve(link_state, well_model_fluid)
+            m_dot, _ = curve.mass_flow(float(link_state.end_node.pressure_pa))
+            return m_dot / (density * link_state.area_m2)
         well_fluid = self._well_fluid(link_state)
         if well_fluid is not None:
             from .well_inflow import well_inflow_point
@@ -245,6 +253,14 @@ class ChokeFlowModel(MinorLossModel):
         return v if delta_p > 0.0 else -v
 
     def calculate_coupling(self, link_state, density, viscosity) -> float:
+        well_model_fluid = self._well_fluid(link_state, "is_well_model")
+        if well_model_fluid is not None:
+            # ΔP = P_res − P_wh with P_res fixed:  dṁ/dΔP = −dṁ/dP_wh  (> 0 on the
+            # stable branch).  A dead well gets a near-zero coupling.
+            from .well_model import well_link_curve
+            curve = well_link_curve(link_state, well_model_fluid)
+            _, dm_dpwh = curve.mass_flow(float(link_state.end_node.pressure_pa))
+            return min(dm_dpwh, -1e-12)
         well_fluid = self._well_fluid(link_state)
         if well_fluid is not None:
             # Tangent dṁ/dΔP of the IPR (exact for the linear part).

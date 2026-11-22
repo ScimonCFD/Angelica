@@ -29,6 +29,7 @@ from angelica.core.components import (
     HeatSource,
     Pipe,
     Pump,
+    Well,
     WellInflow,
 )
 from angelica.core.results import ComponentFlowResult, IterationMetrics
@@ -503,6 +504,28 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         diameter_m=_required_float(component, "diameter_m", link.link_id),
                         loss_coefficient=_optional_float(component, "loss_coefficient", default=2.0),
                         component_id=f"link_{link.link_id}_check_valve_{component.component_id}",
+                    )
+                )
+            elif component.component_type == "well":
+                if not is_black_oil:
+                    raise ValueError(
+                        f"Connection #{link.link_id} has a Well (IPR + tubing), which needs black-oil mode."
+                    )
+                tubing_length = _required_float(component, "tubing_length_m", link.link_id)
+                rise_text = component.properties.get("tubing_height_change_m", "").strip()
+                components.append(
+                    Well(
+                        start_node=current_start,
+                        end_node=current_end,
+                        diameter_m=_required_float(component, "diameter_m", link.link_id),
+                        productivity_index_m3_per_day_per_bar=_required_float(
+                            component, "productivity_index_m3_per_day_per_bar", link.link_id),
+                        ipr_model=component.properties.get("ipr_model", "vogel").strip() or "vogel",
+                        tubing_length_m=tubing_length,
+                        tubing_height_change_m=float(rise_text) if rise_text else tubing_length,
+                        tubing_roughness_m=_optional_float(component, "tubing_roughness_m", default=4.6e-5),
+                        tubing_segments=int(_optional_float(component, "tubing_segments", default=25.0)),
+                        component_id=f"link_{link.link_id}_well_{component.component_id}",
                     )
                 )
             elif component.component_type == "well_inflow":
