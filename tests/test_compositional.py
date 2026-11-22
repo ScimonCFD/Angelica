@@ -477,10 +477,108 @@ class TestThreePhaseDensity:
         z = self._norm(self.Z)
         zs = tuple(x * (1 - z_w) for x in z) + (z_w,)
         rho = _flash_properties(self.HC + ("water",), P, T, zs, "PR")[0]
-        beta, rg, rl, mg, ml, _, _ = _hc_phase_split(self.HC, P, T, z, "PR")
+        beta, rg, rl, mg, ml, _, _, _ = _hc_phase_split(self.HC, P, T, z, "PR")
         n_wl, n_wv = free_water_split(z_w, beta, 1 - z_w, T + 273.15, P)
         ng, nl = beta * (1 - z_w), (1 - beta) * (1 - z_w)
         mass = ng * mg + nl * ml + (n_wl + n_wv) * WATER_MW
         vol = (ng + n_wv) * mg / rg + nl * ml / rl + n_wl * WATER_MW / water_liquid_density_kg_m3(T + 273.15)
         assert rho == pytest.approx(mass / vol, rel=1e-9)
         assert mg < sum(a * b for a, b in zip(z, (16.04, 30.07, 44.10, 58.12, 72.15, 86.18))) < ml
+
+    def test_free_water_stays_liquid_without_hc_vapour(self):
+        """No HC vapour (all-liquid oil, or a dense phase thermo labels liquid):
+        the water has no gas to evaporate into and must stay liquid (v1.15.0)."""
+        from angelica.properties.free_water import free_water_split
+        assert free_water_split(0.1, 0.0, 0.9, 333.15, 150e5) == (0.1, 0.0)
+        # below the water saturation pressure it evaporates
+        assert free_water_split(0.1, 0.0, 0.9, 373.15, 0.5e5) == (0.0, 0.1)
+        # dense HC + water: adding liquid water can only raise the density
+        from angelica.properties.compositional_fluid import _flash_properties
+        z = self._norm(self.Z)
+        dry = _flash_properties(self.HC, 150e5, 60.0, z, "PR")[0]
+        wet = _flash_properties(self.HC + ("water",), 150e5, 60.0, tuple(x * 0.9 for x in z) + (0.1,), "PR")[0]
+        assert wet > dry
+
+
+class TestCompositionalBeggsBrillProperties:
+    """Gas/liquid split handed to Beggs-Brill (v1.15.0)."""
+
+    HC = ("methane", "ethane", "propane", "n-butane", "n-pentane", "n-hexane")
+    Z = tuple(x / 0.96 for x in (0.70, 0.08, 0.07, 0.05, 0.03, 0.03))
+
+    @pytest.mark.parametrize("water", [0.0, 0.1])
+    @pytest.mark.parametrize("P, T", [(60e5, 20.0), (20e5, 40.0), (150e5, 60.0)])
+    def test_no_slip_density_equals_bulk_density(self, water, P, T):
+        from angelica.properties.compositional_fluid import _beggs_brill_properties, _flash_properties
+        names, zs = self.HC, self.Z
+        if water:
+            names, zs = self.HC + ("water",), tuple(x * (1 - water) for x in self.Z) + (water,)
+        CL, rl, rg, _, _, sig = _beggs_brill_properties(names, P, T, zs, "PR")
+        assert 0.0 <= CL <= 1.0 and sig > 0.0
+        assert CL * rl + (1 - CL) * rg == pytest.approx(_flash_properties(names, P, T, zs, "PR")[0], rel=1e-9)
+
+    def test_liquid_fraction_matches_flash_volumes(self):
+        from angelica.properties.compositional_fluid import _beggs_brill_properties, _get_flash_obj
+        P, T = 60e5, 20.0
+        res = _get_flash_obj(self.HC, "PR").flash(T=T + 273.15, P=P, zs=list(self.Z))
+        v_g = res.betas[0] * res.gas.V()
+        v_l = res.betas[1] * res.liquid0.V()
+        CL = _beggs_brill_properties(self.HC, P, T, self.Z, "PR")[0]
+        assert CL == pytest.approx(v_l / (v_g + v_l), rel=1e-6)
+        assert 0.03 < CL < 0.1             # a few % liquid by volume
+
+    def test_single_phase_limits(self):
+        from angelica.properties.compositional_fluid import _beggs_brill_properties
+        assert _beggs_brill_properties(("methane",), 60e5, 20.0, (1.0,), "PR")[0] == 0.0
+        assert _beggs_brill_properties(("n-hexane",), 60e5, 20.0, (1.0,), "PR")[0] == 1.0
+
+
+class TestCompositionalBeggsBrillSolver:
+    """SteadyCompositionalSolver with BeggsBrillCorrelation (v1.15.0)."""
+
+    HC = ["methane", "ethane", "propane", "n-butane", "n-pentane", "n-hexane"]
+    Z = [x / 0.96 for x in (0.70, 0.08, 0.07, 0.05, 0.03, 0.03)]
+
+    def _case(self, dz):
+        from angelica.core.case import ThermalBoundary
+        return NetworkCase(
+            name="bb-comp", fluid_model=CompositionalFluid(self.HC, self.Z),
+            pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=60e5),),
+            pressure_outlets=(PressureBoundary(node_id=2, pressure_pa=50e5),),
+            thermal_inlets=(ThermalBoundary(node_id=1, temperature_c=20.0, bc_type="fixed_temperature"),),
+            components=(Pipe(start_node=1, end_node=2, diameter_m=0.2, length_m=5000.0,
+                             absolute_roughness_m=4.6e-5, height_change_m=dz),),
+        )
+
+    @pytest.mark.parametrize("dz", [0.0, 100.0, -100.0])
+    def test_pressure_drop_is_beggs_brill_of_flash_phases(self, dz):
+        import math
+        from angelica.closures import BeggsBrillCorrelation
+        from angelica.closures.beggs_brill import beggs_brill_gradient
+        case = self._case(dz)
+        res = SteadyCompositionalSolver(turbulent_pipe_correlation=BeggsBrillCorrelation()).solve(case)
+        assert res.converged
+        m = res.component_flows[0].mass_flow_kg_per_s
+
+        class _Node:
+            def __init__(self, p): self.pressure_pa = p
+
+        class _Link:
+            start_node, end_node = _Node(60e5), _Node(50e5)
+            temperature_c = res.node_temperatures_c[2]
+            zs = tuple(self.Z)
+
+        CL, rl, rg, ml, mg, sig = case.fluid_model.beggs_brill_phase_properties(_Link())
+        area = math.pi * 0.2 ** 2 / 4
+        v_m = m / ((CL * rl + (1 - CL) * rg) * area)
+        st = beggs_brill_gradient(v_m, CL, rl, rg, ml, mg, 0.2, 4.6e-5, math.asin(dz / 5000.0), sig)
+        assert st.dP_dz_total * 5000.0 == pytest.approx(10e5, rel=2e-3)
+
+    def test_slip_lowers_flow_and_balances_close(self):
+        from angelica.closures import BeggsBrillCorrelation
+        hom = SteadyCompositionalSolver().solve(self._case(0.0))
+        bb = SteadyCompositionalSolver(turbulent_pipe_correlation=BeggsBrillCorrelation()).solve(self._case(0.0))
+        m_h, m_b = hom.component_flows[0].mass_flow_kg_per_s, bb.component_flows[0].mass_flow_kg_per_s
+        assert 0.6 * m_h < m_b < 0.95 * m_h
+        assert bb.global_energy_balance.energy_error_pct < 0.01
+        assert bb.global_balance.mass_error_pct < 0.01

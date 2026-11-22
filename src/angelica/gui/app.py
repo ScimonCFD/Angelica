@@ -173,10 +173,10 @@ class NetSimGui:
             "name": "Panhandle B (gas)",
         },
         "beggs_brill": {
-            "name": "Beggs-Brill (two-phase, black-oil)",
+            "name": "Beggs-Brill (two-phase)",
         },
         "beggs_brill_payne": {
-            "name": "Beggs-Brill + Payne holdup correction (black-oil)",
+            "name": "Beggs-Brill + Payne holdup correction",
         },
     }
     VELOCITY_LOOP_METHOD_LIBRARY = {

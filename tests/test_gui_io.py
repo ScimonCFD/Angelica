@@ -414,6 +414,11 @@ class GuiNewFeatureTests(unittest.TestCase):
         solver = build_solver_from_scene(scene)
         self.assertTrue(solver._hydraulic_solver.turbulent_pipe_correlation.payne_correction)
 
+    def test_beggs_brill_selected_for_compositional(self):
+        from angelica.closures import BeggsBrillCorrelation
+        solver = build_solver_from_scene(self._scene("steady_compositional/07_hilly_condensate_beggs_brill"))
+        self.assertIsInstance(solver._hydraulic_solver.turbulent_pipe_correlation, BeggsBrillCorrelation)
+
     def test_beggs_brill_rejected_outside_black_oil(self):
         scene = self._scene("steady_non_isothermal_incompressible/06_hilly_network_heat_loss")
         scene.pressure_drop_model = {"library_key": "beggs_brill", "name": "Beggs-Brill"}

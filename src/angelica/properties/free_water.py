@@ -128,9 +128,12 @@ def free_water_split(
     P_sat = water_psat_pa(T_K)
     V_HC = VF_hc * sum_hc  # HC vapour moles per mole of feed
 
-    if P_Pa <= P_sat or V_HC < 1e-15:
+    if P_Pa <= P_sat:
         # Pressure below water saturation → all water stays as vapour
         return 0.0, z_water
+    if V_HC < 1e-15:
+        # No HC vapour to carry water vapour → all water is liquid
+        return z_water, 0.0
 
     # Maximum water that can stay in the vapour phase
     max_n_wv = V_HC * P_sat / (P_Pa - P_sat)

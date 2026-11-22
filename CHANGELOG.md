@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.15.0] — 2026-11-22
+
+### New: Beggs-Brill for compositional fluids
+
+`SteadyCompositionalSolver(turbulent_pipe_correlation=BeggsBrillCorrelation())`
+now solves two-phase pipes with slip instead of the homogeneous no-slip
+model.  Each pipe's EOS flash supplies the gas and liquid properties:
+
+  - liquid = hydrocarbon condensate + free water (volume-weighted density,
+    viscosity and surface tension; condensate surface tension from thermo,
+    gas–water from the black-oil correlation);
+  - gas = hydrocarbon vapour + water vapour;
+  - C_L = no-slip liquid volume fraction, and C_L·ρ_L + (1 − C_L)·ρ_g equals
+    the homogeneous mixture density, so the two models differ only in slip.
+
+New `CompositionalFluid.beggs_brill_phase_properties(link)`; the GUI accepts
+Beggs-Brill (and Beggs-Brill + Payne) in compositional mode.  Homogeneous
+flow stays the default, so existing results do not change.
+
+  - New tutorial: compositional 07, a 20 km hilly gas-condensate line —
+    Beggs-Brill delivers 15.6 % less than the homogeneous model for the same
+    80 → 55 bar, and holds 124 m³ of liquid instead of 22 m³.
+  - Validation: the no-slip density of the phase split equals the flash's
+    bulk density (with and without free water, two-phase and single-phase);
+    C_L equals the flash phase volumes; the network pressure drop equals the
+    Beggs-Brill gradient of the flash phases (horizontal, uphill, downhill).
+
+### Fixed: free water with no hydrocarbon vapour
+
+`free_water_split` sent all the water to the vapour phase when the
+hydrocarbon flash had no vapour (an all-liquid oil, or a dense fluid thermo
+labels liquid), because the "below saturation pressure" and "no gas to carry
+it" cases shared one branch.  Without hydrocarbon vapour the water now stays
+liquid.  No tutorial was affected.
+
 ## [1.14.0] — 2026-11-22
 
 ### Fixed: Beggs-Brill inclination correction now follows the published correlation

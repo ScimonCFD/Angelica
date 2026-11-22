@@ -50,7 +50,11 @@ class SteadyCompositionalSolver(BaseSolver):
     Models fluid mixtures of arbitrary components using the ``thermo`` library
     for equation-of-state PT flashes at each pipe's local pressure and
     temperature.  Two-phase regions are treated with the homogeneous no-slip
-    model (volumetric-fraction-weighted mixture properties).
+    model (volumetric-fraction-weighted mixture properties) unless a slip
+    correlation is passed as ``turbulent_pipe_correlation``: with
+    ``BeggsBrillCorrelation()`` the pipes use Beggs-Brill holdup and friction
+    with the gas and liquid (condensate + free water) properties of each
+    pipe's flash.
 
     ``case.fluid_model`` must be a :class:`~angelica.properties.CompositionalFluid`
     instance, which carries the component list and the default mole-fraction
@@ -216,6 +220,11 @@ class SteadyCompositionalSolver(BaseSolver):
 
         network_state = build_network_state(case)
         settings = self.compositional_settings
+
+        # Fluid-aware correlations (Beggs-Brill) read phase properties from the fluid.
+        corr = self._hydraulic_solver.turbulent_pipe_correlation
+        if hasattr(corr, "set_fluid"):
+            corr.set_fluid(fluid)
 
         # ── initialise thermal BCs ────────────────────────────────────────────
         for tb in case.thermal_inlets:

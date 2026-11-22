@@ -11,6 +11,7 @@ from .free_water import (
     water_liquid_density_kg_m3,
     water_liquid_viscosity_pa_s,
 )
+from .surface_tension import water_surface_tension
 
 # Flash-object cache keyed by (component_names, eos_name) — avoids recreating
 # ChemicalConstantsPackage + CEOSGas/Liquid on every cache miss.
@@ -149,6 +150,18 @@ def _wilson_psat(Tc: float, Pc: float, omega: float, T_K: float) -> float:
     return Pc * math.exp(5.373 * (1.0 + omega) * (1.0 - Tc / T_K))
 
 
+_SIGMA_PLACEHOLDER = 0.020
+
+
+def _liquid_sigma(phase) -> float:
+    """Liquid surface tension (N/m) from thermo, with a placeholder fallback."""
+    try:
+        sigma = float(phase.sigma())
+    except Exception:
+        return _SIGMA_PLACEHOLDER
+    return sigma if math.isfinite(sigma) and sigma > 1e-5 else _SIGMA_PLACEHOLDER
+
+
 @lru_cache(maxsize=2048)
 def _hc_phase_split(
     component_names: tuple[str, ...],
@@ -156,12 +169,14 @@ def _hc_phase_split(
     temperature_c: float,
     zs: tuple[float, ...],
     eos_name: str = "PR",
-) -> tuple[float, float, float, float, float, float, float]:
+) -> tuple[float, float, float, float, float, float, float, float]:
     """Per-phase properties of an HC-only PT flash.
 
-    Returns ``(beta_g, rho_g, rho_l, MW_g, MW_l, mu_g, mu_l)``: the vapour mole
-    fraction and, for each phase, mass density (kg/m³), molar mass (g/mol) and
-    viscosity (Pa·s).  When two phases coexist the lighter one is the vapour
+    Returns ``(beta_g, rho_g, rho_l, MW_g, MW_l, mu_g, mu_l, sigma_l)``: the
+    vapour mole fraction; for each phase, mass density (kg/m³), molar mass
+    (g/mol) and viscosity (Pa·s); and the liquid surface tension (N/m, from
+    thermo's mixture correlation; 0.02 N/m placeholder when unavailable or
+    when there is no liquid).  When two phases coexist the lighter one is the vapour
     (thermo can label both alike near the critical point).  A single-phase
     result repeats its properties in both slots, with ``beta_g`` 1 or 0.
     """
@@ -180,7 +195,8 @@ def _hc_phase_split(
         rho = max(float(phase.rho_mass()), 0.001)
         mu = max(_phase_viscosity(phase, T_K, pressure_pa, const, corr), 1e-10)
         MW = float(const.MWs[0])
-        return (1.0 if is_gas else 0.0, rho, rho, MW, MW, mu, mu)
+        sigma = _SIGMA_PLACEHOLDER if is_gas else _liquid_sigma(phase)
+        return (1.0 if is_gas else 0.0, rho, rho, MW, MW, mu, mu, sigma)
 
     phases = list(res.phases)
     if len(phases) == 1:
@@ -189,7 +205,8 @@ def _hc_phase_split(
         mu = max(_phase_viscosity(ph, T_K, pressure_pa, const, corr), 1e-10)
         MW = float(ph.MW())
         beta_g = 1.0 if _gas_like(ph, T_K, const) else 0.0
-        return (beta_g, rho, rho, MW, MW, mu, mu)
+        sigma = _SIGMA_PLACEHOLDER if beta_g == 1.0 else _liquid_sigma(ph)
+        return (beta_g, rho, rho, MW, MW, mu, mu, sigma)
 
     i_g = min(range(len(phases)), key=lambda i: phases[i].rho_mass())
     i_l = 1 - i_g if len(phases) == 2 else max(range(len(phases)), key=lambda i: phases[i].rho_mass())
@@ -203,6 +220,7 @@ def _hc_phase_split(
         float(liq.MW()),
         max(_phase_viscosity(gas, T_K, pressure_pa, const, corr, True), 1e-10),
         max(_phase_viscosity(liq, T_K, pressure_pa, const, corr, False), 1e-10),
+        _liquid_sigma(liq),
     )
 
 
@@ -306,7 +324,7 @@ def _flash_properties(
         # Each HC phase uses its own molar mass (the vapour is much lighter
         # than the feed, the condensate much heavier); water vapour travels
         # in the gas at the gas molar volume.
-        beta_g, rho_gas_hc, rho_liq_hc, MW_g, MW_l, _, _ = _hc_phase_split(
+        beta_g, rho_gas_hc, rho_liq_hc, MW_g, MW_l, _, _, _ = _hc_phase_split(
             hc_names, pressure_pa, temperature_c, hc_zs_norm, eos_name
         )
         rho_wl = water_liquid_density_kg_m3(T_K)
@@ -383,6 +401,63 @@ def _flash_properties(
     VF  = float(res.VF) if res.VF is not None else 0.0
 
     return (max(rho, 0.001), max(mu, 1e-10), max(Cp, 1.0), max(k, 1e-6), VF, 0.0)
+
+
+@lru_cache(maxsize=2048)
+def _beggs_brill_properties(
+    component_names: tuple[str, ...],
+    pressure_pa: float,
+    temperature_c: float,
+    zs: tuple[float, ...],
+    eos_name: str = "PR",
+) -> tuple[float, float, float, float, float, float]:
+    """Gas/liquid split for slip correlations: ``(C_L, rho_l, rho_g, mu_l, mu_g, sigma_l)``.
+
+    The liquid is the HC condensate plus free water (volume-weighted density,
+    viscosity and surface tension); the gas carries the water vapour.  C_L is
+    the no-slip liquid volume fraction, and C_L·ρ_l + (1 − C_L)·ρ_g equals the
+    bulk density of ``_flash_properties``.
+    """
+    T_K = temperature_c + 273.15
+    water_idx = find_water_index(component_names)
+    if water_idx is not None:
+        z_w = zs[water_idx]
+        hc_names = tuple(n for i, n in enumerate(component_names) if i != water_idx)
+        hc_zs_raw = tuple(z for i, z in enumerate(zs) if i != water_idx)
+        sum_hc = sum(hc_zs_raw)
+        if sum_hc < 1e-10 or not hc_names:
+            rho_w = water_liquid_density_kg_m3(T_K)
+            return (1.0, rho_w, 1.2, water_liquid_viscosity_pa_s(T_K), 1.5e-5,
+                    water_surface_tension(temperature_c, pressure_pa))
+        hc_zs = tuple(z / sum_hc for z in hc_zs_raw)
+        VF_hc = _flash_properties(hc_names, pressure_pa, temperature_c, hc_zs, eos_name)[4]
+        n_wl, n_wv = free_water_split(z_w, VF_hc, sum_hc, T_K, pressure_pa)
+    else:
+        hc_names, hc_zs, sum_hc, n_wl, n_wv = component_names, zs, 1.0, 0.0, 0.0
+
+    beta_g, rho_g, rho_l, MW_g, MW_l, mu_g, mu_l, sigma_l = _hc_phase_split(
+        hc_names, pressure_pa, temperature_c, hc_zs, eos_name
+    )
+    n_g, n_l = beta_g * sum_hc, (1.0 - beta_g) * sum_hc
+    V_gas = (n_g + n_wv) * MW_g / rho_g
+    V_hcl = n_l * MW_l / rho_l
+    rho_w = water_liquid_density_kg_m3(T_K)
+    V_wat = n_wl * WATER_MW / rho_w
+    V_liq = V_hcl + V_wat
+    V_tot = V_gas + V_liq
+    if V_tot <= 0.0:
+        return (1.0, rho_l, rho_g, mu_l, mu_g, sigma_l)
+    C_L = V_liq / V_tot
+    if V_liq > 0.0:
+        mu_w = water_liquid_viscosity_pa_s(T_K)
+        sigma_w = water_surface_tension(temperature_c, pressure_pa)
+        rho_liq = (V_hcl * rho_l + V_wat * rho_w) / V_liq
+        mu_liq = (V_hcl * mu_l + V_wat * mu_w) / V_liq
+        sig_liq = (V_hcl * sigma_l + V_wat * sigma_w) / V_liq
+    else:
+        rho_liq, mu_liq, sig_liq = rho_l, mu_l, sigma_l
+    rho_gas = (n_g * MW_g + n_wv * WATER_MW) / V_gas if V_gas > 0.0 else rho_g
+    return (C_L, rho_liq, rho_gas, mu_liq, mu_g, sig_liq)
 
 
 class CompositionalFluid(FluidModel):
@@ -525,6 +600,14 @@ class CompositionalFluid(FluidModel):
             return self._props(link_state)[5]
         except RuntimeError:
             return 0.0
+
+    def beggs_brill_phase_properties(self, link_state) -> tuple[float, float, float, float, float, float]:
+        """``(C_L, rho_l, rho_g, mu_l, mu_g, sigma_l)`` at the link's mean P, T, z
+        for slip correlations such as Beggs-Brill."""
+        zs = self._get_zs(link_state)
+        P_r, T_r = _cache_key_pt(self._get_pressure_pa(link_state), self._get_temperature_c(link_state))
+        zs_r = tuple(round(z, _ZS_DIGITS) for z in zs)
+        return _beggs_brill_properties(self.component_names, P_r, T_r, zs_r, self.eos_name)
 
     def flash_phase_detail_for_link(
         self, link_state

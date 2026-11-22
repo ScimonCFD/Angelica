@@ -75,7 +75,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - 1.0 Beggs-Brill inclination correction per the published correlation
   (added after review: the code used the Payne multipliers as C).  **Done
   in v1.14.0.**
-- 1.1 Beggs-Brill for compositional fluids, using per-phase flash properties
+- 1.1 **Done in v1.15.0.** Beggs-Brill for compositional fluids, using per-phase flash properties
   (three-phase: oil and free water combined as the liquid).
   *Done when:* black-oil and compositional runs with matched phase properties
   agree within 1 %; homogeneous remains the default so existing tutorials do
@@ -83,6 +83,13 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - 1.2 Per-segment report: holdup, flow pattern, superficial velocities,
   mixture velocity, liquid inventory; shown in the GUI link results.
 - 1.3 Erosional velocity ratio (API RP 14E) per link, with a GUI warning.
+- 1.4 Joule-Thomson cooling along pipes (compressible and compositional).
+  Found while doing 1.1: the pipe energy equation has no JT term (only
+  valves/fittings are isenthalpic), so a gas line expanding 25 bar stays at
+  constant temperature apart from wall heat loss — PIPEPHASE includes it.
+  *Done when:* an adiabatic gas pipe follows h(T, P) = const (plus friction
+  work consistent with the energy balance), checked against the EOS
+  isenthalpic temperature, and the global energy balance still closes.
 
 ### Stage 2 — flow assurance (item 3)
 - 2.1 Hydrate curve by van der Waals–Platteeuw (sI and sII, published
@@ -173,3 +180,15 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   - Decision: original Beggs-Brill stays the default; Payne is opt-in.
   - Pending: acceleration term (E_k) still omitted; no-slip friction uses
     Churchill (rough Moody) rather than the smooth-pipe Beggs-Brill form.
+- **1.1 Beggs-Brill for compositional fluids (v1.15.0).** Flash supplies
+  gas/liquid split (condensate + free water as liquid, thermo condensate
+  surface tension). Validated by consistency: no-slip density = bulk density,
+  C_L = flash phase volumes, network ΔP = Beggs-Brill gradient of the flash
+  phases. The roadmap's "black-oil vs compositional with matched phase
+  properties" check was not done as such: a black-oil PVT cannot be matched
+  to an EOS fluid without tuning; the plumbing tests cover the same risk
+  (both paths call the same `beggs_brill_gradient`).
+  - Tutorial compositional 07 (hilly gas-condensate line).
+  - Also fixed: `free_water_split` put all water in the vapour when the HC
+    flash had no vapour (no tutorial affected).
+  - Found: no Joule-Thomson term in the pipe energy equation → new item 1.4.

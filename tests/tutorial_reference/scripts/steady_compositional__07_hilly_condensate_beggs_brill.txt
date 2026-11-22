@@ -1,0 +1,25 @@
+============================================================================
+Tutorial 07 — Hilly gas-condensate line: homogeneous vs Beggs-Brill
+============================================================================
+
+  Model           ṁ (kg/s)  converged  mass bal.  energy bal.
+  Homogeneous        30.17       True    0.0007%      0.0000%
+  Beggs-Brill        25.46       True    0.0011%      0.0000%
+  Beggs-Brill delivers 15.6 % less for the same 25 bar.
+
+Sections with Beggs-Brill
+  Sec    dz  P_out  T_out       pattern    C_L    H_L  ΔP elev  ΔP fric  liquid
+        (m)  (bar)   (°C)                                (bar)    (bar)    (m³)
+  A     +80  74.66   38.8    segregated  0.019  0.136     1.13     4.23    34.5
+  B     -60  69.59   33.9    transition  0.023  0.116    -0.76     5.85    29.3
+  C    +120  61.81   30.0    transition  0.023  0.132     1.55     6.26    33.5
+  D     -40  55.00   25.8    transition  0.022  0.106    -0.44     7.26    26.8
+  Liquid in the line: 124 m³ with slip  ·  22 m³ at the no-slip fraction
+
+  • At these low mixture velocities the gas slips past the liquid everywhere:
+    H_L is five to seven times the no-slip fraction C_L.
+  • Uphill sections (A, C) hold the most liquid; downhill (B, D) the liquid
+    drains faster and H_L is lower, so the descent recovers less elevation
+    pressure than the climb cost.
+  • The extra liquid also raises the two-phase friction factor: friction,
+    not elevation, takes most of the 25 bar.
