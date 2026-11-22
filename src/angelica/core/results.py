@@ -4,6 +4,27 @@ from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
+class MultiphaseFlowResult:
+    """Two-phase flow state of one pipe (black-oil and compositional runs).
+
+    ``flow_pattern`` is the Beggs-Brill pattern when the run used Beggs-Brill,
+    or ``"no-slip"`` for the homogeneous model (then the holdup equals the
+    no-slip liquid fraction).  Gradients are along the flow direction, positive
+    when they oppose the flow; the elevation gradient uses the in-situ holdup.
+    """
+
+    flow_pattern: str
+    no_slip_liquid_fraction: float          # C_L = q_L / (q_L + q_g)
+    liquid_holdup: float                    # H_L, in-situ liquid volume fraction
+    superficial_liquid_velocity_m_per_s: float
+    superficial_gas_velocity_m_per_s: float
+    mixture_velocity_m_per_s: float
+    liquid_volume_m3: float                 # H_L · A · L
+    elevation_gradient_pa_per_m: float
+    friction_gradient_pa_per_m: float
+
+
+@dataclass(frozen=True)
 class ComponentFlowResult:
     label: str
     mass_flow_kg_per_s: float
@@ -16,6 +37,7 @@ class ComponentFlowResult:
     liquid_fraction: float | None = None  # mole fraction of feed that is HC liquid
     gas_phase_zs: tuple[float, ...] = ()    # gas phase mole fractions per HC component
     liquid_phase_zs: tuple[float, ...] = () # liquid HC phase mole fractions per HC component
+    multiphase: MultiphaseFlowResult | None = None  # pipes in black-oil / compositional runs
 
 
 @dataclass(frozen=True)

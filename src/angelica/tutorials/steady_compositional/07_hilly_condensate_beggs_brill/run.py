@@ -29,14 +29,14 @@ What to look at
 ---------------
   1. Beggs-Brill delivers less gas for the same pressures: the line holds
      more liquid, which is heavier to lift and raises the friction factor.
-  2. Section table: flow pattern, no-slip C_L, in-situ H_L, and the split
-     of the pressure drop between elevation and friction.
+  2. Section table (``result.component_flows[i].multiphase``): flow
+     pattern, no-slip C_L, in-situ H_L, superficial gas velocity, and the
+     split of the pressure drop between elevation and friction.
   3. Liquid inventory: the line holds far more liquid than the homogeneous
      model predicts — what a pig would push out, or a slug catcher see.
 """
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
 
@@ -45,7 +45,6 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from angelica.closures import BeggsBrillCorrelation
-from angelica.closures.beggs_brill import beggs_brill_gradient
 from angelica.core.case import InletCompositionBC, NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import Pipe
 from angelica.properties.compositional_fluid import CompositionalFluid
@@ -76,40 +75,24 @@ def build_case() -> NetworkCase:
     )
 
 
-class _LinkView:
-    """Mean conditions of one solved section, in the form the fluid model reads."""
-
-    class _Node:
-        def __init__(self, p: float) -> None:
-            self.pressure_pa = p
-
-    def __init__(self, p_in: float, p_out: float, t_mean: float) -> None:
-        self.start_node, self.end_node = self._Node(p_in), self._Node(p_out)
-        self.temperature_c = t_mean
-        self.zs = tuple(ZS)
-
-
-def section_table(case: NetworkCase, res) -> None:
-    fluid = case.fluid_model
-    area = math.pi * D * D / 4.0
+def section_table(res) -> None:
+    """Per-section two-phase state from ``ComponentFlowResult.multiphase``."""
     P, T = res.node_pressures_pa, res.node_temperatures_c
-    m = res.component_flows[0].mass_flow_kg_per_s
     print(f"  {'Sec':3} {'dz':>5} {'P_out':>6} {'T_out':>6} {'pattern':>13} {'C_L':>6} {'H_L':>6}"
-          f" {'ΔP elev':>8} {'ΔP fric':>8} {'liquid':>7}")
+          f" {'v_sg':>6} {'ΔP elev':>8} {'ΔP fric':>8} {'liquid':>7}")
     print(f"  {'':3} {'(m)':>5} {'(bar)':>6} {'(°C)':>6} {'':>13} {'':>6} {'':>6}"
-          f" {'(bar)':>8} {'(bar)':>8} {'(m³)':>7}")
-    inv_ns = inv_bb = 0.0
-    for i, (name, L, dz) in enumerate(SECTIONS):
-        link = _LinkView(P[i + 1], P[i + 2], 0.5 * (T[i + 1] + T[i + 2]))
-        CL, rl, rg, ml, mg, sig = fluid.beggs_brill_phase_properties(link)
-        v_m = m / ((CL * rl + (1 - CL) * rg) * area)
-        st = beggs_brill_gradient(v_m, CL, rl, rg, ml, mg, D, ROUGH, math.asin(dz / L), sig)
-        inv_ns += CL * area * L
-        inv_bb += st.holdup * area * L
-        print(f"  {name:3} {dz:>+5.0f} {P[i + 2] / 1e5:>6.2f} {T[i + 2]:>6.1f} {st.regime:>13} {CL:>6.3f}"
-              f" {st.holdup:>6.3f} {st.dP_dz_gravity * L / 1e5:>8.2f} {st.dP_dz_friction * L / 1e5:>8.2f}"
-              f" {st.holdup * area * L:>7.1f}")
-    print(f"  Liquid in the line: {inv_bb:.0f} m³ with slip  ·  {inv_ns:.0f} m³ at the no-slip fraction")
+          f" {'(m/s)':>6} {'(bar)':>8} {'(bar)':>8} {'(m³)':>7}")
+    inv_ns = inv = 0.0
+    for i, ((name, L, dz), cf) in enumerate(zip(SECTIONS, res.component_flows)):
+        mp = cf.multiphase
+        inv += mp.liquid_volume_m3
+        inv_ns += mp.no_slip_liquid_fraction * mp.liquid_volume_m3 / mp.liquid_holdup
+        print(f"  {name:3} {dz:>+5.0f} {P[i + 2] / 1e5:>6.2f} {T[i + 2]:>6.1f} {mp.flow_pattern:>13}"
+              f" {mp.no_slip_liquid_fraction:>6.3f} {mp.liquid_holdup:>6.3f}"
+              f" {mp.superficial_gas_velocity_m_per_s:>6.2f}"
+              f" {mp.elevation_gradient_pa_per_m * L / 1e5:>8.2f} {mp.friction_gradient_pa_per_m * L / 1e5:>8.2f}"
+              f" {mp.liquid_volume_m3:>7.1f}")
+    print(f"  Liquid in the line: {inv:.0f} m³ with slip  ·  {inv_ns:.0f} m³ at the no-slip fraction")
 
 
 def run() -> None:
@@ -118,8 +101,7 @@ def run() -> None:
     print("=" * 76)
 
     hom = SteadyCompositionalSolver().solve(build_case())
-    case_bb = build_case()
-    bb = SteadyCompositionalSolver(turbulent_pipe_correlation=BeggsBrillCorrelation()).solve(case_bb)
+    bb = SteadyCompositionalSolver(turbulent_pipe_correlation=BeggsBrillCorrelation()).solve(build_case())
 
     m_h = hom.component_flows[0].mass_flow_kg_per_s
     m_b = bb.component_flows[0].mass_flow_kg_per_s
@@ -130,7 +112,7 @@ def run() -> None:
     print(f"  Beggs-Brill delivers {100 * (1 - m_b / m_h):.1f} % less for the same 25 bar.")
 
     print("\nSections with Beggs-Brill")
-    section_table(case_bb, bb)
+    section_table(bb)
     print()
     print("  • At these low mixture velocities the gas slips past the liquid everywhere:")
     print("    H_L is five to seven times the no-slip fraction C_L.")

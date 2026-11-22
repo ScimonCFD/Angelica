@@ -366,6 +366,79 @@ def surface_tension_from_pvt(pvt, api_gravity: float) -> float:
     )
 
 
+def link_phase_properties(fluid, link_state) -> tuple[float, float, float, float, float, float] | None:
+    """``(C_L, rho_l, rho_g, mu_l, mu_g, sigma_l)`` of a link for slip
+    correlations, from a black-oil (``.pvt``) or compositional
+    (``.beggs_brill_phase_properties``) fluid; None for other fluids."""
+    if fluid is not None and hasattr(fluid, "fluid_for_link"):
+        fluid = fluid.fluid_for_link(link_state)  # per-inlet composition wrapper
+    if fluid is not None and hasattr(fluid, "beggs_brill_phase_properties"):
+        return fluid.beggs_brill_phase_properties(link_state)
+    if fluid is None or not hasattr(fluid, "pvt"):
+        return None
+    P_s = getattr(getattr(link_state, "start_node", None), "pressure_pa", None)
+    P_e = getattr(getattr(link_state, "end_node", None), "pressure_pa", None)
+    if P_s is not None and P_e is not None:
+        P_avg = 0.5 * (float(P_s) + float(P_e))
+    elif P_s is not None or P_e is not None:
+        P_avg = float(P_s if P_s is not None else P_e)
+    else:
+        P_avg = getattr(fluid, "reference_pressure_pa", 101_325.0)
+    T_avg = float(link_state.temperature_c) if link_state.temperature_c is not None else 20.0
+    pvt = fluid.pvt(P_avg, T_avg)
+    return (*phase_properties_from_pvt(pvt),
+            surface_tension_from_pvt(pvt, float(getattr(fluid, "api_gravity", 35.0))))
+
+
+def multiphase_flow_report(link_state, fluid, correlation=None):
+    """Two-phase flow state of a solved pipe (``MultiphaseFlowResult``), or None.
+
+    With a ``BeggsBrillCorrelation`` the holdup, pattern and gradients are
+    Beggs-Brill's; otherwise the homogeneous model is reported (H_L = C_L,
+    friction = total gradient minus elevation).
+    """
+    from angelica.core.results import MultiphaseFlowResult
+
+    comp = getattr(link_state, "component", None)
+    L = getattr(comp, "length_m", None)
+    if not L or not hasattr(comp, "absolute_roughness_m"):
+        return None
+    props = link_phase_properties(fluid, link_state)
+    if props is None:
+        return None
+    C_L, rho_l, rho_g, mu_l, mu_g, sigma_l = props
+    D = comp.diameter_m
+    area = math.pi * D * D / 4.0
+    m = float(link_state.mass_flow_kg_per_s)
+    rho_ns = C_L * rho_l + (1.0 - C_L) * rho_g
+    v_m = abs(m) / max(rho_ns * area, 1e-30)
+    direction = 1.0 if m >= 0.0 else -1.0
+    theta = direction * math.asin(max(-1.0, min(1.0, comp.height_change_m / L)))
+    p_up, p_down = float(link_state.start_node.pressure_pa), float(link_state.end_node.pressure_pa)
+    if direction < 0.0:
+        p_up, p_down = p_down, p_up
+    if isinstance(correlation, BeggsBrillCorrelation):
+        st = beggs_brill_gradient(v_m, C_L, rho_l, rho_g, mu_l, mu_g, D, comp.absolute_roughness_m,
+                                  theta, sigma_l, correlation.payne_correction)
+        pattern, H_L = st.regime, st.holdup
+        elev, fric = st.dP_dz_gravity, st.dP_dz_friction
+    else:
+        pattern, H_L = "no-slip", C_L
+        elev = rho_ns * _G * math.sin(theta)
+        fric = (p_up - p_down) / L - elev
+    return MultiphaseFlowResult(
+        flow_pattern=pattern,
+        no_slip_liquid_fraction=C_L,
+        liquid_holdup=H_L,
+        superficial_liquid_velocity_m_per_s=C_L * v_m,
+        superficial_gas_velocity_m_per_s=(1.0 - C_L) * v_m,
+        mixture_velocity_m_per_s=v_m,
+        liquid_volume_m3=H_L * area * L,
+        elevation_gradient_pa_per_m=elev,
+        friction_gradient_pa_per_m=fric,
+    )
+
+
 # ── PressureDropCorrelation implementation ────────────────────────────────────
 
 class BeggsBrillCorrelation(PressureDropCorrelation):
@@ -412,12 +485,8 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
 
     def _phase_properties(self, pipe_state) -> tuple[float, float, float, float, float, float]:
         """Return (C_L, rho_l, rho_g, mu_l, mu_g, sigma_l) at midpoint conditions."""
-        fluid = self._fluid
-        if fluid is not None and hasattr(fluid, "fluid_for_link"):
-            fluid = fluid.fluid_for_link(pipe_state)  # per-inlet composition wrapper
-        if fluid is not None and hasattr(fluid, "beggs_brill_phase_properties"):
-            return fluid.beggs_brill_phase_properties(pipe_state)
-        if fluid is None or not hasattr(fluid, "pvt"):
+        props = link_phase_properties(self._fluid, pipe_state)
+        if props is None:
             if not self._warned_fallback:
                 warnings.warn(
                     "BeggsBrillCorrelation: fluid has no black-oil PVT; using an "
@@ -426,24 +495,7 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
                 )
                 self._warned_fallback = True
             return 1.0, 850.0, 1.2, 1e-3, 1.5e-5, 0.030  # all-liquid fallback
-
-        # Midpoint pressure
-        P_s = getattr(getattr(pipe_state, "start_node", None), "pressure_pa", None)
-        P_e = getattr(getattr(pipe_state, "end_node",   None), "pressure_pa", None)
-        if P_s is not None and P_e is not None:
-            P_avg = 0.5 * (float(P_s) + float(P_e))
-        elif P_s is not None:
-            P_avg = float(P_s)
-        elif P_e is not None:
-            P_avg = float(P_e)
-        else:
-            P_avg = getattr(fluid, "reference_pressure_pa", 101_325.0)
-
-        T_avg = float(pipe_state.temperature_c) if pipe_state.temperature_c is not None else 20.0
-
-        pvt = fluid.pvt(P_avg, T_avg)
-        return (*phase_properties_from_pvt(pvt),
-                surface_tension_from_pvt(pvt, float(getattr(fluid, "api_gravity", 35.0))))
+        return props
 
     def _solve_vm(
         self,

@@ -152,14 +152,73 @@ def _wilson_psat(Tc: float, Pc: float, omega: float, T_K: float) -> float:
 
 _SIGMA_PLACEHOLDER = 0.020
 
+# Parachors, (dyn/cm)^¼·cm³/mol, keyed by CAS number (Weinaug & Katz 1943;
+# values as tabulated in Whitson & Brulé, *Phase Behavior*, SPE Monograph 20,
+# 2000, and Reid, Prausnitz & Poling).  Components not listed use the Fanchi
+# (1985) correlation P = −11.4 + 3.23·M − 0.0022·M².
+_PARACHORS: dict[str, float] = {
+    "74-82-8": 77.0,     # methane
+    "74-84-0": 108.0,    # ethane
+    "74-98-6": 150.3,    # propane
+    "75-28-5": 181.5,    # isobutane
+    "106-97-8": 189.9,   # n-butane
+    "78-78-4": 225.0,    # isopentane
+    "109-66-0": 231.5,   # n-pentane
+    "110-54-3": 271.0,   # n-hexane
+    "142-82-5": 312.5,   # n-heptane
+    "111-65-9": 351.5,   # n-octane
+    "111-84-2": 393.0,   # n-nonane
+    "124-18-5": 433.5,   # n-decane
+    "7727-37-9": 41.0,   # nitrogen
+    "124-38-9": 78.0,    # carbon dioxide
+    "7783-06-4": 80.1,   # hydrogen sulfide
+}
 
-def _liquid_sigma(phase) -> float:
-    """Liquid surface tension (N/m) from thermo, with a placeholder fallback."""
-    try:
-        sigma = float(phase.sigma())
-    except Exception:
-        return _SIGMA_PLACEHOLDER
-    return sigma if math.isfinite(sigma) and sigma > 1e-5 else _SIGMA_PLACEHOLDER
+
+def _parachors(constants) -> list[float]:
+    out = []
+    for cas, mw in zip(constants.CASs, constants.MWs):
+        p = _PARACHORS.get(cas)
+        out.append(p if p is not None else max(-11.4 + 3.23 * mw - 0.0022 * mw * mw, 10.0))
+    return out
+
+
+_R_GAS = 8.314462618
+
+
+def _peneloux_molar_density(constants, phase) -> float:
+    """Molar density (mol/cm³) with the Peneloux volume translation for PR,
+    c_i = 0.50033·R·Tc/Pc·(0.25969 − Z_RA), Z_RA = 0.29056 − 0.08775·ω.
+
+    Macleod-Sugden scales with density to the fourth power, and untranslated
+    PR liquid densities are 3–8 % off for C5–C10 (σ off by 15–30 %); the shift
+    brings pure n-alkane σ at 20 °C within 5 % of measured values.  It is used
+    for σ only; the flow model keeps the EOS densities.
+    """
+    shift = sum(
+        x * 0.50033 * _R_GAS * tc / pc * (0.25969 - (0.29056 - 0.08775 * w))
+        for x, tc, pc, w in zip(phase.zs, constants.Tcs, constants.Pcs, constants.omegas)
+    )
+    V = float(phase.V()) - shift                                   # m³/mol
+    return 1e-6 / V if V > 0.0 else float(phase.rho_mass()) * 1e-3 / float(phase.MW())
+
+
+def _macleod_sugden_sigma(constants, liq, gas=None) -> float:
+    """Gas–liquid surface tension (N/m) by Macleod-Sugden / Weinaug-Katz:
+
+        σ^¼ = Σ P_i·(x_i·ρ_L/M_L − y_i·ρ_V/M_V)    (cgs: dyn/cm, mol/cm³)
+
+    with Peneloux-translated molar densities.  The vapour term makes σ
+    vanish at the critical point.  Without a gas phase (single-phase liquid)
+    the vapour term is dropped.
+    """
+    par = _parachors(constants)
+    s = sum(p * x for p, x in zip(par, liq.zs)) * _peneloux_molar_density(constants, liq)
+    if gas is not None:
+        s -= sum(p * y for p, y in zip(par, gas.zs)) * _peneloux_molar_density(constants, gas)
+    if not math.isfinite(s) or s <= 0.0:
+        return 1e-5
+    return max(s ** 4 * 1e-3, 1e-5)                               # dyn/cm → N/m
 
 
 @lru_cache(maxsize=2048)
@@ -174,9 +233,9 @@ def _hc_phase_split(
 
     Returns ``(beta_g, rho_g, rho_l, MW_g, MW_l, mu_g, mu_l, sigma_l)``: the
     vapour mole fraction; for each phase, mass density (kg/m³), molar mass
-    (g/mol) and viscosity (Pa·s); and the liquid surface tension (N/m, from
-    thermo's mixture correlation; 0.02 N/m placeholder when unavailable or
-    when there is no liquid).  When two phases coexist the lighter one is the vapour
+    (g/mol) and viscosity (Pa·s); and the gas–liquid surface tension (N/m,
+    Macleod-Sugden with parachors; 0.02 N/m placeholder when there is no
+    liquid).  When two phases coexist the lighter one is the vapour
     (thermo can label both alike near the critical point).  A single-phase
     result repeats its properties in both slots, with ``beta_g`` 1 or 0.
     """
@@ -195,7 +254,7 @@ def _hc_phase_split(
         rho = max(float(phase.rho_mass()), 0.001)
         mu = max(_phase_viscosity(phase, T_K, pressure_pa, const, corr), 1e-10)
         MW = float(const.MWs[0])
-        sigma = _SIGMA_PLACEHOLDER if is_gas else _liquid_sigma(phase)
+        sigma = _SIGMA_PLACEHOLDER if is_gas else _macleod_sugden_sigma(const, phase)
         return (1.0 if is_gas else 0.0, rho, rho, MW, MW, mu, mu, sigma)
 
     phases = list(res.phases)
@@ -205,7 +264,7 @@ def _hc_phase_split(
         mu = max(_phase_viscosity(ph, T_K, pressure_pa, const, corr), 1e-10)
         MW = float(ph.MW())
         beta_g = 1.0 if _gas_like(ph, T_K, const) else 0.0
-        sigma = _SIGMA_PLACEHOLDER if beta_g == 1.0 else _liquid_sigma(ph)
+        sigma = _SIGMA_PLACEHOLDER if beta_g == 1.0 else _macleod_sugden_sigma(const, ph)
         return (beta_g, rho, rho, MW, MW, mu, mu, sigma)
 
     i_g = min(range(len(phases)), key=lambda i: phases[i].rho_mass())
@@ -220,7 +279,7 @@ def _hc_phase_split(
         float(liq.MW()),
         max(_phase_viscosity(gas, T_K, pressure_pa, const, corr, True), 1e-10),
         max(_phase_viscosity(liq, T_K, pressure_pa, const, corr, False), 1e-10),
-        _liquid_sigma(liq),
+        _macleod_sugden_sigma(const, liq, gas),
     )
 
 

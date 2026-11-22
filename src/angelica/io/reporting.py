@@ -74,6 +74,7 @@ def export_solve_result_csv(result, output_path: str) -> None:
         _write_compositions_csv(writer, result)
         _write_component_mass_flows_csv(writer, result)
         _write_phase_report_csv(writer, result)
+        _write_multiphase_csv(writer, result)
 
 
 def export_solve_result_workbook(result, output_path: str) -> None:
@@ -82,7 +83,7 @@ def export_solve_result_workbook(result, output_path: str) -> None:
     except ImportError as _err:
         raise ImportError(
             "Excel export requires the 'openpyxl' package. "
-            "Install it with: pip install 'angelica[excel]'"
+            "Install it with: pip install openpyxl  (included in 'angelica[gui]')"
         ) from _err
 
     output = Path(output_path)
@@ -154,6 +155,7 @@ def export_solve_result_workbook(result, output_path: str) -> None:
     _write_compositions_sheet(workbook, result)
     _write_component_mass_flows_sheet(workbook, result)
     _write_phase_report_sheet(workbook, result)
+    _write_multiphase_sheet(workbook, result)
     workbook.save(output)
 
 
@@ -630,3 +632,54 @@ def _write_phase_report_sheet(workbook, result) -> None:
                     ws.append([cf.label if idx == 0 else None, comp, zi, yi, xi])
                 else:
                     ws.append([cf.label if idx == 0 else None, comp, zi, yi])
+
+
+# ── Multiphase flow (holdup, pattern, velocities) ─────────────────────────────
+
+MULTIPHASE_HEADER = [
+    "Pipe", "Flow pattern", "C_L no-slip (-)", "H_L holdup (-)", "v_sL (m/s)", "v_sg (m/s)",
+    "v_m (m/s)", "Liquid volume (m^3)", "dP/dz elevation (Pa/m)", "dP/dz friction (Pa/m)",
+]
+
+
+def multiphase_rows(result) -> list[list]:
+    """One row per pipe with a two-phase report, plus a total-liquid row."""
+    rows: list[list] = []
+    total = 0.0
+    for cf in result.component_flows:
+        mp = getattr(cf, "multiphase", None)
+        if mp is None:
+            continue
+        total += mp.liquid_volume_m3
+        rows.append([
+            cf.label, mp.flow_pattern,
+            round(mp.no_slip_liquid_fraction, 6), round(mp.liquid_holdup, 6),
+            round(mp.superficial_liquid_velocity_m_per_s, 5),
+            round(mp.superficial_gas_velocity_m_per_s, 5),
+            round(mp.mixture_velocity_m_per_s, 5), round(mp.liquid_volume_m3, 4),
+            round(mp.elevation_gradient_pa_per_m, 4), round(mp.friction_gradient_pa_per_m, 4),
+        ])
+    if rows:
+        rows.append(["Total liquid in pipes", "", "", "", "", "", "", round(total, 4), "", ""])
+    return rows
+
+
+def _write_multiphase_csv(writer, result) -> None:
+    rows = multiphase_rows(result)
+    if not rows:
+        return
+    writer.writerow([])
+    writer.writerow(["=== MULTIPHASE FLOW ==="])
+    writer.writerow(MULTIPHASE_HEADER)
+    for row in rows:
+        writer.writerow(row)
+
+
+def _write_multiphase_sheet(workbook, result) -> None:
+    rows = multiphase_rows(result)
+    if not rows:
+        return
+    ws = workbook.create_sheet("Multiphase")
+    ws.append(MULTIPHASE_HEADER)
+    for row in rows:
+        ws.append([None if v == "" else v for v in row])

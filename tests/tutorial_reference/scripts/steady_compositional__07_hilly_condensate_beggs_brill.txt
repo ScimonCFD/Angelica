@@ -4,17 +4,17 @@ Tutorial 07 — Hilly gas-condensate line: homogeneous vs Beggs-Brill
 
   Model           ṁ (kg/s)  converged  mass bal.  energy bal.
   Homogeneous        30.17       True    0.0007%      0.0000%
-  Beggs-Brill        25.46       True    0.0011%      0.0000%
-  Beggs-Brill delivers 15.6 % less for the same 25 bar.
+  Beggs-Brill        25.54       True    0.0016%      0.0000%
+  Beggs-Brill delivers 15.3 % less for the same 25 bar.
 
 Sections with Beggs-Brill
-  Sec    dz  P_out  T_out       pattern    C_L    H_L  ΔP elev  ΔP fric  liquid
-        (m)  (bar)   (°C)                                (bar)    (bar)    (m³)
-  A     +80  74.66   38.8    segregated  0.019  0.136     1.13     4.23    34.5
-  B     -60  69.59   33.9    transition  0.023  0.116    -0.76     5.85    29.3
-  C    +120  61.81   30.0    transition  0.023  0.132     1.55     6.26    33.5
-  D     -40  55.00   25.8    transition  0.022  0.106    -0.44     7.26    26.8
-  Liquid in the line: 124 m³ with slip  ·  22 m³ at the no-slip fraction
+  Sec    dz  P_out  T_out       pattern    C_L    H_L   v_sg  ΔP elev  ΔP fric  liquid
+        (m)  (bar)   (°C)                              (m/s)    (bar)    (bar)    (m³)
+  A     +80  74.77   38.8    segregated  0.020  0.140   5.51     1.14     4.08    35.5
+  B     -60  69.68   33.9    transition  0.023  0.116   5.77    -0.77     5.86    29.5
+  C    +120  61.86   30.0    transition  0.024  0.132   6.29     1.56     6.27    33.5
+  D     -40  55.00   25.8    transition  0.022  0.106   7.11    -0.44     7.30    26.8
+  Liquid in the line: 125 m³ with slip  ·  23 m³ at the no-slip fraction
 
   • At these low mixture velocities the gas slips past the liquid everywhere:
     H_L is five to seven times the no-slip fraction C_L.

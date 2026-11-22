@@ -196,6 +196,14 @@ class SteadyCompositionalSolver(BaseSolver):
 
     # ── Main solve ────────────────────────────────────────────────────────────
 
+    def _multiphase_report(self, link, fluid):
+        """Holdup, flow pattern and velocities of a solved pipe (None otherwise)."""
+        from angelica.closures.beggs_brill import multiphase_flow_report
+        try:
+            return multiphase_flow_report(link, fluid, self._hydraulic_solver.turbulent_pipe_correlation)
+        except Exception:  # a report must never break a converged solve
+            return None
+
     def solve(self, case: NetworkCase, progress_callback=None) -> SolveResult:
         from angelica.numerics.energy import solve_energy_system
 
@@ -382,6 +390,7 @@ class SteadyCompositionalSolver(BaseSolver):
                     liquid_fraction=liq_frac,
                     gas_phase_zs=gas_zs,
                     liquid_phase_zs=liquid_zs,
+                    multiphase=self._multiphase_report(link, fluid),
                 )
             )
 

@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.16.0] — 2026-11-22
+
+### New: two-phase flow report per pipe (holdup, flow pattern, inventory)
+
+Black-oil and compositional results now carry, for every pipe,
+`ComponentFlowResult.multiphase` (`MultiphaseFlowResult`):
+
+  - flow pattern (Beggs-Brill pattern, or "no-slip" for the homogeneous
+    model), no-slip liquid fraction C_L and in-situ holdup H_L;
+  - superficial liquid and gas velocities and mixture velocity;
+  - liquid volume in the pipe (H_L·A·L);
+  - elevation and friction pressure gradients along the flow direction.
+
+The table is exported to CSV ("=== MULTIPHASE FLOW ===") and Excel (sheet
+"Multiphase", with the total liquid in the pipes), and shown in the GUI:
+right-click a link → *Multiphase Flow*.  Tutorial compositional 07 now reads
+its section table from the report.  Tests check that the elevation and
+friction gradients add up to each section's pressure drop, the velocity and
+volume identities, the homogeneous limit and the sign for reverse flow.
+
+### Fixed: gas–condensate surface tension (v1.15.0 CI failure)
+
+v1.15.0 took the condensate surface tension from thermo, whose mixture model
+changed between versions (7.0 vs 4.4 mN/m for the same phases in thermo 0.5
+and 0.6), so tutorial compositional 07 differed by 0.2 % on CI.  Surface
+tension is now computed in Angelica by Macleod-Sugden / Weinaug-Katz with a
+parachor table and Peneloux-translated PR densities (σ ∝ ρ⁴, so the
+untranslated PR liquid densities gave 15–30 % errors).  Pure n-alkanes at
+20 °C are within 1–5 % of measured values, and σ falls to zero as the phases
+converge near the critical point, which the previous liquid-only value did
+not.  Tutorial compositional 07: Beggs-Brill flow 25.46 → 25.54 kg/s.
+
+Also: the Excel-export error message no longer suggests the nonexistent
+`angelica[excel]` extra.
+
 ## [1.15.0] — 2026-11-22
 
 ### New: Beggs-Brill for compositional fluids

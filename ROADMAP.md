@@ -80,7 +80,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   *Done when:* black-oil and compositional runs with matched phase properties
   agree within 1 %; homogeneous remains the default so existing tutorials do
   not change.
-- 1.2 Per-segment report: holdup, flow pattern, superficial velocities,
+- 1.2 **Done in v1.16.0.** Per-segment report: holdup, flow pattern, superficial velocities,
   mixture velocity, liquid inventory; shown in the GUI link results.
 - 1.3 Erosional velocity ratio (API RP 14E) per link, with a GUI warning.
 - 1.4 Joule-Thomson cooling along pipes (compressible and compositional).
@@ -192,3 +192,13 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   - Also fixed: `free_water_split` put all water in the vapour when the HC
     flash had no vapour (no tutorial affected).
   - Found: no Joule-Thomson term in the pipe energy equation → new item 1.4.
+  - CI failed on v1.15.0: thermo's condensate surface tension differs
+    between versions (local 0.5 vs CI 0.6). Lesson: anything taken from
+    thermo beyond the EOS core (σ, transport models) must be checked in the
+    py311 scratch env (`scratchpad/py311`, thermo 0.6.1) before release.
+- **1.2 Multiphase report (v1.16.0).** `MultiphaseFlowResult` per pipe,
+  CSV/Excel section, GUI window (checked visually by capturing the real
+  Toplevel with ImageMagick `import -window`; PIL grabs come out black on
+  this desktop). Also replaced thermo σ by Macleod-Sugden + Peneloux
+  (pure n-alkanes within 1–5 % of CRC values; mixture IFT data not
+  available to me — limitation noted).

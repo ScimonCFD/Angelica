@@ -553,6 +553,7 @@ class TestCompositionalBeggsBrillSolver:
     @pytest.mark.parametrize("dz", [0.0, 100.0, -100.0])
     def test_pressure_drop_is_beggs_brill_of_flash_phases(self, dz):
         import math
+
         from angelica.closures import BeggsBrillCorrelation
         from angelica.closures.beggs_brill import beggs_brill_gradient
         case = self._case(dz)
@@ -582,3 +583,34 @@ class TestCompositionalBeggsBrillSolver:
         assert 0.6 * m_h < m_b < 0.95 * m_h
         assert bb.global_energy_balance.energy_error_pct < 0.01
         assert bb.global_balance.mass_error_pct < 0.01
+
+
+class TestGasLiquidSurfaceTension:
+    """Macleod-Sugden σ with parachors and Peneloux-translated densities (v1.16.0)."""
+
+    # Measured surface tension against air at 20 °C (mN/m), CRC Handbook.
+    @pytest.mark.parametrize("name, measured", [
+        ("n-pentane", 16.0), ("n-hexane", 18.4), ("n-heptane", 20.1), ("n-octane", 21.6), ("n-decane", 23.8),
+    ])
+    def test_pure_n_alkanes_within_6_percent(self, name, measured):
+        from angelica.properties.compositional_fluid import _hc_phase_split
+        sigma = _hc_phase_split((name,), 101325.0, 20.0, (1.0,), "PR")[7] * 1e3
+        assert sigma == pytest.approx(measured, rel=0.06)
+
+    def test_sigma_falls_as_phases_converge(self):
+        """Methane–n-butane at 40 °C: as pressure rises toward the critical
+        region the phases converge and σ decreases monotonically."""
+        from angelica.properties.compositional_fluid import _hc_phase_split
+        sig = []
+        for p_bar in (20, 40, 60, 80, 100):
+            beta, *_rest, s = _hc_phase_split(("methane", "n-butane"), p_bar * 1e5, 40.0, (0.5, 0.5), "PR")
+            assert 0.0 < beta < 1.0
+            sig.append(s)
+        assert all(b < a for a, b in zip(sig, sig[1:]))
+        assert sig[-1] < 0.5 * sig[0]
+
+    def test_unknown_component_uses_fanchi_parachor(self):
+        from angelica.properties.compositional_fluid import _get_flash_obj, _parachors
+        c = _get_flash_obj(("n-dodecane",), "PR").constants
+        mw = c.MWs[0]
+        assert _parachors(c)[0] == pytest.approx(-11.4 + 3.23 * mw - 0.0022 * mw * mw)

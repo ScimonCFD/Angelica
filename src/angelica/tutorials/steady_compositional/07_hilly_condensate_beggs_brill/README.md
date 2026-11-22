@@ -31,26 +31,31 @@ result = SteadyCompositionalSolver(
 
 In the GUI choose *Physics → Define Pressure-Drop Model → Beggs-Brill
 (two-phase)*. Each pipe's flash gives the gas and liquid densities,
-viscosities and the condensate surface tension; their no-slip mixture
+viscosities and the gas–condensate surface tension (Macleod-Sugden); their no-slip mixture
 density equals the homogeneous model's density, so the two models differ
 only in slip.
 
 ## Results
 
+The section table comes from `result.component_flows[i].multiphase`
+(`MultiphaseFlowResult`), also exported to CSV/Excel and shown in the GUI
+(right-click a link → *Multiphase Flow*).
+
+
 | Model | Flow (kg/s) |
 |---|---|
 | Homogeneous | 30.17 |
-| Beggs-Brill | 25.46 (15.6 % less) |
+| Beggs-Brill | 25.54 (15.3 % less) |
 
 | Section | dz (m) | Pattern | C_L | H_L | ΔP elevation (bar) | ΔP friction (bar) |
 |---|---|---|---|---|---|---|
-| A | +80 | segregated | 0.019 | 0.136 | 1.13 | 4.23 |
-| B | −60 | transition | 0.023 | 0.116 | −0.76 | 5.85 |
-| C | +120 | transition | 0.023 | 0.132 | 1.55 | 6.26 |
-| D | −40 | transition | 0.022 | 0.106 | −0.44 | 7.26 |
+| A | +80 | segregated | 0.020 | 0.140 | 1.14 | 4.08 |
+| B | −60 | transition | 0.023 | 0.116 | −0.77 | 5.86 |
+| C | +120 | transition | 0.024 | 0.132 | 1.56 | 6.27 |
+| D | −40 | transition | 0.022 | 0.106 | −0.44 | 7.30 |
 
 At these low mixture velocities the liquid holdup is five to seven times the
-no-slip liquid fraction: the line holds about 124 m³ of liquid, against 22 m³
+no-slip liquid fraction: the line holds about 125 m³ of liquid, against 23 m³
 in the homogeneous model. Uphill sections hold the most; downhill the
 liquid drains faster. The extra liquid raises the two-phase friction factor,
 which takes most of the 25 bar.

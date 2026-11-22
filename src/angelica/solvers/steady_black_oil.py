@@ -295,6 +295,14 @@ class SteadyBlackOilSolver(BaseSolver):
 
     # ── Main solve ────────────────────────────────────────────────────────────
 
+    def _multiphase_report(self, link, fluid):
+        """Holdup, flow pattern and velocities of a solved pipe (None otherwise)."""
+        from angelica.closures.beggs_brill import multiphase_flow_report
+        try:
+            return multiphase_flow_report(link, fluid, self._hydraulic_solver.turbulent_pipe_correlation)
+        except Exception:  # a report must never break a converged solve
+            return None
+
     def solve(self, case: NetworkCase, progress_callback=None) -> SolveResult:
         from angelica.numerics.energy import solve_energy_system
 
@@ -492,6 +500,7 @@ class SteadyBlackOilSolver(BaseSolver):
                     ),
                     temperature_in_c=t_in,
                     temperature_out_c=t_out,
+                    multiphase=self._multiphase_report(link, effective_fluid),
                 )
             )
 

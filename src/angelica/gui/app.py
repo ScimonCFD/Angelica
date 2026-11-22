@@ -2977,6 +2977,11 @@ class NetSimGui:
                 label="Phase Envelope",
                 command=lambda: self._show_link_phase_envelope(link),
             )
+        if self._get_link_multiphase(link):
+            menu.add_command(
+                label="Multiphase Flow",
+                command=lambda: self._show_link_multiphase(link),
+            )
         menu.add_separator()
         menu.add_command(
             label=f"Delete Connection #{link.link_id}",
@@ -3893,6 +3898,66 @@ class NetSimGui:
 
     def _has_compositional_results(self) -> bool:
         return self.latest_result is not None and bool(self.latest_result.component_names)
+
+    def _get_link_multiphase(self, link: CanvasLink) -> list:
+        """(label, MultiphaseFlowResult) for each pipe segment of ``link``."""
+        if self.latest_result is None:
+            return []
+        prefix = f"link_{link.link_id}_"
+        return [
+            (cf.label, cf.multiphase) for cf in self.latest_result.component_flows
+            if prefix in cf.label and getattr(cf, "multiphase", None) is not None
+        ]
+
+    @staticmethod
+    def _segment_display_name(label: str, link_id: int) -> str:
+        """'Pipe:link_3_pipe_7_seg1' → 'Pipe #7, segment 2'."""
+        import re
+        m = re.search(rf"link_{link_id}_([a-z_]+?)_(\d+)(?:_seg(\d+))?$", label)
+        if not m:
+            return label.split(":")[-1]
+        name = f"{m.group(1).replace('_', ' ').capitalize()} #{m.group(2)}"
+        return name + (f", segment {int(m.group(3)) + 1}" if m.group(3) is not None else "")
+
+    def _show_link_multiphase(self, link: CanvasLink) -> None:
+        rows = self._get_link_multiphase(link)
+        win = tk.Toplevel(self.root)
+        win.title(f"Multiphase Flow — Connection #{link.link_id}")
+        frame = ttk.Frame(win, padding=10)
+        frame.pack(fill="both", expand=True)
+        columns = (
+            ("segment", "Segment", 150), ("pattern", "Flow pattern", 100),
+            ("cl", "C_L no-slip", 80), ("hl", "H_L holdup", 80),
+            ("vsl", "v_sL (m/s)", 80), ("vsg", "v_sg (m/s)", 80), ("vm", "v_m (m/s)", 80),
+            ("vol", "Liquid (m³)", 85), ("elev", "Elevation (bar/km)", 135), ("fric", "Friction (bar/km)", 125),
+        )
+        tree = ttk.Treeview(frame, columns=[c[0] for c in columns], show="headings",
+                            height=min(max(len(rows), 1), 15))
+        for key, title, width in columns:
+            tree.heading(key, text=title)
+            tree.column(key, width=width, anchor="w" if key in ("segment", "pattern") else "e")
+        total = 0.0
+        for label, mp in rows:
+            total += mp.liquid_volume_m3
+            tree.insert("", "end", values=(
+                self._segment_display_name(label, link.link_id), mp.flow_pattern,
+                f"{mp.no_slip_liquid_fraction:.4f}", f"{mp.liquid_holdup:.4f}",
+                f"{mp.superficial_liquid_velocity_m_per_s:.3f}",
+                f"{mp.superficial_gas_velocity_m_per_s:.3f}",
+                f"{mp.mixture_velocity_m_per_s:.3f}", f"{mp.liquid_volume_m3:.2f}",
+                f"{mp.elevation_gradient_pa_per_m * 1e-2:.3f}",
+                f"{mp.friction_gradient_pa_per_m * 1e-2:.3f}",
+            ))
+        tree.pack(fill="both", expand=True)
+        note = (
+            f"Liquid in this connection: {total:.2f} m³.   "
+            "C_L = no-slip liquid fraction, H_L = in-situ holdup "
+            "(equal in the homogeneous model; Beggs-Brill adds slip)."
+        )
+        ttk.Label(frame, text=note, foreground="gray", wraplength=900, justify="left").pack(
+            anchor="w", pady=(6, 0))
+        ttk.Button(frame, text="Close", command=win.destroy).pack(anchor="e", pady=(6, 0))
+        win.transient(self.root)
 
     def _get_link_zs(self, link: CanvasLink) -> "tuple[float, ...] | None":
         if self.latest_result is None:
