@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.16.1] — 2026-11-22
+
+  - Type fix in `link_phase_properties` (mypy failed the v1.16.0 lint job);
+    no behaviour change.
+
 ## [1.16.0] — 2026-11-22
 
 ### New: two-phase flow report per pipe (holdup, flow pattern, inventory)

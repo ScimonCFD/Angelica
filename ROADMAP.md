@@ -196,6 +196,9 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
     between versions (local 0.5 vs CI 0.6). Lesson: anything taken from
     thermo beyond the EOS core (σ, transport models) must be checked in the
     py311 scratch env (`scratchpad/py311`, thermo 0.6.1) before release.
+- v1.16.0 lint job failed on mypy (not installed locally). Pre-release
+  check now: `scratchpad/precheck.sh` = ruff + mypy (py311) + pytest in
+  both environments. Fixed in v1.16.1.
 - **1.2 Multiphase report (v1.16.0).** `MultiphaseFlowResult` per pipe,
   CSV/Excel section, GUI window (checked visually by capturing the real
   Toplevel with ImageMagick `import -window`; PIL grabs come out black on

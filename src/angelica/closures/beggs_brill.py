@@ -380,8 +380,10 @@ def link_phase_properties(fluid, link_state) -> tuple[float, float, float, float
     P_e = getattr(getattr(link_state, "end_node", None), "pressure_pa", None)
     if P_s is not None and P_e is not None:
         P_avg = 0.5 * (float(P_s) + float(P_e))
-    elif P_s is not None or P_e is not None:
-        P_avg = float(P_s if P_s is not None else P_e)
+    elif P_s is not None:
+        P_avg = float(P_s)
+    elif P_e is not None:
+        P_avg = float(P_e)
     else:
         P_avg = getattr(fluid, "reference_pressure_pa", 101_325.0)
     T_avg = float(link_state.temperature_c) if link_state.temperature_c is not None else 20.0
