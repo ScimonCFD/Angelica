@@ -206,6 +206,35 @@ class SteadyCompositionalSolver(BaseSolver):
 
     # ── Main solve ────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _hydrate_report(link, fluid, node_temperatures) -> dict:
+        """Hydrate formation temperature and subcooling at the pipe end where
+        the fluid is coldest relative to the formation curve (empty for links
+        that are not pipes or carry no hydrate former)."""
+        from angelica.properties.hydrate import hydrate_formation_temperature
+        if not isinstance(link, PipeState) or abs(link.mass_flow_kg_per_s) < 1e-12:
+            return {}
+        zs = getattr(link, "zs", ()) or fluid.default_zs
+        worst: dict = {}
+        try:
+            for node in (link.start_node, link.end_node):
+                T = node_temperatures.get(node.node_id)
+                if T is None or node.pressure_pa is None:
+                    continue
+                pt = hydrate_formation_temperature(fluid.component_names, zs, float(node.pressure_pa),
+                                                   fluid.eos_name)
+                if pt is None:
+                    sub, t_h, st = T - 0.0, None, ""     # no hydrate above 0 °C here
+                    sub = -sub
+                else:
+                    sub, t_h, st = pt.temperature_c - T, pt.temperature_c, pt.structure
+                if not worst or sub > worst["hydrate_subcooling_k"]:
+                    worst = {"hydrate_subcooling_k": sub, "hydrate_temperature_c": t_h,
+                             "hydrate_structure": st}
+        except Exception:      # a check must never break a converged solve
+            return {}
+        return worst
+
     def _multiphase_report(self, link, fluid):
         """Holdup, flow pattern and velocities of a solved pipe (None otherwise)."""
         from angelica.closures.beggs_brill import multiphase_flow_report
@@ -403,6 +432,7 @@ class SteadyCompositionalSolver(BaseSolver):
                     gas_phase_zs=gas_zs,
                     liquid_phase_zs=liquid_zs,
                     multiphase=self._multiphase_report(link, fluid),
+                    **self._hydrate_report(link, fluid, node_temperatures),
                 )
             )
 

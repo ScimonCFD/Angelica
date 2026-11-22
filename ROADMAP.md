@@ -92,11 +92,11 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   isenthalpic temperature, and the global energy balance still closes.
 
 ### Stage 2 — flow assurance (item 3)
-- 2.1 Hydrate curve by van der Waals–Platteeuw (sI and sII, published
+- 2.1 **Done in v1.19.0.** Hydrate curve by van der Waals–Platteeuw (sI and sII, published
   Parrish-Prausnitz / Munck parameters). *Done when:* pure CH4, C2H6, C3H8,
   CO2 and at least two natural-gas mixtures fall within about 1 K of the
   experimental data over 273–295 K; larger errors are reported, not tuned away.
-- 2.2 Hydrate curve on the phase-envelope plot; hydrate margin per link in
+- 2.2 **Done in v1.19.0.** Hydrate curve on the phase-envelope plot; hydrate margin per link in
   the results and on the canvas.
 - 2.3 Inhibitors (methanol, MEG). *Done when:* matches published depression
   data (Ng & Robinson 1985) within the accuracy of the chosen method.
@@ -234,4 +234,20 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
     later item.
   - Pending: kinetic energy (≈1 K at 65 m/s in compositional tutorial 01) is
     not in the balance.
+- **2.1/2.2 Hydrates (v1.19.0).** vdW-P with Munck Langmuir constants
+  (verified verbatim from Antunes et al. 2018, Table 2, via pdftotext of the
+  open PDF) and Holder reference properties (883/808/3.4 sII from Dongre et
+  al. 2022; sI 1264/1151/3.0). Hydrate curve on the envelope, per-pipe
+  subcooling, canvas label, CSV columns, tutorial compositional 08.
+  - Validation: quadruple points (Sloan & Koh, via a ScienceDirect table):
+    all within ~0.75 K (or 7 % in pressure).
+  - **Not validated (data not accessible to me):** pure methane above 288 K
+    and natural-gas mixtures (Nature and ScienceDirect sources refused
+    automated access). The roadmap's "two natural-gas mixtures within 1 K"
+    criterion is therefore open. Qualitative check only: 3 % propane switches
+    to sII and cuts the formation pressure by ~4×.
+  - Decision: sI Δμ0 = 1264 J/mol (Munck/Holder-consistent) rather than
+    1297 (Handa & Tse) — documented in the CHANGELOG with both errors.
+  - Pending: ice branch (T < 0 °C); inhibitors (2.3); gas solubility in
+    water (x_w < 1).
 

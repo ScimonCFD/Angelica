@@ -1,0 +1,41 @@
+========================================================================
+Tutorial 08 — Hydrate risk in a subsea wet-gas line
+========================================================================
+
+Hydrate formation curve of the gas (dry basis, free water present)
+   T (°C)   P (bar)  structure   pure methane (bar)
+      0.0       6.9        sII        27.3
+      4.0      11.4        sII        40.7
+      8.0      18.9        sII        61.6
+     12.0      31.7        sII        96.2
+     16.0      56.2        sII       157.8
+     20.0     119.3        sII       271.5
+
+Bare line (U = 15 W/m²K)
+  Section     P_out  T_out  T_hyd  subcool  free water
+              (bar)   (°C)   (°C)      (K)  (mol frac)
+  km0-5        85.3   24.3   18.4     -5.9       0.090
+  km5-10       80.7   14.8   18.1     +3.3       0.090  ← hydrate risk
+  km10-15      75.9    9.0   17.8     +8.8       0.090  ← hydrate risk
+  km15-20      71.0    5.3   17.4    +12.1       0.090  ← hydrate risk
+  km20-25      65.8    2.8   17.0    +14.1       0.090  ← hydrate risk
+  km25-30      60.0    1.1   16.4    +15.3       0.090  ← hydrate risk
+  ṁ = 43.14 kg/s  ·  converged True  ·  energy balance 0.0006 %
+  First section at risk: km5-10
+
+Insulated line (U = 1.5 W/m²K)
+  Section     P_out  T_out  T_hyd  subcool  free water
+              (bar)   (°C)   (°C)      (K)  (mol frac)
+  km0-5        85.6   36.6   18.4    -18.2       0.089
+  km5-10       81.0   33.2   18.1    -15.1       0.089
+  km10-15      76.3   29.9   17.8    -12.1       0.089
+  km15-20      71.2   26.5   17.4     -9.1       0.090
+  km20-25      65.8   23.1   17.0     -6.1       0.090
+  km25-30      60.0   19.5   16.4     -3.1       0.090
+  ṁ = 40.73 kg/s  ·  converged True  ·  energy balance 0.0019 %
+  First section at risk: none
+
+  • The bare line reaches seabed temperature long before shore and runs
+    inside the hydrate region: it would need inhibitor injection
+    (methanol, MEG) or a heated / insulated design.
+  • Insulation keeps the gas above the hydrate temperature to shore.

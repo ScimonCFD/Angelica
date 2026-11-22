@@ -3201,6 +3201,19 @@ class NetSimGui:
                 tags=("link", f"link_{link.link_id}"),
             )
 
+        # Hydrate warning: free water present and the fluid colder than the
+        # hydrate formation temperature somewhere in the link
+        hyd = self._get_link_hydrate_subcooling(link)
+        if hyd is not None and hyd > 0.0:
+            self.canvas.create_text(
+                mid_x,
+                mid_y + (24 if ero and max(ero) > 1.0 else 12),
+                text=f"HYD +{hyd:.1f} K",
+                font=("TkDefaultFont", 8, "bold"),
+                fill="#6c3483",
+                tags=("link", f"link_{link.link_id}"),
+            )
+
         # VF label — show only when there is a result and physics is compositional
         vf = self._get_link_vf(link)
         if vf is not None:
@@ -3911,6 +3924,19 @@ class NetSimGui:
     def _has_compositional_results(self) -> bool:
         return self.latest_result is not None and bool(self.latest_result.component_names)
 
+    def _get_link_hydrate_subcooling(self, link: CanvasLink) -> "float | None":
+        """Largest hydrate subcooling (K) among the link's segments that carry
+        free water; None when no segment has a hydrate result with free water."""
+        if self.latest_result is None:
+            return None
+        prefix = f"link_{link.link_id}_"
+        vals = [
+            cf.hydrate_subcooling_k for cf in self.latest_result.component_flows
+            if prefix in cf.label and getattr(cf, "hydrate_subcooling_k", None) is not None
+            and getattr(cf, "free_water_fraction", 0.0) > 0.0
+        ]
+        return max(vals) if vals else None
+
     def _get_link_multiphase(self, link: CanvasLink) -> list:
         """(label, MultiphaseFlowResult) for each pipe segment of ``link``."""
         if self.latest_result is None:
@@ -4088,6 +4114,7 @@ class NetSimGui:
             self._draw_phase_envelope_plot(
                 plot_canvas, bubble, dew, Tc, Pc,
                 component_names, zs, op_points, quality_lines,
+                hydrate_pts=result_holder.get("hydrate", []),
             )
 
         def _save_image() -> None:
@@ -4156,6 +4183,8 @@ class NetSimGui:
                     w.writerow(["bubble", f"{T - 273.15:.4f}", f"{P / 1e5:.6f}"])
                 for T, P in dew:
                     w.writerow(["dew", f"{T - 273.15:.4f}", f"{P / 1e5:.6f}"])
+                for T, P in result_holder.get("hydrate", []):
+                    w.writerow(["hydrate", f"{T - 273.15:.4f}", f"{P / 1e5:.6f}"])
                 if Tc_K and Pc_Pa:
                     w.writerow(["critical",
                                 f"{Tc_K - 273.15:.4f}",
@@ -4210,6 +4239,14 @@ class NetSimGui:
                 result_holder["Pc"] = Pc
             except Exception as exc:
                 result_holder["error"] = str(exc)
+            try:
+                from angelica.properties.hydrate import hydrate_curve
+                result_holder["hydrate"] = [
+                    (pt.temperature_c + 273.15, pt.pressure_pa)
+                    for pt in hydrate_curve(component_names, zs, 0.0, 35.0, 36, eos_name=eos_name)
+                ]
+            except Exception:
+                result_holder["hydrate"] = []
             if win.winfo_exists():
                 win.after(0, _on_done)
 
@@ -4250,6 +4287,7 @@ class NetSimGui:
         zs: "tuple[float, ...]",
         op_points: "list[tuple[float, float]] | None" = None,
         quality_lines: "list | None" = None,
+        hydrate_pts: "list[tuple[float, float]] | None" = None,
     ) -> None:
         canvas.delete("all")
         W = int(canvas.winfo_width() or 700)
@@ -4429,8 +4467,26 @@ class NetSimGui:
                     fill=ql_color,
                 )
 
+        # Hydrate formation curve (water assumed present), clipped to the axes
+        hyd_color = "#8e44ad"
+        hyd_drawn = False
+        if hydrate_pts and len(hydrate_pts) >= 2:
+            pts_c = [(_to_C(t), _to_bar(p)) for t, p in hydrate_pts]
+            for (t1, p1), (t2, p2) in zip(pts_c, pts_c[1:]):
+                if p1 > P_max_d:
+                    break
+                if p2 > P_max_d:                      # clip at the top of the plot
+                    t2 = t1 + (t2 - t1) * (P_max_d - p1) / (p2 - p1)
+                    p2 = P_max_d
+                if t1 < T_min_d or t2 > T_max_d:
+                    continue
+                canvas.create_line(_cx(t1), _cy(p1), _cx(t2), _cy(p2), fill=hyd_color, width=2.5)
+                hyd_drawn = True
+
         # Legend
         legend: list[tuple[str, str, "tuple | None"]] = []
+        if hyd_drawn:
+            legend.append(("Hydrate curve (free water)", hyd_color, ()))
         if bubble_pts:
             legend.append(("Bubble curve", bubble_color, ()))
         if dew_pts:

@@ -1,5 +1,53 @@
 # Changelog
 
+## [1.19.0] — 2026-11-22
+
+### New: gas-hydrate formation curve and hydrate risk per pipe
+
+`angelica.properties.hydrate` predicts where hydrates form, with the
+van der Waals–Platteeuw model:
+
+  - Langmuir constants of Munck, Skjold-Jørgensen & Rasmussen (1988) for
+    methane, ethane, propane, isobutane, n-butane, nitrogen and CO2 in the
+    small and large cavities of structures I and II (values checked against
+    the table reproduced by Antunes et al. 2018);
+  - empty-lattice reference properties of Holder et al. (1980), with
+    Δcp = −38.12 + 0.141·(T − T0) (Holder & Hand 1982);
+  - guest fugacities from the Peng-Robinson EOS; the stable structure is the
+    one that forms at the lower pressure.
+
+Functions: `hydrate_formation_pressure(names, zs, T)`,
+`hydrate_formation_temperature(names, zs, P)`, `hydrate_curve(...)`.
+
+  - Compositional results: each pipe reports `hydrate_temperature_c`,
+    `hydrate_subcooling_k` (T_hydrate − T_fluid, positive inside the hydrate
+    region) and `hydrate_structure` at its colder end; CSV/Excel flow tables
+    gain the two columns.
+  - GUI: the phase-envelope window draws the hydrate curve (and its CSV
+    export lists it); links carrying free water inside the hydrate region are
+    labelled "HYD +x K" on the canvas.
+  - New tutorial: compositional 08, a 30 km subsea wet-gas line — bare, it
+    enters the hydrate region after 5 km and arrives 15 K inside it;
+    insulated, it arrives 3 K above the hydrate temperature.
+  - Validation against the measured hydrate quadruple points tabulated from
+    Sloan & Koh: methane (2.563 MPa at Q1: +6.6 % in pressure at 273.15 K,
+    ≈ 0.3 K), ethane (Q1 −6.7 %, Q2 −0.74 K), propane (Q1 −3.8 %, Q2
+    −0.26 K).  The alternative sI reference value Δμ0 = 1297 J/mol (instead
+    of 1264) gives methane +17.7 % and ethane Q2 −1.8 K; 1264 is the value
+    consistent with Munck's constants.
+
+Limitations: liquid-water branch only (T ≥ 0 °C); pure water (no inhibitors,
+no gas-solubility correction); structure H and C5+ guests are not modelled;
+no published data were available to check methane above 288 K or
+natural-gas mixtures — recorded in ROADMAP.md.
+
+### Performance
+
+  - The free-water enthalpy reuses the hydrocarbon flash for the vapour
+    fraction, and enthalpies are cached at 1e-4 K: compositional tutorial 06
+    runs in about 28 s with the enthalpy balance and the hydrate checks.
+    Other tutorial results change by less than 1e-5 (rounding).
+
 ## [1.18.0] — 2026-11-22
 
 ### New: Joule-Thomson cooling, latent heat and potential energy along pipes

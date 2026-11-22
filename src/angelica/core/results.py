@@ -42,6 +42,11 @@ class ComponentFlowResult:
     gas_phase_zs: tuple[float, ...] = ()    # gas phase mole fractions per HC component
     liquid_phase_zs: tuple[float, ...] = () # liquid HC phase mole fractions per HC component
     multiphase: MultiphaseFlowResult | None = None  # pipes in black-oil / compositional runs
+    # Hydrate check (compositional pipes with hydrate formers), at the pipe end
+    # where the fluid is coldest relative to the formation curve:
+    hydrate_temperature_c: float | None = None   # formation temperature at that end's pressure
+    hydrate_subcooling_k: float | None = None    # T_hydrate − T_fluid (> 0: inside the hydrate region)
+    hydrate_structure: str = ""
 
 
 @dataclass(frozen=True)

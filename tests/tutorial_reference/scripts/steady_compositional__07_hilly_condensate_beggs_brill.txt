@@ -3,8 +3,8 @@ Tutorial 07 — Hilly gas-condensate line: homogeneous vs Beggs-Brill
 ============================================================================
 
   Model           ṁ (kg/s)  converged  mass bal.  energy bal.
-  Homogeneous        30.40       True    0.0007%      0.0004%
-  Beggs-Brill        25.67       True    0.0017%      0.0009%
+  Homogeneous        30.40       True    0.0007%      0.0005%
+  Beggs-Brill        25.67       True    0.0017%      0.0012%
   Beggs-Brill delivers 15.6 % less for the same 25 bar.
 
 Sections with Beggs-Brill

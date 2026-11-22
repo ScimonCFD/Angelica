@@ -494,11 +494,17 @@ def _water_latent_heat(temperature_c: float) -> float:
 
 def _hc_enthalpy(component_names, pressure_pa, temperature_c, zs, eos_name) -> float:
     """Equilibrium specific enthalpy (J/kg) of an HC-only feed, from thermo."""
+    return _hc_enthalpy_vf(component_names, pressure_pa, temperature_c, zs, eos_name)[0]
+
+
+def _hc_enthalpy_vf(component_names, pressure_pa, temperature_c, zs, eos_name) -> tuple[float, float]:
+    """(specific enthalpy J/kg, vapour fraction) of an HC-only feed from one flash."""
     flash_obj = _get_flash_obj(component_names, eos_name)
     T_K = temperature_c + 273.15
     try:
         res = _tp_flash(component_names, pressure_pa, temperature_c, zs, eos_name)
-        return float(res.H()) / float(res.MW()) * 1000.0
+        vf = float(res.VF) if res.VF is not None else 0.0
+        return float(res.H()) / float(res.MW()) * 1000.0, vf
     except ZeroDivisionError:
         const = flash_obj.constants
         Psat = _wilson_psat(const.Tcs[0], const.Pcs[0], const.omegas[0], T_K)
@@ -506,7 +512,7 @@ def _hc_enthalpy(component_names, pressure_pa, temperature_c, zs, eos_name) -> f
         phase = parent.to(T=T_K, P=pressure_pa, zs=[1.0])
         phase.constants = parent.constants
         phase.correlations = parent.correlations
-        return float(phase.H()) / float(const.MWs[0]) * 1000.0
+        return float(phase.H()) / float(const.MWs[0]) * 1000.0, (1.0 if parent is flash_obj.gas else 0.0)
 
 
 @lru_cache(maxsize=8192)
@@ -537,12 +543,11 @@ def _mixture_enthalpy(
     if sum_hc < 1e-10 or not hc_names:
         return h_wl
     hc_zs = tuple(z / sum_hc for z in hc_zs_raw)
-    VF_hc = _flash_properties(hc_names, pressure_pa, temperature_c, hc_zs, eos_name)[4]
+    h_hc, VF_hc = _hc_enthalpy_vf(hc_names, pressure_pa, temperature_c, hc_zs, eos_name)
     n_wl, n_wv = free_water_split(z_w, VF_hc, sum_hc, temperature_c + 273.15, pressure_pa)
     MWs = _get_flash_obj(hc_names, eos_name).constants.MWs
     m_hc = sum_hc * sum(z * mw for z, mw in zip(hc_zs, MWs))
     m_wl, m_wv = n_wl * WATER_MW, n_wv * WATER_MW
-    h_hc = _hc_enthalpy(hc_names, pressure_pa, temperature_c, hc_zs, eos_name)
     h_wv = h_wl + _water_latent_heat(temperature_c)
     return (m_hc * h_hc + m_wl * h_wl + m_wv * h_wv) / (m_hc + m_wl + m_wv)
 
@@ -779,12 +784,12 @@ class CompositionalFluid(FluidModel):
     def enthalpy_for_link(self, link_state, pressure_pa: float, temperature_c: float) -> float:
         """Equilibrium specific enthalpy (J/kg) of the link's mixture at (P, T).
 
-        Rounded far finer than the property cache (1 Pa, 1e-6 K): h enters the
+        Rounded finer than the property cache (10 Pa, 1e-4 K): h enters the
         energy balance through differences, and a 1 mK step in T would leave a
-        staircase that stalls the energy iteration."""
+        staircase that stalls the energy iteration (1e-4 K is ≈ 0.25 J/kg)."""
         zs_r = tuple(round(z, _ZS_DIGITS) for z in self._get_zs(link_state))
-        P_r = float(round(pressure_pa))
-        T_r = round(temperature_c, 6)
+        P_r = float(round(pressure_pa / 10.0) * 10.0)
+        T_r = round(temperature_c, 4)
         return _mixture_enthalpy(self.component_names, P_r, T_r, zs_r, self.eos_name)
 
     def reference_enthalpy_for_link(self, link_state) -> float:
