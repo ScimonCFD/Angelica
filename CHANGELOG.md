@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.17.0] — 2026-11-22
+
+### New: erosional velocity check (API RP 14E)
+
+Every pipe in black-oil and compositional results now reports the API RP 14E
+erosional velocity V_e = C/√ρ_m (C = 100, continuous service, on the no-slip
+mixture density) and the ratio v_m/V_e
+(`MultiphaseFlowResult.erosional_velocity_m_per_s`, `erosional_velocity_ratio`).
+
+  - New `angelica.closures.erosion.erosional_velocity(rho, c_factor)` with
+    the continuous (100) and intermittent (125) C values.
+  - CSV/Excel multiphase tables gain the two columns.
+  - GUI: links above the limit are labelled "EROSION v/Ve = …" in red on the
+    canvas, and the *Multiphase Flow* window has a v_m/V_e column.
+  - Validation: hand calculation of the API formula (ρ_m = 50 lbm/ft³:
+    14.14 ft/s at C = 100, 17.68 ft/s at C = 125).
+  - Several tutorials run above the limit (black-oil 06 at v_m/V_e ≈ 4.9,
+    black-oil 05 at 1.3, compositional 01–03 at 1.2–1.4): they were sized to
+    show the physics, not to API RP 14E.  Their results are unchanged.
+
 ## [1.16.1] — 2026-11-22
 
   - Type fix in `link_phase_properties` (mypy failed the v1.16.0 lint job);

@@ -401,6 +401,8 @@ def multiphase_flow_report(link_state, fluid, correlation=None):
     """
     from angelica.core.results import MultiphaseFlowResult
 
+    from .erosion import erosional_velocity
+
     comp = getattr(link_state, "component", None)
     L = getattr(comp, "length_m", None)
     if not L or not hasattr(comp, "absolute_roughness_m"):
@@ -428,6 +430,7 @@ def multiphase_flow_report(link_state, fluid, correlation=None):
         pattern, H_L = "no-slip", C_L
         elev = rho_ns * _G * math.sin(theta)
         fric = (p_up - p_down) / L - elev
+    v_e = erosional_velocity(rho_ns)
     return MultiphaseFlowResult(
         flow_pattern=pattern,
         no_slip_liquid_fraction=C_L,
@@ -438,6 +441,8 @@ def multiphase_flow_report(link_state, fluid, correlation=None):
         liquid_volume_m3=H_L * area * L,
         elevation_gradient_pa_per_m=elev,
         friction_gradient_pa_per_m=fric,
+        erosional_velocity_m_per_s=v_e,
+        erosional_velocity_ratio=v_m / v_e,
     )
 
 

@@ -639,6 +639,7 @@ def _write_phase_report_sheet(workbook, result) -> None:
 MULTIPHASE_HEADER = [
     "Pipe", "Flow pattern", "C_L no-slip (-)", "H_L holdup (-)", "v_sL (m/s)", "v_sg (m/s)",
     "v_m (m/s)", "Liquid volume (m^3)", "dP/dz elevation (Pa/m)", "dP/dz friction (Pa/m)",
+    "V_e API 14E (m/s)", "v_m / V_e (-)",
 ]
 
 
@@ -658,9 +659,10 @@ def multiphase_rows(result) -> list[list]:
             round(mp.superficial_gas_velocity_m_per_s, 5),
             round(mp.mixture_velocity_m_per_s, 5), round(mp.liquid_volume_m3, 4),
             round(mp.elevation_gradient_pa_per_m, 4), round(mp.friction_gradient_pa_per_m, 4),
+            round(mp.erosional_velocity_m_per_s, 4), round(mp.erosional_velocity_ratio, 4),
         ])
     if rows:
-        rows.append(["Total liquid in pipes", "", "", "", "", "", "", round(total, 4), "", ""])
+        rows.append(["Total liquid in pipes", "", "", "", "", "", "", round(total, 4), "", "", "", ""])
     return rows
 
 

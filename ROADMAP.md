@@ -82,7 +82,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   not change.
 - 1.2 **Done in v1.16.0.** Per-segment report: holdup, flow pattern, superficial velocities,
   mixture velocity, liquid inventory; shown in the GUI link results.
-- 1.3 Erosional velocity ratio (API RP 14E) per link, with a GUI warning.
+- 1.3 **Done in v1.17.0.** Erosional velocity ratio (API RP 14E) per link, with a GUI warning.
 - 1.4 Joule-Thomson cooling along pipes (compressible and compositional).
   Found while doing 1.1: the pipe energy equation has no JT term (only
   valves/fittings are isenthalpic), so a gas line expanding 25 bar stays at
@@ -205,3 +205,12 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   this desktop). Also replaced thermo σ by Macleod-Sugden + Peneloux
   (pure n-alkanes within 1–5 % of CRC values; mixture IFT data not
   available to me — limitation noted).
+- **1.3 Erosional velocity (v1.17.0).** API RP 14E, C = 100, on the no-slip
+  density; in the multiphase report, exports, GUI table and a red canvas
+  label (the ⚠ glyph is missing from Tk's default font — plain text used).
+  - Decision: C fixed at 100 in the report (the function takes any C);
+    a per-case C setting can come with the oil-field units work (7.1).
+  - Observation: black-oil tutorial 06 runs at ~4.9× V_e (≈ 490 kg/s through
+    its lines). Left unchanged — tutorials show physics, not sizing — but
+    worth revisiting when the validation manual (8.4) is written.
+

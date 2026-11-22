@@ -3189,6 +3189,18 @@ class NetSimGui:
         )
         self.canvas.tag_lower("link")
 
+        # Erosional-velocity warning (API RP 14E) for two-phase links
+        ero = [mp.erosional_velocity_ratio for _l, mp in self._get_link_multiphase(link)]
+        if ero and max(ero) > 1.0:
+            self.canvas.create_text(
+                mid_x,
+                mid_y + 12,
+                text=f"EROSION  v/Ve = {max(ero):.2f}",
+                font=("TkDefaultFont", 8, "bold"),
+                fill="#d03030",
+                tags=("link", f"link_{link.link_id}"),
+            )
+
         # VF label — show only when there is a result and physics is compositional
         vf = self._get_link_vf(link)
         if vf is not None:
@@ -3930,6 +3942,7 @@ class NetSimGui:
             ("cl", "C_L no-slip", 80), ("hl", "H_L holdup", 80),
             ("vsl", "v_sL (m/s)", 80), ("vsg", "v_sg (m/s)", 80), ("vm", "v_m (m/s)", 80),
             ("vol", "Liquid (m³)", 85), ("elev", "Elevation (bar/km)", 135), ("fric", "Friction (bar/km)", 125),
+            ("ero", "v_m / V_e", 85),
         )
         tree = ttk.Treeview(frame, columns=[c[0] for c in columns], show="headings",
                             height=min(max(len(rows), 1), 15))
@@ -3947,12 +3960,15 @@ class NetSimGui:
                 f"{mp.mixture_velocity_m_per_s:.3f}", f"{mp.liquid_volume_m3:.2f}",
                 f"{mp.elevation_gradient_pa_per_m * 1e-2:.3f}",
                 f"{mp.friction_gradient_pa_per_m * 1e-2:.3f}",
+                f"{mp.erosional_velocity_ratio:.2f}" + ("  !" if mp.erosional_velocity_ratio > 1.0 else ""),
             ))
         tree.pack(fill="both", expand=True)
         note = (
             f"Liquid in this connection: {total:.2f} m³.   "
             "C_L = no-slip liquid fraction, H_L = in-situ holdup "
-            "(equal in the homogeneous model; Beggs-Brill adds slip)."
+            "(equal in the homogeneous model; Beggs-Brill adds slip).  "
+            "V_e = API RP 14E erosional velocity, C = 100 (continuous service); "
+            "'!' marks a mixture velocity above it."
         )
         ttk.Label(frame, text=note, foreground="gray", wraplength=900, justify="left").pack(
             anchor="w", pady=(6, 0))

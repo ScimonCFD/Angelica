@@ -108,3 +108,28 @@ def test_black_oil_report_and_reverse_flow_sign():
     assert pipe.multiphase is not None and fitting.multiphase is None
     assert pipe.multiphase.elevation_gradient_pa_per_m < 0.0
     assert 0.0 < pipe.multiphase.no_slip_liquid_fraction < 1.0
+
+
+def test_api_14e_erosional_velocity_hand_calculation():
+    """V_e = C/√ρ_m (ft/s, lbm/ft³): ρ_m = 50 lbm/ft³, C = 100 → 14.142 ft/s;
+    C = 125 → 17.678 ft/s."""
+    from angelica.closures.erosion import erosional_velocity
+    rho = 50.0 * 16.0185
+    assert erosional_velocity(rho) / 0.3048 == pytest.approx(100 / math.sqrt(50), rel=1e-9)
+    assert erosional_velocity(rho, 125.0) / 0.3048 == pytest.approx(125 / math.sqrt(50), rel=1e-9)
+    # gas at 5 lbm/ft³ allows about 3.2× the velocity of a 50 lbm/ft³ liquid
+    assert erosional_velocity(5 * 16.0185) / erosional_velocity(rho) == pytest.approx(math.sqrt(10), rel=1e-9)
+
+
+def test_report_erosional_ratio(compositional_runs):
+    from angelica.closures.erosion import erosional_velocity
+    for res in compositional_runs:
+        for cf in res.component_flows:
+            mp = cf.multiphase
+            assert mp.erosional_velocity_ratio == pytest.approx(
+                mp.mixture_velocity_m_per_s / mp.erosional_velocity_m_per_s, rel=1e-12)
+            assert 0.0 < mp.erosional_velocity_ratio < 1.0     # this line is well sized
+    m = compositional_runs[0].component_flows[0].multiphase
+    assert m.erosional_velocity_m_per_s == pytest.approx(
+        erosional_velocity(compositional_runs[0].component_flows[0].mass_flow_kg_per_s
+                           / (m.mixture_velocity_m_per_s * math.pi * hilly.D ** 2 / 4)), rel=1e-9)

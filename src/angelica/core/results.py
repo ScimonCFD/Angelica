@@ -11,6 +11,8 @@ class MultiphaseFlowResult:
     or ``"no-slip"`` for the homogeneous model (then the holdup equals the
     no-slip liquid fraction).  Gradients are along the flow direction, positive
     when they oppose the flow; the elevation gradient uses the in-situ holdup.
+    The erosional velocity is API RP 14E's with C = 100 (continuous service)
+    on the no-slip mixture density.
     """
 
     flow_pattern: str
@@ -22,6 +24,8 @@ class MultiphaseFlowResult:
     liquid_volume_m3: float                 # H_L · A · L
     elevation_gradient_pa_per_m: float
     friction_gradient_pa_per_m: float
+    erosional_velocity_m_per_s: float = float("nan")   # API RP 14E, C = 100
+    erosional_velocity_ratio: float = float("nan")      # v_m / V_e (> 1: above the limit)
 
 
 @dataclass(frozen=True)
