@@ -13,21 +13,22 @@ Viscosity ratio cold/hot = 70.0×
 =================================================================
 HOT case (T_in = 80 °C):
   Converged:       True
-  T_outlet:        74.64 °C
-  T_out analytical:74.63 °C  (NTU = 0.0799)
-  Error:           0.010 °C  (tolerance: ±2 °C)
-  Mass flow:       137.55 kg/s
+  T_outlet (no dissipation): 74.64 °C
+  T_out analytical:          74.63 °C  (NTU = 0.0799)
+  Error:                     0.010 °C  (tolerance: ±2 °C)
+  T_outlet (full physics):   76.22 °C  (+1.58 °C friction heating net of gas JT cooling)
+  Mass flow:       137.53 kg/s
 
 COLD case (T_in = 10 °C, isothermal at ambient):
   Converged:       True
-  Mass flow:       101.73 kg/s
+  Mass flow:       104.37 kg/s
 
-Flow ratio (hot / cold) = 1.352
-  → Hot oil delivers 35.2% more flow for the same ΔP
+Flow ratio (hot / cold) = 1.318
+  → Hot oil delivers 31.8% more flow for the same ΔP
     driven by viscosity: 1.143 mPa·s (inlet)
     vs cold viscosity:   79.956 mPa·s (10 °C, 2 MPa)
 
 PVT change along the hot pipe:
   Inlet  (8 MPa, 80 °C): ρ = 860.7 kg/m³  μ = 1.143 mPa·s  Rs = 25.00 m³/m³  (undersaturated: P > Pb)
-  Outlet (2 MPa, 74.6 °C): ρ = 521.1 kg/m³  μ = 1.109 mPa·s  Rs = 6.39 m³/m³  (two-phase: P < Pb)
-  Gas liberation: ΔRs = 18.61 m³/m³  (74% of inlet GOR)
+  Outlet (2 MPa, 76.2 °C): ρ = 519.2 kg/m³  μ = 1.071 mPa·s  Rs = 6.35 m³/m³  (two-phase: P < Pb)
+  Gas liberation: ΔRs = 18.65 m³/m³  (75% of inlet GOR)

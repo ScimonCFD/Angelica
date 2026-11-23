@@ -16,15 +16,15 @@ Holdup water                            0.3171          0.1959
 ============================================================
 Case: Three-Phase Black-Oil Pipeline
 Converged:           True
-PVT iterations:      3
+PVT iterations:      2
 
-Mass flow:   109.7810 kg/s
-Vol. flow:   481.501 m³/h  (mixture at actual conditions)
+Mass flow:   109.8174 kg/s
+Vol. flow:   482.486 m³/h  (mixture at actual conditions)
 
 T inlet:     60.00 °C
-T outlet:    55.67 °C
+T outlet:    57.31 °C
 
 Surface rates (standard conditions):
-  Oil:    282.89 m³/h
-  Gas:    7072.3 m³/h  (25.0 m³/m³  ← GOR input: 25.0)
-  Water:  141.45 m³/h  (0.50 m³/m³  ← WOR input: 0.5)
+  Oil:    282.99 m³/h
+  Gas:    7074.7 m³/h  (25.0 m³/m³  ← GOR input: 25.0)
+  Water:  141.49 m³/h  (0.50 m³/m³  ← WOR input: 0.5)

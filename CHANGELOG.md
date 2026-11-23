@@ -1,5 +1,58 @@
 # Changelog
 
+## [1.20.0] — 2026-11-23
+
+### New: black-oil energy balance — Joule-Thomson, friction heating, isenthalpic chokes
+
+`BlackOilFluid` now has an enthalpy model, so black-oil networks get the
+same energy treatment as compressible and compositional ones (v1.18.0):
+pipe Joule-Thomson / potential-energy sources, enthalpy-conserving
+junctions, isenthalpic chokes and valves, and a real-enthalpy global
+balance.
+
+    h(P, T) = ∫₀ᵀ cp(1 atm, T') dT' + ∫_{1 atm}^{P} (∂h/∂P)_T dP'
+    (∂h/∂P)_T = Σ_phases w_i·(v_i − T·(∂v_i/∂T)_P)
+
+The free gas (v = Z·R·T/(P·M), Hall-Yarborough Z) cools on expansion; oil
+and water warm (friction heating).  The heat of solution of the dissolved
+gas is neglected.  `BlackOilSolverSettings.pipe_enthalpy_terms` (default
+True) switches the new terms off for comparison.
+
+  - Validation (data READ IN SOURCE, NIST Chemistry WebBook): the isothermal
+    throttling coefficient (∂h/∂P)_T = −μ_JT·cp of a methane-gravity gas is
+    within 2.0–2.5 % of the Setzmann-Wagner reference at 5 MPa and 3.9–6.1 %
+    at 10 MPa (280–320 K); liquid water within 1.9–2.8 % of IAPWS-95 at
+    10 MPa.  Adiabatic black-oil pipes satisfy h_in = h_out + g·Δz within
+    0.01 K (consistency).
+  - Wells (`Well`, `WellInflow`) keep the reservoir temperature until the
+    tubing thermal model (stage 4.1); the enthalpy they change at constant
+    temperature is reported as heat exchanged with the formation
+    (`GlobalEnergyBalance.isothermal_device_heat_kw`, also exported).
+
+### New: hydrate check for black-oil (gas-gravity chart)
+
+Black-oil pipes report `hydrate_temperature_c` and `hydrate_subcooling_k`
+from the Katz gas-gravity chart (GPSA), using chart values digitised in
+Janna (2015, UTP dissertation) for gravities 0.6–1.0 and 30–80 °F,
+interpolated in ln P and gravity, and anchored at pure methane by the
+van der Waals–Platteeuw curve below 0.6.  `free_water_fraction` carries the
+in-situ water volume fraction, so the GUI labels black-oil links carrying
+water inside the hydrate region.  The chart is an engineering estimate: for
+the tutorial-08 gas (gravity 0.634, 3 % propane) it gives 20–30 % higher
+formation pressures than the composition-based model between 0 and 15 °C.
+
+### Fixed
+  - Per-inlet black-oil fluids ignored the case's PVT correlation and gas
+    thermal properties (they fell back to Standing and the defaults).
+  - Black-oil tutorial 07 compares with the analytical heat-loss formula
+    using `pipe_enthalpy_terms=False` (the formula neglects dissipation) and
+    prints the full-physics outlet temperature next to it.
+
+Tutorial results that change (references regenerated): every black-oil
+tutorial, through friction heating of the liquid net of gas cooling — e.g.
+tutorial 01 outlet 55.67 → 57.31 °C, tutorial 07 hot-oil outlet 74.64 →
+76.22 °C; flows move by ≤ 0.3 % (tutorial 07 cold case +2.6 %).
+
 ## [1.19.1] — 2026-11-22
 
 Corrections after review of v1.13.3–v1.19.0.

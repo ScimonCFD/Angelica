@@ -3,30 +3,30 @@ Bubble point at 60 °C : 5.63 MPa
 ============================================================
 Case: Black-Oil Loop — Two Separators
 Converged:      True
-PVT iterations: 4
+PVT iterations: 3
 
   Node    P (MPa)    T (°C)          Regime
      1      8.000     60.00  UNDERSATURATED
-     2      7.420     59.05  UNDERSATURATED
-     3      6.766     54.65  UNDERSATURATED
-     4      6.375     54.99  UNDERSATURATED
-     5      5.651     50.44  UNDERSATURATED
-     6      5.246     49.36       two-phase
-     7      6.102     51.99  UNDERSATURATED
+     2      7.420     59.08  UNDERSATURATED
+     3      6.766     54.69  UNDERSATURATED
+     4      6.376     55.12  UNDERSATURATED
+     5      5.652     50.68  UNDERSATURATED
+     6      5.248     49.72       two-phase
+     7      6.103     52.18  UNDERSATURATED
 
 Pipe                                   ṁ (kg/s)   Q_mix (m³/h)
-Pipe:pipe_A_trunk_in                    100.000         411.13
-Pipe:pipe_B_upper_L                      50.712         208.02
-Pipe:pipe_C_upper_R                      50.712         207.39
-Pipe:pipe_D_lower_L                      49.288         202.21
-Pipe:pipe_E_lower_R                      29.288         120.23
-Pipe:pipe_F_trunk_out                    80.000         336.73
-Pipe:pipe_G_satellite                    20.000          81.84
+Pipe:pipe_A_trunk_in                    100.000         411.17
+Pipe:pipe_B_upper_L                      50.711         208.04
+Pipe:pipe_C_upper_R                      50.711         207.42
+Pipe:pipe_D_lower_L                      49.288         202.25
+Pipe:pipe_E_lower_R                      29.288         120.28
+Pipe:pipe_F_trunk_out                    80.000         336.89
+Pipe:pipe_G_satellite                    20.000          81.85
 
-Primary separator  (Node 6) P = 5.246 MPa
-Satellite separator(Node 7) P = 6.102 MPa
+Primary separator  (Node 6) P = 5.248 MPa
+Satellite separator(Node 7) P = 6.103 MPa
 
-Upper loop (B+C): 50.712 kg/s  (50.7 % of loop flow)
+Upper loop (B+C): 50.711 kg/s  (50.7 % of loop flow)
 Lower loop (D+E): 49.288 kg/s  (49.3 % of loop flow)
 Satellite branch : 20.000 kg/s  (drawn from Node 4)
 Total inlet:       100.000 kg/s

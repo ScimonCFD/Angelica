@@ -41,10 +41,10 @@ Bubble point at 60 °C: **5.63 MPa**.
 | Node | P (MPa) | Regime |
 |---|---|---|
 | 1 | 8.000 | Undersaturated |
-| 2 | 7.176 | Undersaturated |
-| 3 | 5.793 | Undersaturated (just above Pb) |
-| 4 | 3.567 | Two-phase |
-| 5 | 3.174 | Two-phase |
+| 2 | 7.175 | Undersaturated |
+| 3 | 5.792 | Undersaturated (just above Pb) |
+| 4 | 3.566 | Two-phase |
+| 5 | 3.173 | Two-phase |
 | 6 | 2.000 | Two-phase |
 
 | Branch | Mass flow | Share |

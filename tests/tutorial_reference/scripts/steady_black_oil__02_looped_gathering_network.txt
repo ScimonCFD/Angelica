@@ -7,25 +7,25 @@ PVT iterations: 3
 
   Node    P (MPa)    T (°C)          Regime
      1      8.000     60.00  UNDERSATURATED
-     2      7.176     59.22  UNDERSATURATED
-     3      5.793     56.20  UNDERSATURATED
-     4      3.567     53.26       two-phase
-     5      3.174     52.48       two-phase
-     6      2.000     51.72       two-phase
+     2      7.175     59.34  UNDERSATURATED
+     3      5.792     56.59  UNDERSATURATED
+     4      3.566     54.18       two-phase
+     5      3.173     53.47       two-phase
+     6      2.000     53.01       two-phase
 
 Pipe                                   ṁ (kg/s)   Q_mix (m³/h)
-Pipe:pipe_A_trunk_in                    120.381         494.98
-Pipe:pipe_B_upper_L                      75.697         310.79
-Pipe:pipe_C_upper_R                      75.697         342.90
-Pipe:pipe_D_lower_L                      44.685         190.90
-Pipe:pipe_E_lower_R                      44.685         225.29
-Pipe:pipe_F_trunk_out                   120.382         687.45
+Pipe:pipe_A_trunk_in                    120.442         495.29
+Pipe:pipe_B_upper_L                      75.733         311.02
+Pipe:pipe_C_upper_R                      75.733         343.61
+Pipe:pipe_D_lower_L                      44.710         191.25
+Pipe:pipe_E_lower_R                      44.710         225.90
+Pipe:pipe_F_trunk_out                   120.443         689.65
 
-Upper loop (B+C): 75.697 kg/s  (62.9 %)
-Lower loop (D+E): 44.685 kg/s  (37.1 %)
-Total throughput: 120.382 kg/s
+Upper loop (B+C): 75.733 kg/s  (62.9 %)
+Lower loop (D+E): 44.710 kg/s  (37.1 %)
+Total throughput: 120.443 kg/s
 
 Surface rates at separator (standard conditions):
-  Oil:   310.2 m³/h
-  Gas:   7755 m³/h
-  Water: 155.1 m³/h
+  Oil:   310.4 m³/h
+  Gas:   7759 m³/h
+  Water: 155.2 m³/h

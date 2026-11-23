@@ -33,7 +33,11 @@ assuming nearly constant Cp and mass flow:
     T(L) = T_amb + (T_in - T_amb) * exp(−U · π · D · L / (ṁ · Cp))
 
 This analytical formula is used as the quantitative benchmark (tolerance
-±2 °C to allow for variable Cp along the pipe).
+±2 °C to allow for variable Cp along the pipe).  Since v1.20.0 the solver
+also includes friction heating of the liquid and Joule-Thomson cooling of
+the gas, which the formula neglects, so the benchmark is run with those
+terms switched off (``pipe_enthalpy_terms=False``); the full-physics outlet
+temperature is printed next to it.
 """
 import math
 import sys
@@ -47,6 +51,7 @@ from angelica.core.case import NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import Pipe
 from angelica.properties.black_oil import BlackOilFluid
 from angelica.solvers import SteadyBlackOilSolver
+from angelica.solvers.steady_black_oil import BlackOilSolverSettings
 
 # ── Parameters ────────────────────────────────────────────────────────────────
 API     = 32.0
@@ -127,22 +132,30 @@ res_cold   = solver.solve(_make_case(T_AMB, fluid_cold, "cold-oil-20km"))
 
 T_out_hot  = res_hot.node_temperatures_c[2]
 mdot_hot   = res_hot.component_flows[0].mass_flow_kg_per_s
+# Benchmark with the assumptions of the analytical formula (no dissipation)
+res_bench  = SteadyBlackOilSolver(
+    black_oil_settings=BlackOilSolverSettings(pipe_enthalpy_terms=False)
+).solve(_make_case(T_HOT, fluid_hot, "hot-oil-20km-no-dissipation"))
+T_out_bench = res_bench.node_temperatures_c[2]
+mdot_bench  = res_bench.component_flows[0].mass_flow_kg_per_s
 mdot_cold  = res_cold.component_flows[0].mass_flow_kg_per_s
 
 # ── Analytical temperature verification ───────────────────────────────────────
-pvt_mean   = fluid_hot.pvt(5.0e6, 0.5 * (T_HOT + T_out_hot))
+pvt_mean   = fluid_hot.pvt(5.0e6, 0.5 * (T_HOT + T_out_bench))
 Cp_mean    = pvt_mean.mixture_specific_heat_j_per_kg_k
-NTU        = math.pi * D * U * L / (mdot_hot * Cp_mean)
+NTU        = math.pi * D * U * L / (mdot_bench * Cp_mean)
 T_out_ana  = T_AMB + (T_HOT - T_AMB) * math.exp(-NTU)
-err_T      = abs(T_out_hot - T_out_ana)
+err_T      = abs(T_out_bench - T_out_ana)
 
 print()
 print("=" * 65)
 print("HOT case (T_in = 80 °C):")
 print(f"  Converged:       {res_hot.converged}")
-print(f"  T_outlet:        {T_out_hot:.2f} °C")
-print(f"  T_out analytical:{T_out_ana:.2f} °C  (NTU = {NTU:.4f})")
-print(f"  Error:           {err_T:.3f} °C  (tolerance: ±2 °C)")
+print(f"  T_outlet (no dissipation): {T_out_bench:.2f} °C")
+print(f"  T_out analytical:          {T_out_ana:.2f} °C  (NTU = {NTU:.4f})")
+print(f"  Error:                     {err_T:.3f} °C  (tolerance: ±2 °C)")
+print(f"  T_outlet (full physics):   {T_out_hot:.2f} °C  "
+      f"(+{T_out_hot - T_out_bench:.2f} °C friction heating net of gas JT cooling)")
 print(f"  Mass flow:       {mdot_hot:.2f} kg/s")
 
 print()

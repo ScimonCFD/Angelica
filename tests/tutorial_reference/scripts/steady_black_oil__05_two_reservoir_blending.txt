@@ -9,21 +9,21 @@ PVT iterations: 4
   Node    P (MPa)    T (°C)
      1      9.000     70.00
      2      8.000     60.00
-     3      4.674     63.27
-     4      2.000     62.14
+     3      4.680     60.84
+     4      2.000     60.62
 
 Pipe                    ṁ (kg/s)   Q_mix (m³/h)
-pipe_A                   103.459         438.74
-pipe_B                    65.898         247.45
-pipe_C                   169.357         764.18
+pipe_A                   103.416         438.84
+pipe_B                    65.990         247.93
+pipe_C                   169.406         761.50
 
 Surface rates at separator (standard conditions):
-  From Reservoir A (103.5 kg/s):
-    Oil 312.5 m³/h  |  Gas 7811 m³/h  |  Water 93.7 m³/h
-  From Reservoir B (65.9 kg/s):
-    Oil 96.2 m³/h  |  Gas 962 m³/h  |  Water 144.2 m³/h
+  From Reservoir A (103.4 kg/s):
+    Oil 312.3 m³/h  |  Gas 7808 m³/h  |  Water 93.7 m³/h
+  From Reservoir B (66.0 kg/s):
+    Oil 96.3 m³/h  |  Gas 963 m³/h  |  Water 144.4 m³/h
   TOTAL (169.4 kg/s):
-    Oil 408.6 m³/h  |  Gas 8773 m³/h  |  Water 238.0 m³/h
+    Oil 408.6 m³/h  |  Gas 8771 m³/h  |  Water 238.1 m³/h
 
 Blended fluid at Node 3 (junction):
   API = 28.1°  |  GOR = 19.2 m³/m³  |  WOR = 0.77 m³/m³

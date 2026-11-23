@@ -11,18 +11,18 @@ Fluid at avg conditions (4.0 MPa, 50 °C):
   Mix density             ρ_m = 382.0 kg/m³
   Mix viscosity           µ_m = 1.44 mPa·s
 
-Beggs-Brill at v_m = 2.62 m/s:
+Beggs-Brill at v_m = 2.63 m/s:
   Flow regime        = intermittent
   In-situ holdup H_L = 0.517  (vs no-slip C_L = 0.425)
-  Froude number N_Fr = 6.91
+  Froude number N_Fr = 6.92
   No-slip f_n        = 0.02123
   Two-phase f_tp     = 0.03089  (ratio = 1.46×)
   dP/dz friction     = 400 Pa/m
 
                           Colebrook  Beggs-Brill
   Converged                    True         True
-  Mass flow (kg/s)            9.970        8.127
-  Volume flow (m³/h)          93.97        76.60
+  Mass flow (kg/s)            9.974        8.131
+  Volume flow (m³/h)          94.11        76.72
 
   Colebrook / BB ratio: 1.227  (BB predicts lower flow)
   → ignoring slip overestimates flow by 22.7 %

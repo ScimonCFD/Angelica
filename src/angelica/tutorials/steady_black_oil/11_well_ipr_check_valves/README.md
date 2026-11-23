@@ -35,7 +35,7 @@ gathering-network models.  Tutorial 12 adds the production tubing with the
 
 | | Well 1 | Well 2 | Well 3 | Manifold |
 |---|---|---|---|---|
-| A — no check valves | 7.32 kg/s | 6.38 kg/s | −0.15 kg/s (injected) | 3.29 MPa |
+| A — no check valves | 7.33 kg/s | 6.38 kg/s | −0.15 kg/s (injected) | 3.29 MPa |
 | B — check valves | 7.31 kg/s | 6.35 kg/s | shut in | 3.31 MPa |
 
 With a linear IPR the same network produces about 8 % more oil than with

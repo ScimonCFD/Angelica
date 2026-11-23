@@ -37,7 +37,8 @@ class ComponentFlowResult:
     temperature_out_c: float | None = None
     zs: tuple[float, ...] = ()        # mole fractions — non-empty for compositional runs
     vapor_fraction: float | None = None  # 0=liquid, 1=gas, (0,1)=two-phase; None for non-EOS modes
-    free_water_fraction: float = 0.0   # mole fraction of feed that is liquid free water
+    free_water_fraction: float = 0.0   # compositional: mole fraction of the feed that is liquid free water;
+                                       # black-oil: in-situ water volume fraction
     liquid_fraction: float | None = None  # mole fraction of feed that is HC liquid
     gas_phase_zs: tuple[float, ...] = ()    # gas phase mole fractions per HC component
     liquid_phase_zs: tuple[float, ...] = () # liquid HC phase mole fractions per HC component
@@ -96,6 +97,9 @@ class GlobalEnergyBalance:
     shaft_work_kw: float = 0.0  # Σ pump / compressor work on the fluid
     joule_thomson_kw: float = 0.0  # Σ ṁ·Δ(cp·T) at constant h (valves and pipes)
     potential_energy_kw: float = 0.0  # −Σ ṁ·g·Δz along pipes (enthalpy-based fluids)
+    # Real basis: enthalpy changed at constant temperature by devices kept
+    # isothermal (wells at reservoir temperature) = heat they exchange.
+    isothermal_device_heat_kw: float = 0.0
     # "sensible": fluxes are ṁ·cp·T (liquids, black-oil); "real": fluxes are the
     # fluid's enthalpy ṁ·h(P, T) above the ideal gas at 0 °C (compressible gas,
     # compositional EOS).  With real enthalpy the Joule-Thomson effect is part
@@ -107,7 +111,7 @@ class GlobalEnergyBalance:
         """Residual of the global first-law balance (should be ≈ 0)."""
         jt = self.joule_thomson_kw if self.enthalpy_basis == "sensible" else 0.0
         return (self.enthalpy_in_kw + self.heat_sources_kw + self.shaft_work_kw
-                + jt + self.potential_energy_kw
+                + jt + self.potential_energy_kw + self.isothermal_device_heat_kw
                 - self.heat_wall_loss_kw - self.enthalpy_out_kw)
 
     @property
@@ -125,7 +129,8 @@ class GlobalEnergyBalance:
         ref = max(abs(self.enthalpy_in_kw), abs(self.enthalpy_out_kw), 1e-30)
         if self.enthalpy_basis == "real":
             ref = max(ref, abs(self.heat_sources_kw), abs(self.heat_wall_loss_kw),
-                      abs(self.shaft_work_kw), abs(self.joule_thomson_kw), abs(self.potential_energy_kw))
+                      abs(self.shaft_work_kw), abs(self.joule_thomson_kw), abs(self.potential_energy_kw),
+                      abs(self.isothermal_device_heat_kw))
         return 100.0 * abs(self.energy_error_kw) / ref
 
 

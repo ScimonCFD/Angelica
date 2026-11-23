@@ -1,9 +1,9 @@
 {
  "converged": true,
- "energy_error_pct": 3.785967720066878e-08,
+ "energy_error_pct": 0.0006262046621809027,
  "mass_error_pct": 0.0,
  "mass_flows_kg_per_s": {
-  "Pipe:link_1_pipe_1_seg0": 137.54896430406149
+  "Pipe:link_1_pipe_1_seg0": 137.5279688502568
  },
  "node_pressures_pa": {
   "1": 8000000.0,
@@ -11,6 +11,6 @@
  },
  "node_temperatures_c": {
   "1": 80.0,
-  "2": 74.6264954705318
+  "2": 76.2089243873775
  }
 }

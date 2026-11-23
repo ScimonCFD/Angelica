@@ -17,16 +17,16 @@ Part A — Well 1 deliverability (3.0 in tubing, P_r = 25 MPa, P_b = 20.9 MPa)
 Part B — gathering network, 3.0 in tubing
   Well       P_wh    P_wf       ṁ   q_oil  State
             (MPa)   (MPa)  (kg/s)  (m³/d)
-  Well 1    4.077   15.18   6.687   547.4  producing
+  Well 1    4.074   15.18   6.689   547.5  producing
   Well 2    2.688   17.74   2.375   170.4  producing
-  Well 3    2.617       —   0.000     0.0  dead: column heavier than P_r
-  Manifold 2.617 MPa  ·  oil 717.8 m³/d  ·  converged True
+  Well 3    2.618       —   0.000     0.0  dead: column heavier than P_r
+  Manifold 2.618 MPa  ·  oil 718.0 m³/d  ·  converged True
 
 Part C — tubing size (all wells)
    Tubing ID  oil (m³/d)
-     50.3 mm       505.3   converged True
+     50.3 mm       505.2   converged True
      62.0 mm       629.3   converged True
-     76.2 mm       717.8   converged True
+     76.2 mm       718.0   converged True
 
   • Well 3's static oil-and-water column (25 °API, WOR 0.8, 2 000 m) weighs
     more than its reservoir pressure: it cannot flow without artificial lift.

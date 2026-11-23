@@ -143,7 +143,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 The objective is PIPEPHASE's main use — oil and gas gathering networks with
 wells — so the remaining stages are worked in this order:
 
-1. **Black-oil brought level** (new item B): Joule-Thomson and friction
+1. **Done in v1.20.0. Black-oil brought level** (new item B): Joule-Thomson and friction
    heating in black-oil pipes; hydrate check from the gas gravity (or an
    equivalent composition) with the same outputs as compositional.
 2. Stage 3 — well correlations: Hagedorn-Brown and Gray selectable in
@@ -315,4 +315,25 @@ Summary for stage 2 so far:
 - Validated by consistency: Henry solubility ordering, structure switch
   with propane, curve/inverse consistency.
 - Not validated: methane above 288 K, CO2 above 273 K, all mixtures.
+
+### 2026-11-23 — Item B: black-oil brought level (v1.20.0)
+
+- Black-oil enthalpy h(P,T) from (∂h/∂P)_T = Σ w_i(v_i − T ∂v_i/∂T); all of
+  the v1.18.0 energy machinery now applies to black-oil (pipes, junctions,
+  chokes/valves, real-enthalpy balance). Wells stay isothermal until 4.1;
+  their implied heat is a new balance term.
+- Hydrate check for black-oil via the Katz gas-gravity chart (no
+  composition in black-oil — a composition-based check is impossible).
+- Fixed: per-inlet black-oil fluids lost the PVT correlation / gas props.
+
+Summary:
+- **Validated against data read in a source:** gas and water (∂h/∂P)_T vs
+  NIST WebBook (Setzmann-Wagner, IAPWS-95): 2–6 % and 2–3 %.
+- **Validated by consistency:** adiabatic pipes h_in = h_out + g·Δz (0.01 K);
+  liquid friction heating between 0 and ΔP/(ρcp) (T·β ≈ 0.31 for the test
+  oil); choke isenthalpic; Katz chart reproduces its digitised nodes.
+- **Not validated:** the Katz chart itself against measurements (chart
+  values read in a secondary source; chart accuracy per literature is a few
+  K); the neglected heat of solution of dissolved gas; black-oil choke
+  temperatures against field or lab data.
 

@@ -35,6 +35,11 @@ class BlackOilSolverSettings:
             for convergence.
         temperature_relaxation: Under-relaxation factor for temperature
             updates (1.0 = no relaxation).
+        pipe_enthalpy_terms: Joule-Thomson cooling of the gas, friction
+            heating of the liquids and potential energy along pipes, with
+            enthalpy-conserving junctions and isenthalpic chokes/valves
+            (default True, since v1.20.0).  False drops them for comparison;
+            the energy balance is then still computed with real enthalpy.
     """
 
     max_outer_iterations: int = 50
@@ -42,6 +47,7 @@ class BlackOilSolverSettings:
     temperature_tolerance_k: float = 0.01
     temperature_relaxation: float = 1.0
     composition_relaxation: float = 1.0
+    pipe_enthalpy_terms: bool = True
 
 
 class SteadyBlackOilSolver(BaseSolver):
@@ -217,19 +223,6 @@ class SteadyBlackOilSolver(BaseSolver):
 
     # ── FluidModel proxy ──────────────────────────────────────────────────────
 
-    @staticmethod
-    def _make_pipe_fluid(comp: BlackOilComposition, ref_p: float, ref_t: float):
-        """Wrap a per-pipe composition into a minimal FluidModel for the hydraulic solver."""
-        from angelica.properties.black_oil import BlackOilFluid
-        return BlackOilFluid(
-            api_gravity             = comp.api_gravity,
-            gas_gravity             = comp.gas_gravity,
-            gor_sc_m3_per_m3        = comp.gor_sc_m3_per_m3,
-            wor_sc_m3_per_m3        = comp.wor_sc_m3_per_m3,
-            reference_pressure_pa   = ref_p,
-            reference_temperature_c = ref_t,
-        )
-
     # ── Mixed-composition FluidModel ──────────────────────────────────────────
 
     def _build_mixed_fluid(
@@ -238,9 +231,18 @@ class SteadyBlackOilSolver(BaseSolver):
         pipe_comps: dict[int, BlackOilComposition],
         default_comp: BlackOilComposition,
         ref_t: float,
+        base_fluid=None,
     ):
-        """Return a FluidModel-compatible object that dispatches per link."""
+        """Return a FluidModel-compatible object that dispatches per link.
+
+        The per-link fluids keep the case fluid's PVT correlation and gas
+        thermal properties (they used to fall back to Standing and the
+        defaults)."""
         from angelica.properties.black_oil import BlackOilFluid
+
+        base_correlation = getattr(base_fluid, "correlation", "STANDING")
+        base_gas_cp = getattr(base_fluid, "gas_specific_heat_j_per_kg_k", 2_200.0)
+        base_gas_k = getattr(base_fluid, "gas_thermal_conductivity_w_per_mk", 0.035)
 
         # Build a lookup: component_object_id → per-pipe fluid
         id_to_comp: dict[int, BlackOilComposition] = {}
@@ -255,6 +257,9 @@ class SteadyBlackOilSolver(BaseSolver):
             wor_sc_m3_per_m3        = default_comp.wor_sc_m3_per_m3,
             reference_pressure_pa   = ref_p,
             reference_temperature_c = ref_t,
+            correlation             = base_correlation,
+            gas_specific_heat_j_per_kg_k     = base_gas_cp,
+            gas_thermal_conductivity_w_per_mk = base_gas_k,
         )
 
         class _PerPipeFluid:
@@ -272,6 +277,9 @@ class SteadyBlackOilSolver(BaseSolver):
                         wor_sc_m3_per_m3        = comp.wor_sc_m3_per_m3,
                         reference_pressure_pa   = ref_p,
                         reference_temperature_c = ref_t,
+                        correlation             = base_correlation,
+                        gas_specific_heat_j_per_kg_k     = base_gas_cp,
+                        gas_thermal_conductivity_w_per_mk = base_gas_k,
                     )
                 return self._cache[key]
 
@@ -291,9 +299,58 @@ class SteadyBlackOilSolver(BaseSolver):
             def thermal_conductivity_for_link(self, link_state) -> float:
                 return self._fluid_for(link_state).thermal_conductivity_for_link(link_state)
 
+            def enthalpy_for_link(self, link_state, pressure_pa: float, temperature_c: float) -> float:
+                return self._fluid_for(link_state).enthalpy_for_link(link_state, pressure_pa, temperature_c)
+
+            def reference_enthalpy_for_link(self, link_state) -> float:
+                return 0.0
+
+            def specific_heat_at(self, link_state, pressure_pa: float, temperature_c: float) -> float:
+                return self._fluid_for(link_state).specific_heat_at(link_state, pressure_pa, temperature_c)
+
+            def temperature_from_enthalpy_for_link(self, link_state, h, pressure_pa, T_guess_c=20.0):
+                return self._fluid_for(link_state).temperature_from_enthalpy_for_link(
+                    link_state, h, pressure_pa, T_guess_c)
+
         return _PerPipeFluid() if id_to_comp else default_fluid
 
     # ── Main solve ────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _hydrate_report(link, fluid, node_temperatures) -> dict:
+        """Hydrate check of a black-oil pipe with the gas-gravity (Katz) chart,
+        at the end where the fluid is coldest relative to the formation curve.
+        Also reports the in-situ water volume fraction as ``free_water_fraction``
+        (black-oil: volume, not mole, fraction), which the GUI uses to flag
+        links where hydrate can actually form."""
+        from angelica.core.state import PipeState
+        from angelica.properties.hydrate import katz_hydrate_temperature
+        if not isinstance(link, PipeState) or abs(link.mass_flow_kg_per_s) < 1e-12:
+            return {}
+        f = fluid.fluid_for_link(link) if hasattr(fluid, "fluid_for_link") else fluid
+        if getattr(f, "gor_sc_m3_per_m3", 0.0) <= 0.0:
+            return {}
+        out: dict = {}
+        try:
+            for node in (link.start_node, link.end_node):
+                T = node_temperatures.get(node.node_id)
+                if T is None or node.pressure_pa is None:
+                    continue
+                pt = katz_hydrate_temperature(f.gas_gravity, float(node.pressure_pa))
+                if pt is None:
+                    continue
+                sub = pt.temperature_c - T
+                if "hydrate_subcooling_k" not in out or sub > out["hydrate_subcooling_k"]:
+                    out.update(hydrate_subcooling_k=sub, hydrate_temperature_c=pt.temperature_c,
+                               hydrate_structure=pt.structure)
+            p_s, p_e = link.start_node.pressure_pa, link.end_node.pressure_pa
+            if f.wor_sc_m3_per_m3 > 0.0 and p_s is not None and p_e is not None:
+                P = 0.5 * (float(p_s) + float(p_e))
+                T_m = link.temperature_c if link.temperature_c is not None else T
+                out["free_water_fraction"] = f.pvt(P, T_m).holdup_water
+        except Exception:      # a check must never break a converged solve
+            return {}
+        return out
 
     def _multiphase_report(self, link, fluid):
         """Holdup, flow pattern and velocities of a solved pipe (None otherwise)."""
@@ -385,7 +442,8 @@ class SteadyBlackOilSolver(BaseSolver):
                     relaxation=settings.composition_relaxation,
                 )
                 effective_fluid = self._build_mixed_fluid(
-                    network_state, pipe_comps, default_comp, T_init  # type: ignore[arg-type]
+                    network_state, pipe_comps, default_comp, T_init,  # type: ignore[arg-type]
+                    base_fluid=fluid_model,
                 )
             else:
                 effective_fluid = fluid_model
@@ -413,7 +471,8 @@ class SteadyBlackOilSolver(BaseSolver):
                 outer_turb_final.append(turb_metrics[-1])
 
             new_node_temps, pipe_mean_temps = solve_energy_system(
-                network_state, effective_fluid, self.convection_scheme, T_ref=T_init
+                network_state, effective_fluid, self.convection_scheme, T_ref=T_init,
+                pipe_enthalpy_terms=settings.pipe_enthalpy_terms,
             )
 
             max_delta_t = 0.0
@@ -467,7 +526,8 @@ class SteadyBlackOilSolver(BaseSolver):
         if turb_metrics:
             outer_turb_final.append(turb_metrics[-1])
         final_node_temps, final_pipe_mean_temps = solve_energy_system(
-            network_state, effective_fluid, self.convection_scheme, T_ref=T_init
+            network_state, effective_fluid, self.convection_scheme, T_ref=T_init,
+            pipe_enthalpy_terms=settings.pipe_enthalpy_terms,
         )
         for nid, T_new in final_node_temps.items():
             if not network_state.nodes[nid].is_thermal_inlet:
@@ -501,6 +561,7 @@ class SteadyBlackOilSolver(BaseSolver):
                     temperature_in_c=t_in,
                     temperature_out_c=t_out,
                     multiphase=self._multiphase_report(link, effective_fluid),
+                    **self._hydrate_report(link, effective_fluid, node_temperatures),
                 )
             )
 

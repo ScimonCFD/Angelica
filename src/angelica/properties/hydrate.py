@@ -319,3 +319,77 @@ def hydrate_curve(component_names, zs, t_min_c: float = 0.0, t_max_c: float = 30
         if p is not None and p.pressure_pa < 1.0e8:
             pts.append(p)
     return pts
+
+
+# ── Gas-gravity method (Katz chart) for black-oil fluids ──────────────────────
+#
+# A black-oil fluid knows only its gas gravity, not a composition, so its
+# hydrate check uses the classic gas-gravity chart of Katz (1945), reproduced
+# in the GPSA Engineering Data Book.  Chart readings (pressure in psia at
+# 30–80 °F for gravities 0.6–1.0) as digitised in F. Janna, "Correlation for
+# predicting hydrate formation", B.Eng. dissertation, Universiti Teknologi
+# PETRONAS (2015), Tables 4.1a–4.5a ("Experiment" column = chart values).
+# Interpolation is linear in ln P and in gravity.  Below 0.6 the chart is
+# anchored at pure methane (0.5537) by the van der Waals–Platteeuw curve
+# above.  The chart is an engineering estimate: it does not see the propane
+# or CO2 content that a composition-based prediction would.
+_KATZ_T_F = (30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0)
+_KATZ_P_PSIA = {
+    0.6: (130, 185, 258, 359, 510, 709, 990, 1400, 2300, 4220, 7800),
+    0.7: (85, 123, 175, 249, 358, 510, 729, 1063, 1937, 3539, 6500),
+    0.8: (68, 98, 143, 209, 299, 423, 611, 940, 1709, 3080, 5650),
+    0.9: (55, 77, 115, 170, 240, 350, 510, 840, 1500, 2700, 5000),
+    1.0: (45, 62, 90, 127.13, 190, 299, 424.53, 720, 1280.25, 2400, 4265),
+}
+_METHANE_GRAVITY = 16.043 / 28.964
+_PSI = 6894.757
+
+
+def _katz_lnP_curve(gas_gravity: float) -> list[float]:
+    """ln P (Pa) at the chart temperatures for a gas gravity (interpolated)."""
+    grav = sorted(_KATZ_P_PSIA)
+    g = min(max(gas_gravity, _METHANE_GRAVITY), grav[-1])
+    if g >= grav[0]:
+        for g0, g1 in zip(grav, grav[1:]):
+            if g0 <= g <= g1:
+                w = (g - g0) / (g1 - g0)
+                return [(1 - w) * math.log(a * _PSI) + w * math.log(b * _PSI)
+                        for a, b in zip(_KATZ_P_PSIA[g0], _KATZ_P_PSIA[g1])]
+    # between pure methane (vdW-P) and the 0.6 chart line
+    w = (g - _METHANE_GRAVITY) / (grav[0] - _METHANE_GRAVITY)
+    out = []
+    for t_f, p06 in zip(_KATZ_T_F, _KATZ_P_PSIA[grav[0]]):
+        t_c = max((t_f - 32.0) / 1.8, 0.0)
+        pm = hydrate_formation_pressure(["methane"], [1.0], t_c)
+        ln_m = math.log(pm.pressure_pa) if pm is not None else math.log(p06 * _PSI)
+        out.append((1 - w) * ln_m + w * math.log(p06 * _PSI))
+    return out
+
+
+def katz_hydrate_pressure(gas_gravity: float, temperature_c: float) -> float:
+    """Hydrate formation pressure (Pa) from the gas-gravity chart."""
+    t_f = temperature_c * 1.8 + 32.0
+    lnp = _katz_lnP_curve(gas_gravity)
+    Ts = _KATZ_T_F
+    i = 0 if t_f <= Ts[0] else (len(Ts) - 2 if t_f >= Ts[-1] else
+                                 max(k for k in range(len(Ts) - 1) if Ts[k] <= t_f))
+    w = (t_f - Ts[i]) / (Ts[i + 1] - Ts[i])
+    return math.exp(lnp[i] + w * (lnp[i + 1] - lnp[i]))
+
+
+def katz_hydrate_temperature(gas_gravity: float, pressure_pa: float) -> HydratePoint | None:
+    """Hydrate formation temperature (°C) at ``pressure_pa`` from the chart;
+    None below the 0 °C pressure, capped at the chart's 80 °F (26.7 °C)."""
+    lnp = _katz_lnP_curve(gas_gravity)
+    ln_target = math.log(max(pressure_pa, 1.0))
+    Ts = _KATZ_T_F
+    p0 = katz_hydrate_pressure(gas_gravity, 0.0)
+    if pressure_pa < p0:
+        return None
+    if ln_target >= lnp[-1]:
+        return HydratePoint((Ts[-1] - 32.0) / 1.8, pressure_pa, "gas-gravity chart (cap)")
+    for k in range(len(Ts) - 1):
+        if lnp[k] <= ln_target <= lnp[k + 1]:
+            t_f = Ts[k] + (ln_target - lnp[k]) / (lnp[k + 1] - lnp[k]) * (Ts[k + 1] - Ts[k])
+            return HydratePoint(max((t_f - 32.0) / 1.8, 0.0), pressure_pa, "gas-gravity chart")
+    return HydratePoint(0.0, pressure_pa, "gas-gravity chart")

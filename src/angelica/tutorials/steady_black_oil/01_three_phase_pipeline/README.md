@@ -67,17 +67,17 @@ Holdup gas                              0.0000          0.3989
 ρ_mixture (kg/m³)                        875.2           539.2
 
 Converged:           True
-PVT iterations:      3
+PVT iterations:      2
 
-Mass flow:   109.7810 kg/s
-T outlet:    55.67 °C
+Mass flow:   109.8174 kg/s
+T outlet:    57.31 °C
 
 Surface rates (standard conditions):
-  Oil:    282.89 m³/h
-  Gas:    7072.3 m³/h  (25.0 m³/m³  ← GOR input: 25.0)
-  Water:  141.45 m³/h  (0.50 m³/m³  ← WOR input: 0.5)
+  Oil:    282.99 m³/h
+  Gas:    7074.7 m³/h  (25.0 m³/m³  ← GOR input: 25.0)
+  Water:  141.49 m³/h  (0.50 m³/m³  ← WOR input: 0.5)
 ```
 
-The solver converges in 3 PVT outer iterations.  Surface GOR and WOR recover
+The solver converges in 2 PVT outer iterations.  Surface GOR and WOR recover
 exactly from the mass-flow split because the surface composition is fixed by
 the input parameters.

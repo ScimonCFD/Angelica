@@ -21,6 +21,7 @@ from __future__ import annotations
 import functools
 import math
 from dataclasses import dataclass
+from functools import lru_cache
 
 from .base import FluidModel
 
@@ -615,6 +616,91 @@ def compute_pvt(
     )
 
 
+# ── Enthalpy (energy balance: Joule-Thomson, friction heating) ────────────────
+#
+# h(P, T) = ∫_0^T cp(P0, T') dT' + ∫_{P0}^{P} (∂h/∂P)_T dP',   P0 = 1 atm,
+# (∂h/∂P)_T = Σ_phases w_i · (v_i − T·(∂v_i/∂T)_P)              (T in K)
+#
+# w_i are the in-situ mass fractions of oil, free gas and water, v_i = 1/ρ_i.
+# For the free gas v = Z·R·T/(P·M), so v − T·∂v/∂T = −R·T²/(P·M)·∂Z/∂T: a real
+# gas cools on expansion.  For the liquids v dominates: they warm (friction
+# heating).  The heat of solution of the dissolved gas is neglected — gas
+# released from the oil only changes the phase split.  h is zero at 1 atm and
+# 0 °C, which is also the reference of the global energy balance.
+
+_GL4 = ((-0.8611363115940526, 0.3478548451374538), (-0.3399810435848563, 0.6521451548625461),
+        (0.3399810435848563, 0.6521451548625461), (0.8611363115940526, 0.3478548451374538))
+_GL8 = ((-0.9602898564975363, 0.1012285362903763), (-0.7966664774136267, 0.2223810344533745),
+        (-0.5255324099163290, 0.3137066458778873), (-0.1834346424956498, 0.3626837833783620),
+        (0.1834346424956498, 0.3626837833783620), (0.5255324099163290, 0.3137066458778873),
+        (0.7966664774136267, 0.2223810344533745), (0.9602898564975363, 0.1012285362903763))
+_P0_PA = 101_325.0
+
+
+def _dh_dp(params: tuple, P: float, T_c: float) -> float:
+    """(∂h/∂P)_T of the black-oil mixture, m³/kg (= J/(kg·Pa))."""
+    dT = 0.5
+    s0 = compute_pvt(P, T_c, *params)
+    s_lo = compute_pvt(P, T_c - dT, *params)
+    s_hi = compute_pvt(P, T_c + dT, *params)
+    T_k = T_c + 273.15
+    total = 0.0
+    for a, rho in (("oil", "density_oil_kg_per_m3"), ("gas", "density_gas_kg_per_m3"),
+                   ("water", "density_water_kg_per_m3")):
+        alpha = getattr(s0, f"holdup_{a}")
+        r0, rl, rh = getattr(s0, rho), getattr(s_lo, rho), getattr(s_hi, rho)
+        if alpha <= 0.0 or r0 <= 0.0 or rl <= 0.0 or rh <= 0.0:
+            continue
+        w = alpha * r0 / s0.mixture_density_kg_per_m3
+        dv_dT = (1.0 / rh - 1.0 / rl) / (2.0 * dT)
+        total += w * (1.0 / r0 - T_k * dv_dT)
+    return total
+
+
+@lru_cache(maxsize=16384)
+def black_oil_enthalpy(params: tuple, pressure_pa: float, temperature_c: float) -> float:
+    """Specific enthalpy (J/kg) of a black-oil mixture; ``params`` are the
+    trailing arguments of :func:`compute_pvt` (api, gas gravity, GOR, WOR,
+    correlation, gas cp, gas k)."""
+    T = temperature_c
+    h_T = 0.5 * T * sum(w * compute_pvt(_P0_PA, 0.5 * T * (1.0 + x), *params).mixture_specific_heat_j_per_kg_k
+                        for x, w in _GL4)
+    P = max(pressure_pa, 1.0)
+    half = 0.5 * (P - _P0_PA)
+    mid = 0.5 * (P + _P0_PA)
+    h_P = half * sum(w * _dh_dp(params, mid + half * x, T) for x, w in _GL8)
+    return h_T + h_P
+
+
+def temperature_from_enthalpy(h_func, target: float, T_guess: float) -> float:
+    """Invert a monotonic h(T) (secant steps safeguarded by bisection)."""
+    lo, hi = T_guess - 5.0, T_guess + 5.0
+    f_lo, f_hi = h_func(lo) - target, h_func(hi) - target
+    for _ in range(40):
+        if f_lo * f_hi <= 0.0:
+            break
+        if abs(f_lo) < abs(f_hi):
+            lo -= 2.0 * (hi - lo)
+            f_lo = h_func(lo) - target
+        else:
+            hi += 2.0 * (hi - lo)
+            f_hi = h_func(hi) - target
+    else:
+        return T_guess
+    for _ in range(60):
+        T = hi - f_hi * (hi - lo) / (f_hi - f_lo) if f_hi != f_lo else 0.5 * (lo + hi)
+        if not (lo < T < hi):
+            T = 0.5 * (lo + hi)
+        f = h_func(T) - target
+        if abs(f) < 1e-3 or hi - lo < 1e-5:
+            return T
+        if f_lo * f <= 0.0:
+            hi, f_hi = T, f
+        else:
+            lo, f_lo = T, f
+    return 0.5 * (lo + hi)
+
+
 # ── PVT state dataclass ───────────────────────────────────────────────────────
 
 @dataclass
@@ -761,3 +847,26 @@ class BlackOilFluid(FluidModel):
         return self.pvt(
             self._pressure(link_state), self._temperature(link_state)
         ).mixture_thermal_conductivity_w_per_m_k
+
+    # ── enthalpy (see black_oil_enthalpy) ─────────────────────────────────────
+
+    def _pvt_params(self) -> tuple:
+        return (self.api_gravity, self.gas_gravity, self.gor_sc_m3_per_m3, self.wor_sc_m3_per_m3,
+                self.correlation, self.gas_specific_heat_j_per_kg_k, self.gas_thermal_conductivity_w_per_mk)
+
+    def enthalpy_for_link(self, link_state, pressure_pa: float, temperature_c: float) -> float:
+        """Specific enthalpy (J/kg) at (P, T); zero at 1 atm and 0 °C."""
+        return black_oil_enthalpy(self._pvt_params(), float(round(pressure_pa / 10.0) * 10.0),
+                                  round(temperature_c, 4))
+
+    def reference_enthalpy_for_link(self, link_state) -> float:
+        return 0.0
+
+    def specific_heat_at(self, link_state, pressure_pa: float, temperature_c: float) -> float:
+        return self.pvt(pressure_pa, temperature_c).mixture_specific_heat_j_per_kg_k
+
+    def temperature_from_enthalpy_for_link(
+        self, link_state, enthalpy_j_per_kg: float, pressure_pa: float, T_guess_c: float = 20.0,
+    ) -> float:
+        return temperature_from_enthalpy(
+            lambda T: self.enthalpy_for_link(link_state, pressure_pa, T), enthalpy_j_per_kg, T_guess_c)

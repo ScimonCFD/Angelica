@@ -447,9 +447,19 @@ def _solve_energy_once(
         down_idx = node_index[dt.down_node.node_id]
         abs_mdot_cp = abs(dt.mdot) * dt.cp_up
         if dt.kind == "passthrough":
-            # Incompressible fitting: T_out = T_in (implicit matrix term)
+            # Incompressible fitting, or a well kept at reservoir temperature:
+            # T_out = T_in (implicit matrix term).  With an enthalpy model the
+            # stream's offsets are added like for any link; the enthalpy the
+            # device changes at constant T is heat exchanged with its
+            # surroundings (the formation, for a well) and is reported by the
+            # global balance as isothermal-device heat.
             inflow[down_idx].append((up_idx, abs_mdot_cp))
             outflow_total[up_idx] += abs_mdot_cp
+            if use_offsets:
+                m_abs = abs(dt.mdot)
+                explicit_rhs[up_idx] += m_abs * _offset(dev, dt.up_node.pressure_pa, dt.T_up, dt.cp_up)
+                explicit_rhs[down_idx] -= m_abs * _offset(dev, dt.down_node.pressure_pa, dt.T_up, dt.cp_up)
+                arriving[down_idx].append((dev, m_abs, dt.cp_up))
         else:
             abs_mdot_cp_out = abs(dt.mdot) * dt.cp_out
             outflow_total[up_idx]           += abs_mdot_cp
@@ -603,6 +613,11 @@ def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState |
     mdot = float(dev.mass_flow_kg_per_s)
     if abs(mdot) < 1e-30:
         return None
+    # Wells (IPR and IPR + tubing) keep the reservoir temperature until the
+    # tubing thermal model exists: an isenthalpic expansion without the
+    # potential energy of a 2 km lift would be worse than no change.
+    is_well = (getattr(dev.component, "is_well_model", False)
+               or getattr(dev.component, "is_well_inflow", False))
 
     up_node   = dev.start_node if mdot >= 0.0 else dev.end_node
     down_node = dev.end_node   if mdot >= 0.0 else dev.start_node
@@ -615,7 +630,7 @@ def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState |
     P_up   = _p_up   if _p_up   is not None else _p_ref
     P_down = _p_down if _p_down is not None else _p_ref
 
-    h_up = fluid_enthalpy(fluid_model, dev, P_up, T_up)
+    h_up = None if is_well else fluid_enthalpy(fluid_model, dev, P_up, T_up)
     if isinstance(dev, PumpState):
         rho = fluid_model.density_for_link(dev)
         w_shaft = (P_down - P_up) / rho
