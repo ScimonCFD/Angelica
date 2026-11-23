@@ -65,16 +65,17 @@ def well_fluid(api, gg, gor, wor) -> BlackOilFluid:
     return BlackOilFluid(api_gravity=api, gas_gravity=gg, gor_sc_m3_per_m3=gor, wor_sc_m3_per_m3=wor)
 
 
-def make_well(i: int, tubing_id: float) -> Well:
+def make_well(i: int, tubing_id: float, correlation: str = "beggs_brill") -> Well:
     name, *_rest = WELLS[i]
     J = WELLS[i][7]
     return Well(component_id=f"well_{name.replace(' ', '')}", start_node=10 * (i + 1),
                 end_node=10 * (i + 1) + 1, diameter_m=tubing_id,
                 productivity_index_m3_per_day_per_bar=J, ipr_model="vogel",
-                tubing_length_m=TUBING_LENGTH, tubing_height_change_m=TUBING_RISE)
+                tubing_length_m=TUBING_LENGTH, tubing_height_change_m=TUBING_RISE,
+                tubing_correlation=correlation)
 
 
-def build_case(tubing_id: float = 0.0762) -> NetworkCase:
+def build_case(tubing_id: float = 0.0762, correlation: str = "beggs_brill") -> NetworkCase:
     components, inlets, thermal, fluids = [], [], [], []
     for i, (name, P_r, T, api, gg, gor, wor, _J, L) in enumerate(WELLS):
         res, wh = 10 * (i + 1), 10 * (i + 1) + 1
@@ -82,7 +83,7 @@ def build_case(tubing_id: float = 0.0762) -> NetworkCase:
         thermal.append(ThermalBoundary(node_id=res, temperature_c=T, bc_type="fixed_temperature"))
         fluids.append(InletFluidBC(node_id=res, api_gravity=api, gas_gravity=gg,
                                    gor_sc_m3_per_m3=gor, wor_sc_m3_per_m3=wor))
-        components.append(make_well(i, tubing_id))
+        components.append(make_well(i, tubing_id, correlation))
         components.append(Pipe(component_id=f"flowline_{name.replace(' ', '')}", start_node=wh,
                                end_node=MANIFOLD, diameter_m=0.1016, length_m=L,
                                absolute_roughness_m=46e-6, heat_transfer_coefficient_w_per_m2k=5.0,
@@ -164,12 +165,28 @@ def run():
                                                         P_r * 1e6, T).mass_per_oil_sc_m3
         print(f"  {tid * 1000:>7.1f} mm {q_tot:>11.1f}   converged {res.converged}")
 
+    # ── Part D: tubing correlation ────────────────────────────────────────────
+    print("\nPart D — tubing correlation (3.0 in tubing)")
+    print(f"  {'Correlation':16} {'Well 1 max P_wh':>16} {'oil (m³/d)':>11}")
+    for corr in ("beggs_brill", "hagedorn_brown", "gray"):
+        res = solver.solve(build_case(0.0762, corr))
+        q_tot = 0.0
+        for i, (nm, P_r, T, api, gg, gor, wor, _J, _L) in enumerate(WELLS):
+            m = next(cf.mass_flow_kg_per_s for cf in res.component_flows
+                     if cf.label.endswith(f"well_{nm.replace(' ', '')}"))
+            q_tot += max(m, 0.0) * 86_400.0 / well_curve(make_well(i, 0.0762, corr), well_fluid(api, gg, gor, wor),
+                                                        P_r * 1e6, T).mass_per_oil_sc_m3
+        c1 = well_curve(make_well(0, 0.0762, corr), well_fluid(*WELLS[0][3:7]), WELLS[0][1] * 1e6, WELLS[0][2])
+        print(f"  {corr:16} {c1.max_wellhead_pressure_pa / 1e6:>12.2f} MPa {q_tot:>11.1f}")
+
     print()
     print("  • Well 3's static oil-and-water column (25 °API, WOR 0.8, 2 000 m) weighs")
     print("    more than its reservoir pressure: it cannot flow without artificial lift.")
     print("  • Larger tubing reduces friction in the high-rate wells; the Well model")
     print("    solves each well's tubing on its own, so the network converges in a")
     print("    few outer iterations even with 2 km two-phase risers.")
+    print("  • Hagedorn-Brown suits oil wells, Gray gas and gas-condensate wells; the")
+    print("    spread between correlations is part of the uncertainty of any well model.")
 
 
 if __name__ == "__main__":

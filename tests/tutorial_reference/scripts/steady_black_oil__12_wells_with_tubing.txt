@@ -28,8 +28,16 @@ Part C — tubing size (all wells)
      62.0 mm       629.3   converged True
      76.2 mm       718.0   converged True
 
+Part D — tubing correlation (3.0 in tubing)
+  Correlation       Well 1 max P_wh  oil (m³/d)
+  beggs_brill             11.43 MPa       718.0
+  hagedorn_brown          11.80 MPa       779.1
+  gray                    12.69 MPa       769.6
+
   • Well 3's static oil-and-water column (25 °API, WOR 0.8, 2 000 m) weighs
     more than its reservoir pressure: it cannot flow without artificial lift.
   • Larger tubing reduces friction in the high-rate wells; the Well model
     solves each well's tubing on its own, so the network converges in a
     few outer iterations even with 2 km two-phase risers.
+  • Hagedorn-Brown suits oil wells, Gray gas and gas-condensate wells; the
+    spread between correlations is part of the uncertainty of any well model.

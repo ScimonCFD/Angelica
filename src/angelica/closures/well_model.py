@@ -76,10 +76,13 @@ def bottomhole_pressure(q: float, p_res: float, J: float, model: str, p_b: float
 
 def tubing_wellhead_pressure(
     p_wf: float, m_dot: float, fluid, T: float, D: float, L: float, dz: float,
-    roughness: float, n_seg: int,
+    roughness: float, n_seg: int, correlation: str = "beggs_brill",
 ) -> float | None:
     """Integrate the tubing from the bottom hole up; None if the pressure
-    falls below ~1.2 bar before the wellhead (rate not deliverable)."""
+    falls below ~1.2 bar before the wellhead (rate not deliverable).
+    ``correlation``: "beggs_brill", "hagedorn_brown" or "gray"."""
+    from .well_correlations import gray_gradient, hagedorn_brown_gradient
+
     theta = math.asin(max(-1.0, min(1.0, dz / L)))
     area = math.pi * D * D / 4.0
     ds = L / n_seg
@@ -90,6 +93,12 @@ def tubing_wellhead_pressure(
         sigma = surface_tension_from_pvt(pvt, float(fluid.api_gravity))
         rho_ns = C_L * rho_l + (1.0 - C_L) * rho_g
         v_m = m_dot / (rho_ns * area)
+        if correlation == "hagedorn_brown":
+            return hagedorn_brown_gradient(v_m, C_L, rho_l, rho_g, mu_l, mu_g, D, roughness, theta,
+                                           sigma, P).dP_dz_total
+        if correlation == "gray":
+            return gray_gradient(v_m, C_L, rho_l, rho_g, mu_l, mu_g, D, roughness, theta,
+                                 sigma, P).dP_dz_total
         return beggs_brill_gradient(v_m, C_L, rho_l, rho_g, mu_l, mu_g, D, roughness, theta,
                                     sigma).dP_dz_total
 
@@ -106,7 +115,8 @@ def tubing_wellhead_pressure(
 
 
 @lru_cache(maxsize=256)
-def _curve_cached(api, gg, gor, wor, corr, p_res, T, J, model, D, L, dz, rough, n_seg) -> WellCurve:
+def _curve_cached(api, gg, gor, wor, corr, p_res, T, J, model, D, L, dz, rough, n_seg,
+                  tubing_corr="beggs_brill") -> WellCurve:
     from angelica.properties.black_oil import BlackOilFluid
 
     fluid = BlackOilFluid(api_gravity=api, gas_gravity=gg, gor_sc_m3_per_m3=gor,
@@ -123,7 +133,8 @@ def _curve_cached(api, gg, gor, wor, corr, p_res, T, J, model, D, L, dz, rough, 
         p_wf = bottomhole_pressure(q, p_res, J, model, p_b)
         if p_wf <= _P_MIN_PA:
             break
-        p_wh = tubing_wellhead_pressure(p_wf, q * m_per / _S_PER_DAY, fluid, T, D, L, dz, rough, n_seg)
+        p_wh = tubing_wellhead_pressure(p_wf, q * m_per / _S_PER_DAY, fluid, T, D, L, dz, rough, n_seg,
+                                        tubing_corr)
         if p_wh is None:
             break
         rates.append(q)
@@ -143,6 +154,7 @@ def well_curve(comp, fluid, p_res: float, T: float) -> WellCurve:
         float(comp.productivity_index_m3_per_day_per_bar), comp.ipr_model,
         float(comp.diameter_m), float(comp.tubing_length_m), float(comp.tubing_height_change_m),
         float(comp.tubing_roughness_m), int(comp.tubing_segments),
+        str(getattr(comp, "tubing_correlation", "beggs_brill")),
     )
 
 

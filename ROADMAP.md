@@ -102,9 +102,9 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   data (Ng & Robinson 1985) within the accuracy of the chosen method.
 
 ### Stage 3 — well correlations (items 4, 5, 6)
-- 3.1 Hagedorn-Brown (with Griffith bubble-flow correction, no-slip floor).
-- 3.2 Gray.
-- 3.3 Selectable tubing correlation in `Well`; flowline correlation per case.
+- 3.1 **Done in v1.21.0.** Hagedorn-Brown (with Griffith bubble-flow correction, no-slip floor).
+- 3.2 **Done in v1.21.0.** Gray.
+- 3.3 **Done in v1.21.0 (Well part).** Selectable tubing correlation in `Well`; flowline correlation per case.
 - 3.4 Duns-Ros and Mukherjee-Brill.
   *Done when:* each reproduces its textbook worked example within 2 %.
 
@@ -336,4 +336,29 @@ Summary:
   values read in a secondary source; chart accuracy per literature is a few
   K); the neglected heat of solution of dissolved gas; black-oil choke
   temperatures against field or lab data.
+
+### 2026-11-23 — Stage 3, items 3.1–3.3 (v1.21.0)
+
+- Hagedorn-Brown (modified) and Gray in `closures/well_correlations.py`,
+  selectable per `Well`; GUI combobox; tutorial 12 Part D.
+- Sources: Gray equations and HB groups/structure from the whitson wiki
+  (secondary, read); HB chart-fit coefficients and the Gray roughness-floor
+  unit from pyResToolbox source (GPL-3.0, secondary, read — coefficients
+  only, own implementation).
+- pyResToolbox also confirmed our Beggs-Brill inclination coefficients, and
+  notes that the 0.924 uphill "Payne" factor is credited by secondary
+  sources but absent from Payne et al. (1979), and that no downhill factor
+  is applied. Our optional `payne_correction` applies 0.924/0.685 — to be
+  reviewed (pending).
+- Attempted cross-check against pyResToolbox installed in the scratch env:
+  **denied** by the permission system; not worked around.
+
+Summary:
+- Validated against data read in a source: none.
+- Validated by consistency: hand calculations of both correlations; dry-gas
+  limits; HB and BB share the static column at zero rate.
+- Not validated: either correlation against measured well data or a
+  textbook example (maintainer could supply Brill & Mukherjee examples).
+- Pending in stage 3: Duns-Ros and Mukherjee-Brill (3.4); network-pipe use
+  of HB/Gray (3.3, flowline part).
 

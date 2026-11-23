@@ -46,6 +46,19 @@ rises from 11.19 MPa (static) to 11.43 MPa at 76 m³/d before falling — gas
 lightens the column at low rates.  Larger tubing raises total production:
 505 m³/d (50.3 mm), 629 m³/d (62.0 mm), 718 m³/d (76.2 mm).
 
+### Tubing correlation (Part D)
+
+| Correlation | Well 1 max P_wh | Total oil |
+|---|---|---|
+| Beggs-Brill | 11.43 MPa | 718 m³/d |
+| Hagedorn-Brown (modified) | 11.80 MPa | 779 m³/d |
+| Gray | 12.69 MPa | 770 m³/d |
+
+Select it with `Well(..., tubing_correlation="hagedorn_brown")` or in the
+GUI well dialog. Hagedorn-Brown is meant for oil wells, Gray for gas and
+gas-condensate wells (its holdup does not tend to 1 at zero rate). The
+spread between correlations is part of the uncertainty of any well model.
+
 The tubing is isothermal at the reservoir temperature.  The GUI file
 reproduces the 3.0 in case.
 

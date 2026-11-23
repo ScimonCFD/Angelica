@@ -262,6 +262,8 @@ class Well(Fitting):
         (defaults to ``tubing_length_m``, a vertical well)
     tubing_roughness_m : absolute roughness (default 4.6e-5 m)
     tubing_segments : integration steps along the tubing (default 25)
+    tubing_correlation : "beggs_brill" (default), "hagedorn_brown" (oil wells)
+        or "gray" (gas and gas-condensate wells)
 
     The tubing is taken at reservoir temperature (isothermal).  Requires
     ``SteadyBlackOilSolver``.
@@ -273,6 +275,7 @@ class Well(Fitting):
     tubing_height_change_m: float = float("nan")
     tubing_roughness_m: float = 4.6e-5
     tubing_segments: int = 25
+    tubing_correlation: str = "beggs_brill"
     loss_coefficient: float = 1.0   # unused; keeps the Fitting interface
     is_well_model = True            # class attribute read by the flow models
 
@@ -289,6 +292,10 @@ class Well(Fitting):
             raise ValueError("Well tubing_height_change_m cannot exceed tubing_length_m.")
         if self.tubing_segments < 2:
             raise ValueError("Well tubing_segments must be at least 2.")
+        if self.tubing_correlation not in ("beggs_brill", "hagedorn_brown", "gray"):
+            raise ValueError(
+                "Well tubing_correlation must be 'beggs_brill', 'hagedorn_brown' or 'gray' "
+                f"(got {self.tubing_correlation!r})")
 
 
 @dataclass(frozen=True)

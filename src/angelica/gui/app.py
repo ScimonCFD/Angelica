@@ -4802,9 +4802,12 @@ class NetSimGui:
                         ("tubing_height_change_m", "Vertical rise (m) — blank: vertical well"),
                         ("tubing_roughness_m", "Tubing roughness (m)"),
                         ("tubing_segments", "Integration segments (−)")],
-                choices={"ipr_model": ("IPR model", ("vogel", "linear"))},
-                note=("Reservoir inflow + production tubing (Beggs-Brill, isothermal at the\n"
-                      "reservoir temperature).  Start node = reservoir (pressure boundary at P_r);\n"
+                choices={"ipr_model": ("IPR model", ("vogel", "linear")),
+                         "tubing_correlation": ("Tubing correlation",
+                                                ("beggs_brill", "hagedorn_brown", "gray"))},
+                note=("Reservoir inflow + production tubing (isothermal at the reservoir\n"
+                      "temperature).  Tubing: Beggs-Brill (any), Hagedorn-Brown (oil wells),\n"
+                      "Gray (gas / gas-condensate wells).  Start node = reservoir (P_r);\n"
                       "end node = wellhead.  The well is dead if the wellhead pressure exceeds\n"
                       "the maximum of its deliverability curve; it never takes injection."),
             )

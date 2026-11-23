@@ -525,6 +525,8 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         tubing_height_change_m=float(rise_text) if rise_text else tubing_length,
                         tubing_roughness_m=_optional_float(component, "tubing_roughness_m", default=4.6e-5),
                         tubing_segments=int(_optional_float(component, "tubing_segments", default=25.0)),
+                        tubing_correlation=(component.properties.get("tubing_correlation", "beggs_brill").strip()
+                                            or "beggs_brill"),
                         component_id=f"link_{link.link_id}_well_{component.component_id}",
                     )
                 )

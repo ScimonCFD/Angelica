@@ -323,6 +323,7 @@ class CanvasScene:
                 "tubing_height_change_m": "",
                 "tubing_roughness_m": "0.000046",
                 "tubing_segments": "25",
+                "tubing_correlation": "beggs_brill",
             }
         if component_type == "well_inflow":
             return {

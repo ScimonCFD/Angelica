@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.21.0] — 2026-11-23
+
+### New: Hagedorn-Brown and Gray tubing correlations for wells
+
+`Well(..., tubing_correlation=...)` selects how the production tubing is
+integrated: "beggs_brill" (default, unchanged), "hagedorn_brown" (oil
+wells) or "gray" (gas and gas-condensate wells).  Also in the GUI well
+dialog.  New module `angelica.closures.well_correlations`.
+
+  - Hagedorn & Brown (1965) with the Brill & Mukherjee (1999) modifications:
+    holdup from the three charts (polynomial fits — coefficients as published
+    in pyResToolbox, GPL-3.0, secondary source), never below the no-slip
+    holdup; Griffith bubble flow below the Orkiszewski boundary with
+    liquid-only friction; Reynolds number on the mass flux with
+    μ_L^H_L·μ_g^(1−H_L).
+  - Gray (1974, API 14B) as given by the whitson wiki: holdup from N_v, N_d
+    and R, effective roughness 28.5·σ/(ρ_m·v_m²) blended below R = 0.007,
+    floor 2.77e-5 ft (the floor is in feet in the original program,
+    confirmed by pyResToolbox).
+  - Black-oil tutorial 12, Part D: the three correlations on the same
+    network — Well 1 maximum wellhead pressure 11.43 / 11.80 / 12.69 MPa,
+    total oil 718 / 779 / 770 m³/d.
+  - Checks: step-by-step hand calculation of both correlations and their
+    single-phase limits (consistency).  NOT validated against measured well
+    data or a published worked example (none accessible; installing an
+    independent implementation for a cross-check was not permitted here).
+  - Known behaviour: Gray's holdup does not tend to 1 at zero rate (it is a
+    mist-flow correlation), so its static column is lighter than the
+    others'.
+
 ## [1.20.0] — 2026-11-23
 
 ### New: black-oil energy balance — Joule-Thomson, friction heating, isenthalpic chokes
