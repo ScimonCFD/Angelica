@@ -101,6 +101,19 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - 2.3 Inhibitors (methanol, MEG). *Done when:* matches published depression
   data (Ng & Robinson 1985) within the accuracy of the chosen method.
 
+### Stage 2b — advanced flow assurance (added 2026-11-23, after stage 4)
+- 2b.1 Water content of the gas as an input (ppm, mg/Sm³ or saturation
+  fraction); water dew point; hydrate check for undersaturated gas (no free
+  water: hydrate–vapour equilibrium with the water in the gas phase).
+  *Done when:* a gas at its water saturation reproduces the current curve,
+  and a dehydrated gas shifts the hydrate temperature down consistently with
+  its water dew point.
+- 2b.2 Phase calculation with hydrate (and ice) as additional phases
+  (Gibbs minimisation): amount of hydrate formed, water-limited cases,
+  composition change. *Done when:* with excess water the incipient boundary
+  equals the vdW-P curve; mass balance of water and formers closes.
+- 2b.3 Inhibitors (methanol, MEG) on top of 2b.2 — replaces item 2.3.
+
 ### Stage 3 — well correlations (items 4, 5, 6)
 - 3.1 **Done in v1.21.0.** Hagedorn-Brown (with Griffith bubble-flow correction, no-slip floor).
 - 3.2 **Done in v1.21.0.** Gray.
@@ -154,7 +167,9 @@ wells — so the remaining stages are worked in this order:
    by outlet temperature.
 5. Stage 7 — tools: oil-field units, sensitivity studies in the GUI,
    calibration factors.
-6. The rest: inhibitors (2.3), detailed heat transfer (stage 6), stage 8.
+6. Stage 2b — advanced flow assurance (water content, hydrate phase flash,
+   inhibitors).
+7. The rest: detailed heat transfer (stage 6), stage 8.
 
 ## 4. Standing rules
 
