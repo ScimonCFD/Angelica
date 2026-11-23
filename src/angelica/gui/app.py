@@ -176,7 +176,7 @@ class NetSimGui:
             "name": "Beggs-Brill (two-phase)",
         },
         "beggs_brill_payne": {
-            "name": "Beggs-Brill + Payne holdup correction",
+            "name": "Beggs-Brill + Payne holdup factors (unverified)",
         },
     }
     VELOCITY_LOOP_METHOD_LIBRARY = {

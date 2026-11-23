@@ -12,8 +12,15 @@ Hagedorn & Brown (1965), JPT 17(4), 475–484, with the modifications of
 Brill & Mukherjee (1999, §4.2.1): holdup not below the no-slip value, and
 Griffith bubble flow (Orkiszewski boundary) at low gas fraction.
   - Groups: N_LV, N_GV, N_D = D·(ρ_L·g/σ)^½, N_L = μ_L·(g/(ρ_L·σ³))^¼.
-  - Charts as polynomial fits (secondary source: pyResToolbox,
-    pyrestoolbox/nodal/nodal.py, M. Burgoyne, GPL-3.0 — coefficients only):
+  - Charts as polynomial fits.  The coefficients were read in two
+    independent open implementations that agree to the digits each prints:
+    pyResToolbox (pyrestoolbox/nodal/nodal.py, M. Burgoyne) and rNodal
+    (R/Duns-Ros.R and R/Hagedorn-Brown.R, A. Reyes), the latter crediting
+    them to Guo, Lyons & Ghalambor (2007), *Petroleum Production
+    Engineering: A Computer-Assisted Approach*, and to Brown's *The
+    Technology of Artificial Lift Methods*.  The book itself was not read,
+    so that attribution is second-hand.  Only the numbers are used; the
+    implementation is Angelica's own:
         CN_L     = 10^Σ c_i·x^i,  x = log10(N_L) + 3, N_L held in [0.002, 0.4]
         H_L/ψ    = Σ y_i·u^i,     u = log10(φ1) + 6 (held at the fit maximum),
                    φ1 = N_LV·(P/P_atm)^0.1·CN_L / (N_GV^0.575·N_D)
@@ -48,7 +55,7 @@ _G = GRAVITY_M_PER_S2
 _P_ATM = 101_325.0
 _FT = 0.3048
 
-# Hagedorn-Brown chart fits (pyResToolbox coefficients)
+# Hagedorn-Brown chart fits (see the module docstring for their origin)
 _CNL = (-2.69851, 0.1584095, -0.5509976, 0.5478492, -0.1219458)
 _HL_PSI = (-0.10306578, 0.617774, -0.632946, 0.29598, -0.0401)
 _PSI = (0.9116257, -4.821756, 1232.25, -22253.58, 116174.3)

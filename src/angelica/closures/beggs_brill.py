@@ -25,13 +25,18 @@ Inclination correction (original Beggs-Brill)
 holds less liquid).  In the transition region the segregated and
 intermittent holdups are each corrected, then weighted.
 
-Payne correction (optional)
----------------------------
-Payne, W.R., Palmer, C.M., Brill, J.P. (1979). Evaluation of Inclined
-Pipe, Two-Phase Liquid Holdup and Pressure-Drop Correlations Using
-Experimental Data. JPT, Sept., 1198-1208: Beggs-Brill over-predicts
-holdup, so H_L(θ) is multiplied by 0.924 uphill and 0.685 downhill.
-Enabled with ``BeggsBrillCorrelation(payne_correction=True)``.
+Holdup factors attributed to Payne et al. (optional, UNVERIFIED)
+----------------------------------------------------------------
+``BeggsBrillCorrelation(payne_correction=True)`` multiplies H_L(θ) by 0.924
+uphill and 0.685 downhill.  Textbooks and commercial manuals credit these
+factors to Payne, W.R., Palmer, C.M., Brill, J.P. and Beggs, H.D. (1979),
+"Evaluation of Inclined-Pipe, Two-Phase Liquid Holdup and Pressure-Loss
+Correlations Using Experimental Data", JPT, Sept., 1198-1208.  Neither
+factor could be read in a source: the paper was not accessible, and the
+pyResToolbox source notes that 0.924 is credited to it by secondary
+sources but does not appear in the paper, and applies no downhill factor.
+The option is kept for comparison with programs that use the factors; it
+is off by default and should not be taken as a validated correction.
 
 Physics
 -------
@@ -478,7 +483,8 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
     Parameters
     ----------
     payne_correction : multiply the holdup by 0.924 uphill and 0.685
-        downhill (Payne et al. 1979).  Off by default (original correlation).
+        downhill (factors attributed to Payne et al. 1979; not verified in
+        a source — see the module docstring).  Off by default.
     """
 
     def __init__(self, payne_correction: bool = False) -> None:

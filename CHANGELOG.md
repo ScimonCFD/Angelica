@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.21.3] — 2026-11-23
+
+Review follow-ups.  No numerical result changes.
+
+### Changed
+  - **Beggs-Brill "Payne" option marked as unverified.**  The 0.924 uphill /
+    0.685 downhill holdup factors could not be read in a source (the 1979
+    paper was not accessible; pyResToolbox notes that 0.924 does not appear
+    in it and applies no downhill factor).  The option stays, off by
+    default, for comparison with programs that use the factors; the GUI
+    entry is now "Beggs-Brill + Payne holdup factors (unverified)" and the
+    docstrings say so.
+  - **Hagedorn-Brown chart fits: origin documented.**  The coefficients
+    agree between two independent open implementations (pyResToolbox and
+    rNodal); rNodal credits them to Guo, Lyons & Ghalambor (2007) and
+    Brown.  The book was not read, so the attribution is second-hand.
+  - **Katz chart: origin stated precisely.**  The dissertation the values
+    come from calls them "experimental data retrieved from the literature";
+    that they are chart readings is an inference.  Cross-check added
+    against the Towler-Mokhatab correlation tabulated in the same source:
+    within 1.8 °F at 500 psia for gravities 0.6–1.0, diverging at higher
+    pressure (up to 8.5 °F at 2000 psia, gravity 1.0).
+
+### Hydrates: what the dissolved-gas term does to methane
+  - The Henry term raises the methane formation pressure by 0.7 % at 273 K,
+    2 % at 285 K, 4 % at 290 K and 7 % at 295 K.  It is not what makes the
+    model run high at the warm end.  Whether Munck et al. (1988) fitted
+    their constants with or without it could not be established; Antunes
+    et al. (2018) use a solubility correction for every gas with the same
+    constants, and the term is kept for all gases.
+  - New validation against data read in a source: methane solubility in
+    water (Böttger, Kamps & Maurer 2016, NIST ThermoML archive), 13 points
+    at 283 K and 298 K up to 10.4 MPa, all inside their expanded
+    uncertainty (−4.1 … +3.5 %).
+  - New comparison at high pressure (Sloan & Koh values through a secondary
+    source): methane at 40 MPa −1.6 K; CO2 at 10 MPa +0.4 K, at 40 MPa
+    −1.3 K.
+  - **Limitation recorded:** CO2 at 100 MPa comes out 9 K low (280.8 K
+    against 289.7 K) because Henry's law without a Poynting factor
+    over-predicts the dissolved CO2.  A Poynting factor with v̄ = 32 cm³/mol
+    would fix the trend but puts the methane solubility 5–10 % below the
+    measurements, so it was not added.  Kept as an expected-failure test.
+
 ## [1.21.2] — 2026-11-23
 
 ### Fixed (phase-envelope window)

@@ -22,8 +22,19 @@ Munck's constants.  Temperature at Q2: 1 K (≈ 11 % in pressure on this part
 of the curve; the roadmap's criterion).  These tolerances were not chosen
 from the results below.
 
-NOT VALIDATED (no measured data accessible): pure methane above 288 K and
-natural-gas mixtures.
+Methane solubility in water — READ IN SOURCE: Böttger, Kamps & Maurer
+(2016), Fluid Phase Equilib. 407, 209, from the NIST ThermoML archive
+(trc.nist.gov/ThermoML/10.1016/j.fluid.2015.03.041), with the expanded
+(95 %) uncertainty of each point.
+
+Hydrate temperatures at 10–100 MPa — SECONDARY SOURCE: Sloan & Koh values
+as quoted by Algaba et al. (2024), arXiv:2408.01819, Table III.
+
+Katz chart — CROSS-CHECK, not validation: Towler-Mokhatab temperatures as
+tabulated by Janna (2015), Tables 4.1b–4.5b (read in the dissertation).
+
+NOT VALIDATED (no measured data accessible): pure methane between 285 K and
+295 K and natural-gas mixtures.
 """
 from __future__ import annotations
 
@@ -74,6 +85,61 @@ def test_dissolved_gas_lowers_water_activity():
     x_c1 = water_mole_fraction(278.15, {"74-82-8": 20.0})
     assert 0.97 < x_co2 < 0.985 and x_c1 > 0.999
     assert water_mole_fraction(278.15, {}) == 1.0
+
+
+# (T K, P kPa, molality mol/kg, expanded uncertainty mol/kg)
+_BOTTGER_2016 = [
+    (283.14, 1151, 0.0214, 0.0043), (283.14, 1967, 0.0352, 0.0044), (283.14, 2456, 0.0447, 0.0044),
+    (283.14, 3342, 0.0576, 0.0044), (283.14, 3876, 0.0669, 0.0044), (283.14, 4673, 0.0784, 0.0044),
+    (283.14, 5701, 0.0920, 0.0044), (298.15, 3200, 0.0424, 0.0043), (298.15, 4111, 0.0527, 0.0043),
+    (298.15, 4989, 0.0638, 0.0043), (298.15, 6539, 0.0812, 0.0043), (298.15, 8675, 0.0993, 0.0043),
+    (298.15, 10360, 0.1141, 0.0043),
+]
+
+
+@pytest.mark.parametrize("T, p_kpa, molality, u", _BOTTGER_2016)
+def test_methane_solubility_against_measurements(T, p_kpa, molality, u):
+    """Validation (data read in source).  Errors obtained: −4.1 … +3.5 %
+    (largest in absolute terms +0.0040 mol/kg at 10.36 MPa).  Tolerance: the
+    expanded uncertainty reported with each point."""
+    from angelica.properties.hydrate import _M_WATER, _former_fugacities, water_mole_fraction
+    fug = _former_fugacities(("methane",), (1.0,), T, p_kpa * 1e3, "PR")
+    x_w = water_mole_fraction(T, fug)
+    m = (1.0 - x_w) / (x_w * _M_WATER)
+    assert abs(m - molality) <= u
+
+
+# Errors obtained: methane 40 MPa −1.56 K; CO2 10 MPa +0.36 K, 40 MPa −1.35 K.
+# Tolerance 2 K: a regression guard chosen after seeing the results — the
+# data come through a secondary source and no accuracy is published for
+# vdW-P + Munck in this range, so this is NOT a validation.
+@pytest.mark.parametrize("gas, p_mpa, t_k", [
+    ("methane", 40.0, 297.0), ("carbon dioxide", 10.0, 283.6), ("carbon dioxide", 40.0, 286.2),
+])
+def test_high_pressure_hydrate_temperature_guard(gas, p_mpa, t_k):
+    pt = hydrate_formation_temperature([gas], [1.0], p_mpa * 1e6)
+    assert pt.temperature_c + 273.15 == pytest.approx(t_k, abs=2.0)
+
+
+@pytest.mark.xfail(strict=True, reason="Known limitation: Henry's law without a Poynting factor "
+                   "over-predicts dissolved CO2 at 100 MPa; model 280.8 K vs 289.7 K")
+def test_co2_hydrate_at_100_mpa_known_limitation():
+    pt = hydrate_formation_temperature(["carbon dioxide"], [1.0], 100e6)
+    assert pt.temperature_c + 273.15 == pytest.approx(289.7, abs=2.0)
+
+
+# Towler-Mokhatab temperature (°F) at 500 psia, Janna (2015) Tables 4.1b–4.5b.
+# Differences obtained (chart − correlation): −1.45, −0.13, −0.77, −1.11,
+# −1.81 °F.  Tolerance 2 °F: regression guard chosen after the results; a
+# cross-check of two representations of gas-gravity data, not a validation
+# against measurements.  At 2000 psia the two differ by 2.4 °F (gravity 0.6)
+# to 8.5 °F (gravity 1.0): the log-linear correlation does not follow the
+# steepening chart curve.
+@pytest.mark.parametrize("gravity, t_f", [(0.6, 51.17), (0.7, 54.85), (0.8, 58.04), (0.9, 60.85), (1.0, 63.36)])
+def test_katz_chart_against_towler_mokhatab(gravity, t_f):
+    from angelica.properties.hydrate import katz_hydrate_temperature
+    pt = katz_hydrate_temperature(gravity, 500.0 * 6894.757)
+    assert pt.temperature_c * 1.8 + 32.0 == pytest.approx(t_f, abs=2.0)
 
 
 def test_propane_promotes_structure_ii_in_natural_gas():

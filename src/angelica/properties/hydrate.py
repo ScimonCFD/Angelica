@@ -35,12 +35,34 @@ Liquid basis: Δh0_L = Δh0 − 6009.5 J/mol (ice fusion), Δv0_L = Δv0 + 1.6 c
 
 Validation status
 -----------------
-Quadruple points of CH4, C2H6, C3H8 and CO2 (Sloan & Koh values seen through
-a secondary source): within 7.3 % in pressure at Q1 and 0.8 K at Q2.  Pure
-methane above 288 K and natural-gas mixtures are NOT validated (no measured
-data were accessible).  CO2 is checked at Q1 only (−1.2 %); without the
-dissolved-gas correction (before v1.19.1) CO2 formation pressures came out
-15–30 % low, about 2 K.
+- Quadruple points of CH4, C2H6, C3H8 and CO2 (Sloan & Koh values seen
+  through a secondary source): within 7.3 % in pressure at Q1 and 0.8 K at Q2.
+- Methane solubility in water (the Henry term), against the measurements of
+  Böttger, Kamps & Maurer (2016), Fluid Phase Equilib. 407, 209 — read in the
+  NIST ThermoML archive: 283 K and 298 K, 1.2–10.4 MPa, all 13 points
+  inside their expanded uncertainty (deviations −4.1 … +3.5 %).
+- High pressure (Sloan & Koh values quoted by Algaba et al. 2024,
+  arXiv:2408.01819, Table III — secondary source): methane at 40 MPa
+  295.4 K against 297 K (−1.6 K); CO2 at 10 MPa +0.4 K and at 40 MPa −1.3 K.
+- Pure methane between 285 K and 295 K and natural-gas mixtures are NOT
+  validated (no measured data were accessible).
+
+Known deviations
+----------------
+- Methane: the dissolved-gas term raises the formation pressure by only
+  0.7 % at 273 K, 2 % at 285 K, 4 % at 290 K and 7 % at 295 K.  It is not
+  the cause of the model running high at the warm end; whether Munck et al.
+  fitted their constants with or without it could not be established (the
+  1988 paper was not accessible).  Antunes et al. (2018) apply a solubility
+  correction to every gas with these same constants, and so does this
+  module.
+- CO2 above about 40 MPa (liquid CO2): Henry's law without a Poynting
+  factor over-predicts the dissolved CO2 (the molality is taken proportional
+  to the fugacity without limit), and the predicted hydrate temperature
+  falls instead of rising: 280.8 K at 100 MPa against 289.7 K.  A Poynting
+  factor with the usual v̄ = 32 cm³/mol would correct the trend, but with the
+  NIST Henry constants it puts the methane solubility 5–10 % below the
+  measurements above, so it was not added.
 
 Scope and limitations
 ---------------------
@@ -381,10 +403,20 @@ def hydrate_curve(component_names, zs, t_min_c: float = 0.0, t_max_c: float = 30
 # A black-oil fluid knows only its gas gravity, not a composition, so its
 # hydrate check uses the classic gas-gravity chart of Katz (1945), reproduced
 # in the GPSA Engineering Data Book.  Chart readings (pressure in psia at
-# 30–80 °F for gravities 0.6–1.0) as digitised in F. Janna, "Correlation for
-# predicting hydrate formation", B.Eng. dissertation, Universiti Teknologi
-# PETRONAS (2015), Tables 4.1a–4.5a ("Experiment" column = chart values).
-# Interpolation is linear in ln P and in gravity.  Below 0.6 the chart is
+# 30–80 °F for gravities 0.6–1.0) from F. Janna, "Correlation for predicting
+# hydrate formation", B.Eng. dissertation, Universiti Teknologi PETRONAS
+# (2015), Tables 4.1a–4.5a, column "Experiment".  The dissertation calls that
+# column "experimental data retrieved from the literature" and builds its own
+# correlation by "computerization of the SG method chart", stating that the
+# chart points differ from it by less than 5 %; it never says in so many
+# words that the column is a reading of the chart.  That is the most likely
+# origin (round values at fixed gravities and 5 °F steps), but it is an
+# inference.  Cross-check: the Towler-Mokhatab correlation, an independent
+# fit of gas-gravity data tabulated in the same dissertation (Tables
+# 4.1b–4.5b), agrees within 1.8 °F at 500 psia for all gravities; it gives
+# higher temperatures as pressure and gravity rise (2.4 °F at 2000 psia for
+# gravity 0.6, 8.5 °F for gravity 1.0), where a log-linear fit cannot follow
+# the steepening curve.  Interpolation is linear in ln P and in gravity.  Below 0.6 the chart is
 # anchored at pure methane (0.5537) by the van der Waals–Platteeuw curve
 # above.  The chart is an engineering estimate: it does not see the propane
 # or CO2 content that a composition-based prediction would.

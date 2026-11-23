@@ -377,3 +377,33 @@ Summary:
 - Pending in stage 3: Duns-Ros and Mukherjee-Brill (3.4); network-pipe use
   of HB/Gray (3.3, flowline part).
 
+### 2026-11-23 — Review follow-ups (v1.21.3)
+
+No numerical change; four open questions from the review closed or
+recorded.
+- **Methane hydrates and the Henry term.** The term adds 0.7 % (273 K) to
+  7 % (295 K) to the formation pressure, so it does not explain the model
+  running high at the warm end. Munck et al. (1988) not accessible —
+  whether their fit included solubility is unknown; Antunes et al. (2018)
+  include it for all gases with the same constants. Kept for all gases.
+- **Hagedorn-Brown coefficients.** Same numbers in pyResToolbox and rNodal;
+  rNodal credits Guo, Lyons & Ghalambor (2007). Book not read.
+- **Katz chart.** The dissertation never states that its "Experiment"
+  column is a chart reading (it says "experimental data retrieved from the
+  literature"); recorded as an inference.
+- **Payne factors.** Not confirmed in any source; option kept, off by
+  default, labelled "unverified" in the GUI and the docstrings.
+- Useful find: the NIST ThermoML archive (trc.nist.gov/ThermoML) is open
+  and machine-readable — a source of measured data for later validations.
+
+Summary:
+- Validated against data read in a source: methane solubility in water
+  (Böttger et al. 2016, 13 points inside their expanded uncertainty).
+- Compared with secondary-source values: hydrate temperatures at 10–40 MPa
+  (methane −1.6 K; CO2 +0.4 / −1.3 K); Katz chart vs Towler-Mokhatab at
+  500 psia (within 1.8 °F).
+- Not validated: methane hydrate 285–295 K, mixtures, the Katz chart
+  against measurements, Hagedorn-Brown / Gray / Beggs-Brill against data.
+- Known limitation: CO2 hydrate at 100 MPa is 9 K low (Henry's law without
+  Poynting factor).
+
