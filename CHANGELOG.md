@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.24.1] — 2026-11-23
+
+### Tutorials
+  - Compositional 09 now ships its GUI file
+    (`09_gas_condensate_wells.gui.json`), like every other tutorial; the
+    GUI run reproduces the script's operating point (wellheads 70.1 and
+    69.7 bar, 44.1 and 59.7 °C).  Checked visually: the Well dialog in
+    compositional mode.
+
 ## [1.24.0] — 2026-11-23
 
 ### New: wells with compositional fluids (roadmap 4.3)
