@@ -396,6 +396,27 @@ class GuiNewFeatureTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Temperature-dependent"):
             build_network_case_from_scene(scene)
 
+    def test_well_thermal_and_fetkovich_fields(self):
+        """Tutorial 12's GUI file: the Well thermal fields (v1.22.0) and the
+        IPR coefficient/exponent (v1.23.0) reach the Well component."""
+        from angelica.core.components import Well
+        scene = self._scene("steady_black_oil/12_wells_with_tubing")
+        link = next(lk for lk in scene.links if any(c.component_type == "well" for c in lk.components))
+        comp = next(c for c in link.components if c.component_type == "well")
+        comp.properties.update({"ipr_model": "fetkovich", "productivity_index_m3_per_day_per_bar": "",
+                                "ipr_coefficient": "0.015", "ipr_exponent": "0.8",
+                                "geothermal_gradient_k_per_m": "0.025", "tubing_u_w_per_m2k": "30"})
+        case = build_network_case_from_scene(scene)
+        well = next(c for c in case.components if isinstance(c, Well) and c.ipr_model == "fetkovich")
+        self.assertAlmostEqual(well.ipr_coefficient, 0.015)
+        self.assertAlmostEqual(well.ipr_exponent, 0.8)
+        self.assertAlmostEqual(well.geothermal_gradient_k_per_m, 0.025)
+        self.assertAlmostEqual(well.tubing_u_w_per_m2k, 30.0)
+        self.assertAlmostEqual(well.wellbore_diameter_m, 0.2159)
+        comp.properties["ipr_coefficient"] = ""
+        with self.assertRaisesRegex(ValueError, "ipr_coefficient"):
+            build_network_case_from_scene(scene)
+
     def test_per_well_api_and_gas_gravity(self):
         case = build_network_case_from_scene(self._scene("steady_black_oil/06_gathering_network_elevation"))
         bcs = {bc.node_id: bc for bc in case.inlet_fluid_bcs}

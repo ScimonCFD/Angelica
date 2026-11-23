@@ -30,6 +30,10 @@ IPR (``WellInflow``)
            (liberated gas reduces the inflow; all three crudes are saturated
            at these pressures, so P_b is capped at P_r)
 
+  Fetkovich: q_o = C·(P_r² − P_wf²)ⁿ  (pressures in bar).  With n = 1 and
+           C = J/(2·P_r) it has the same productivity as the linear IPR at
+           small drawdown; n < 1 accounts for turbulence near the well.
+
   The mass rate adds the produced gas and water,
   ṁ = q_o·(ρ_o,sc + GOR·ρ_g,sc + WOR·ρ_w,sc).
 
@@ -40,6 +44,7 @@ What this tutorial shows
   Part B — check valves: Well 3 is shut in, the other two wells carry the
            whole production.
   Part C — Vogel vs linear IPR for the same productivity index.
+  Part D — Fetkovich IPR with the same initial productivity.
 """
 from __future__ import annotations
 
@@ -51,7 +56,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from angelica.closures import BeggsBrillCorrelation
-from angelica.closures.well_inflow import mass_per_oil_sc_m3, oil_rate_sc_m3_per_day
+from angelica.closures.well_inflow import IPR, ipr_rate, mass_per_oil_sc_m3, oil_rate_sc_m3_per_day
 from angelica.core.case import InletFluidBC, NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import CheckValve, Pipe, WellInflow
 from angelica.properties.black_oil import BlackOilFluid
@@ -78,6 +83,12 @@ def well_fluid(api, gg, gor, wor) -> BlackOilFluid:
                          reference_temperature_c=65.0)
 
 
+def fetkovich_coefficient(J: float, P_r_mpa: float) -> float:
+    """C (m³/d/bar²) of a Fetkovich IPR with n = 1 whose productivity at
+    zero drawdown, 2·C·P_r, equals J."""
+    return J / (2.0 * P_r_mpa * 10.0)
+
+
 def build_case(check_valves: bool = True, ipr_model: str = "vogel") -> NetworkCase:
     components, inlets, thermal, fluids = [], [], [], []
     for i, (name, P_r, T, api, gg, gor, wor, J, L, D) in enumerate(WELLS):
@@ -87,9 +98,12 @@ def build_case(check_valves: bool = True, ipr_model: str = "vogel") -> NetworkCa
         thermal.append(ThermalBoundary(node_id=res, temperature_c=T, bc_type="fixed_temperature"))
         fluids.append(InletFluidBC(node_id=res, api_gravity=api, gas_gravity=gg,
                                    gor_sc_m3_per_m3=gor, wor_sc_m3_per_m3=wor))
+        if ipr_model == "fetkovich":
+            ipr_kw = {"ipr_coefficient": fetkovich_coefficient(J, P_r), "ipr_exponent": 1.0}
+        else:
+            ipr_kw = {"productivity_index_m3_per_day_per_bar": J}
         components.append(WellInflow(component_id=f"ipr_{tag}", start_node=res, end_node=wh,
-                                     diameter_m=0.1016, productivity_index_m3_per_day_per_bar=J,
-                                     ipr_model=ipr_model))
+                                     diameter_m=0.1016, ipr_model=ipr_model, **ipr_kw))
         start = wh
         if check_valves:
             components.append(CheckValve(component_id=f"check_{tag}", start_node=wh, end_node=down,
@@ -139,15 +153,20 @@ def run():
     print("Tutorial 11 — Wells with IPR and check valves (Beggs-Brill flowlines)")
     print("=" * 74)
 
-    print("\nIPR of Well 1 (Vogel vs linear, J = 25 m³/d/bar, P_r = 8 MPa):")
+    print("\nIPR of Well 1 (J = 25 m³/d/bar, P_r = 8 MPa):")
     _n, P_r, T, api, gg, gor, wor, J, *_ = WELLS[0]
     p_b = well_fluid(api, gg, gor, wor).pvt(P_r * 1e6, T).bubble_point_pa
     print(f"  bubble point at {T:.0f} °C: {p_b / 1e6:.1f} MPa (> P_r: saturated reservoir)")
-    print(f"  {'P_wf (MPa)':>11} {'Vogel (m³/d)':>13} {'linear (m³/d)':>14}")
-    for p_wf in (8.0, 6.0, 4.0, 2.0, 0.0):
+    fet1 = IPR("fetkovich", coefficient=fetkovich_coefficient(J, P_r), exponent=1.0)
+    fet08 = IPR("fetkovich", coefficient=fetkovich_coefficient(J, P_r) * (P_r * 10.0) ** 0.4, exponent=0.8)
+    print("  (Fetkovich with C = J/(2·P_r); for n = 0.8, C is scaled to the same open flow)")
+    print(f"  {'P_wf (MPa)':>11} {'Vogel':>9} {'linear':>9} {'Fetk. n=1':>10} {'Fetk. n=0.8':>12}  (m³/d)")
+    for p_wf in (8.0, 7.0, 6.0, 4.0, 2.0, 0.0):
         qv = oil_rate_sc_m3_per_day(P_r * 1e6, p_wf * 1e6, J, "vogel", p_b)
         ql = oil_rate_sc_m3_per_day(P_r * 1e6, p_wf * 1e6, J, "linear", p_b)
-        print(f"  {p_wf:>11.1f} {qv:>13.1f} {ql:>14.1f}")
+        qf = ipr_rate(fet1, P_r * 1e6, p_wf * 1e6)
+        qf8 = ipr_rate(fet08, P_r * 1e6, p_wf * 1e6)
+        print(f"  {p_wf:>11.1f} {qv:>9.1f} {ql:>9.1f} {qf:>10.1f} {qf8:>12.1f}")
 
     print("\nPart A — no check valves (Vogel IPR)")
     well_table(solver.solve(build_case(check_valves=False)))
@@ -158,6 +177,9 @@ def run():
     print("\nPart C — same network with a linear IPR")
     q_linear = well_table(solver.solve(build_case(check_valves=True, ipr_model="linear")))
 
+    print("\nPart D — same network with a Fetkovich IPR (n = 1, C = J/(2·P_r))")
+    q_fet = well_table(solver.solve(build_case(check_valves=True, ipr_model="fetkovich")))
+
     print()
     print("  • Without check valves the manifold pressure exceeds Well 3's reservoir")
     print("    pressure and oil flows back into the reservoir.  The check valve shuts")
@@ -165,6 +187,9 @@ def run():
     print("  • The linear IPR ignores the gas liberated near the wellbore and")
     print(f"    over-predicts production: {q_linear:.0f} vs {q_vogel:.0f} m³/d of oil "
           f"({100 * (q_linear / q_vogel - 1):+.0f} %).")
+    print("  • Fetkovich with n = 1 bends like Vogel (its open flow is J·P_r/2, Vogel's")
+    print(f"    J·P_r/1.8): {q_fet:.0f} m³/d.  In practice C and n come from a multirate")
+    print("    test, not from J; n < 1 flattens the curve at high drawdown (turbulence).")
 
 
 if __name__ == "__main__":

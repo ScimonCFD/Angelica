@@ -43,6 +43,17 @@ Vogel, which accounts for the gas liberated near the wellbore.
 
 The GUI file reproduces case B.
 
+### Fetkovich IPR (Part D)
+
+`WellInflow(..., ipr_model="fetkovich", ipr_coefficient=C, ipr_exponent=n)`
+gives q_o = C·(P_r² − P_wf²)ⁿ with pressures in bar.  With n = 1 and
+C = J/(2·P_r) its productivity at small drawdown equals J; it then bends like
+Vogel (open flow J·P_r/2 against Vogel's J·P_r/1.8).  The network produces
+1040 m³/d, 1.4 % less than with Vogel.  In practice C and n come from a
+multirate (flow-after-flow or isochronal) test; n < 1 flattens the curve at
+high drawdown.  For gas wells use `ipr_model="backpressure"`: the same law
+gives the gas rate, converted to oil with the GOR.
+
 ## Run
 
 ```bash

@@ -4858,19 +4858,21 @@ class NetSimGui:
             unit = self._unit_label("diameter")
             self._render_simple_component_properties(
                 component, properties_frame, link_id, components_list,
-                fields=[("productivity_index_m3_per_day_per_bar", "Productivity index J (m³/d/bar, stock-tank oil)"),
+                fields=[("productivity_index_m3_per_day_per_bar", "J (m³/d/bar) — linear, Vogel"),
+                        ("ipr_coefficient", "C (Sm³/d/bar²ⁿ) — Fetkovich, back-pressure"),
+                        ("ipr_exponent", "n (0.5–1) — blank: 1"),
                         ("diameter_m", f"Tubing inner diameter ({unit})"),
                         ("tubing_length_m", "Tubing length (m)"),
                         ("tubing_height_change_m", "Vertical rise (m) — blank: vertical well"),
                         ("tubing_roughness_m", "Tubing roughness (m)"),
                         ("tubing_segments", "Integration segments (−)"),
-                        ("geothermal_gradient_k_per_m", "Geothermal gradient (K per m of depth)"),
-                        ("formation_conductivity_w_per_mk", "Formation conductivity (W/m·K) — 0: adiabatic tubing"),
-                        ("formation_diffusivity_m2_per_s", "Formation diffusivity (m²/s)"),
-                        ("production_time_days", "Time on production (days)"),
+                        ("geothermal_gradient_k_per_m", "Geothermal gradient (K/m) — blank: 0.03"),
+                        ("formation_conductivity_w_per_mk", "Formation k (W/m·K) — blank: 2.4; 0: adiabatic"),
+                        ("formation_diffusivity_m2_per_s", "Formation diffusivity (m²/s) — blank: 1e-6"),
+                        ("production_time_days", "Time on production (d) — blank: 365"),
                         ("wellbore_diameter_m", "Wellbore diameter (m) — blank: 8½ in"),
                         ("tubing_u_w_per_m2k", "Wellbore U (W/m²·K, tubing ID) — blank: none")],
-                choices={"ipr_model": ("IPR model", ("vogel", "linear")),
+                choices={"ipr_model": ("IPR model", ("vogel", "linear", "fetkovich", "backpressure")),
                          "tubing_correlation": ("Tubing correlation",
                                                 ("beggs_brill", "hagedorn_brown", "gray"))},
                 note=("Reservoir inflow + production tubing.  Tubing: Beggs-Brill (any),\n"
@@ -4885,11 +4887,15 @@ class NetSimGui:
         if component.component_type == "well_inflow":
             self._render_simple_component_properties(
                 component, properties_frame, link_id, components_list,
-                fields=[("productivity_index_m3_per_day_per_bar", "Productivity index J (m³/d/bar, stock-tank oil)"),
+                fields=[("productivity_index_m3_per_day_per_bar", "J (m³/d/bar) — linear, Vogel"),
+                        ("ipr_coefficient", "C (Sm³/d/bar²ⁿ) — Fetkovich, back-pressure"),
+                        ("ipr_exponent", "n (0.5–1) — blank: 1"),
                         ("diameter_m", f"Tubing bore ({self._unit_label('diameter')})")],
-                choices={"ipr_model": ("IPR model", ("vogel", "linear"))},
+                choices={"ipr_model": ("IPR model", ("vogel", "linear", "fetkovich", "backpressure"))},
                 note=("Start node = reservoir (pressure boundary at P_r, reservoir temperature);\n"
-                      "end node = bottom hole / wellhead.  Vogel applies below the bubble point."),
+                      "end node = bottom hole / wellhead.  Vogel applies below the bubble point.\n"
+                      "Fetkovich: q_oil = C·(P_r² − P_wf²)ⁿ; back-pressure (gas wells):\n"
+                      "q_gas = C·(P_r² − P_wf²)ⁿ, pressures in bar, rates in standard m³/d."),
             )
             return
 

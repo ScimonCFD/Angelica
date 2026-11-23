@@ -78,7 +78,7 @@ class TestIprFormulas:
     def test_component_validation(self):
         with pytest.raises(ValueError):
             WellInflow(start_node=1, end_node=2, diameter_m=0.1)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError):          # Fetkovich needs C, not J
             WellInflow(start_node=1, end_node=2, diameter_m=0.1,
                        productivity_index_m3_per_day_per_bar=5.0, ipr_model="fetkovich")
 
@@ -261,3 +261,95 @@ def test_hybrid_scheme_reverse_flow_matches_forward():
     assert rev.node_temperatures_c[2] == pytest.approx(fwd.node_temperatures_c[2], abs=1e-6)
     assert rev.global_energy_balance.energy_error_pct < 1e-6
     assert math.isfinite(rev.node_temperatures_c[2])
+
+
+# ── Fetkovich and gas back-pressure IPR (v1.23.0) ────────────────────────────
+#
+# Standing: the equations q = C·(P_r² − P_wf²)ⁿ with 0.5 ≤ n ≤ 1 were read
+# only in secondary sources (search-engine summaries of course notes); the
+# Fetkovich (1973) papers and the PetroWiki worked examples were not
+# accessible.  The tests below are consistency checks, NOT a validation
+# against a textbook example.
+
+from angelica.closures.well_inflow import (  # noqa: E402
+    IPR,
+    ipr_flowing_pressure,
+    ipr_open_flow,
+    ipr_rate,
+    ipr_rate_derivative,
+    mass_per_rate_unit,
+)
+
+
+class TestFetkovichAndBackPressure:
+    def test_formula_and_open_flow(self):
+        ipr = IPR("fetkovich", coefficient=0.02, exponent=0.8)
+        q = ipr_rate(ipr, 200 * BAR, 120 * BAR)
+        assert q == pytest.approx(0.02 * (200.0**2 - 120.0**2) ** 0.8, rel=1e-12)
+        assert ipr_open_flow(ipr, 200 * BAR) == pytest.approx(0.02 * 200.0 ** 1.6, rel=1e-12)
+        # injection: same law, opposite sign
+        assert ipr_rate(ipr, 200 * BAR, 230 * BAR) == pytest.approx(-0.02 * (230.0**2 - 200.0**2) ** 0.8)
+
+    @pytest.mark.parametrize("model, n", [("fetkovich", 1.0), ("fetkovich", 0.7), ("backpressure", 0.5),
+                                          ("backpressure", 0.85)])
+    def test_inverse_and_derivative(self, model, n):
+        ipr = IPR(model, coefficient=3.0, exponent=n)
+        p_r = 180 * BAR
+        for p_wf in (175 * BAR, 120 * BAR, 40 * BAR, 1 * BAR):
+            q = ipr_rate(ipr, p_r, p_wf)
+            assert ipr_flowing_pressure(ipr, q, p_r) == pytest.approx(p_wf, rel=1e-9)
+            h = 1.0
+            fd = (ipr_rate(ipr, p_r, p_wf - h) - ipr_rate(ipr, p_r, p_wf + h)) / (2 * h)
+            assert ipr_rate_derivative(ipr, p_r, p_wf) == pytest.approx(fd, rel=1e-5)
+        assert ipr_flowing_pressure(ipr, 1.01 * ipr_open_flow(ipr, p_r), p_r) == -1.0
+
+    def test_derivative_finite_at_zero_drawdown(self):
+        ipr = IPR("backpressure", coefficient=3.0, exponent=0.6)
+        d = ipr_rate_derivative(ipr, 180 * BAR, 180 * BAR)
+        assert math.isfinite(d) and d > 0.0
+
+    def test_n_equal_one_is_linear_in_pressure_squared(self):
+        """Fetkovich with n = 1: for a small drawdown about P_r the law is
+        linear with productivity 2·C·P_r (bar units)."""
+        ipr = IPR("fetkovich", coefficient=0.01, exponent=1.0)
+        q = ipr_rate(ipr, 200 * BAR, 199.9 * BAR)
+        assert q / 0.1 == pytest.approx(2 * 0.01 * 200.0, rel=1e-3)
+
+    def test_gas_rate_converted_with_gor(self):
+        fluid = BlackOilFluid(api_gravity=50.0, gas_gravity=0.65, gor_sc_m3_per_m3=2000.0,
+                              wor_sc_m3_per_m3=0.0)
+        bp = IPR("backpressure", coefficient=1.0, exponent=0.8)
+        assert mass_per_rate_unit(fluid, bp) == pytest.approx(mass_per_oil_sc_m3(fluid) / 2000.0)
+        dead = BlackOilFluid(api_gravity=30.0, gas_gravity=0.65, gor_sc_m3_per_m3=0.0, wor_sc_m3_per_m3=0.0)
+        with pytest.raises(ValueError, match="GOR"):
+            mass_per_rate_unit(dead, bp)
+
+    def test_component_validation(self):
+        WellInflow(start_node=1, end_node=2, diameter_m=0.1, ipr_model="fetkovich", ipr_coefficient=0.01,
+                   ipr_exponent=0.8)
+        for kw in ({"ipr_model": "fetkovich"},                                        # no C
+                   {"ipr_model": "backpressure", "ipr_coefficient": 1.0, "ipr_exponent": 1.2},
+                   {"ipr_model": "backpressure", "ipr_coefficient": 1.0, "ipr_exponent": 0.4},
+                   {"ipr_model": "jones", "ipr_coefficient": 1.0}):
+            with pytest.raises(ValueError):
+                WellInflow(start_node=1, end_node=2, diameter_m=0.1, **kw)
+
+
+@pytest.mark.parametrize("model, C, n", [("fetkovich", 0.02, 0.8), ("backpressure", 60.0, 0.75)])
+def test_solver_reproduces_fetkovich_and_backpressure(model, C, n):
+    fluid = BlackOilFluid(api_gravity=32.0, gas_gravity=0.65, gor_sc_m3_per_m3=60.0,
+                          wor_sc_m3_per_m3=0.2, reference_pressure_pa=8e6, reference_temperature_c=70.0)
+    case = NetworkCase(
+        name="single-well",
+        fluid_model=fluid,
+        pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=12e6),),
+        pressure_outlets=(PressureBoundary(node_id=2, pressure_pa=5e6),),
+        thermal_inlets=(ThermalBoundary(node_id=1, temperature_c=70.0, bc_type="fixed_temperature"),),
+        components=(WellInflow(start_node=1, end_node=2, diameter_m=0.1016, ipr_model=model,
+                               ipr_coefficient=C, ipr_exponent=n),),
+    )
+    res = SteadyBlackOilSolver().solve(case)
+    assert res.converged
+    ipr = IPR(model, coefficient=C, exponent=n)
+    m_expected = ipr_rate(ipr, 12e6, 5e6) * mass_per_rate_unit(fluid, ipr) / 86_400.0
+    assert res.component_flows[0].mass_flow_kg_per_s == pytest.approx(m_expected, rel=1e-6)

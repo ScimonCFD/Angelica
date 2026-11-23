@@ -318,6 +318,8 @@ class CanvasScene:
             return {
                 "productivity_index_m3_per_day_per_bar": "",
                 "ipr_model": "vogel",
+                "ipr_coefficient": "",
+                "ipr_exponent": "1.0",
                 "diameter_m": "0.0762",
                 "tubing_length_m": "",
                 "tubing_height_change_m": "",
@@ -336,6 +338,8 @@ class CanvasScene:
                 "diameter_m": "0.1016",
                 "productivity_index_m3_per_day_per_bar": "",
                 "ipr_model": "vogel",
+                "ipr_coefficient": "",
+                "ipr_exponent": "1.0",
             }
         if component_type == "choke":
             return {

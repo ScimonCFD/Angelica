@@ -50,7 +50,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from .beggs_brill import beggs_brill_gradient, phase_properties_from_pvt, surface_tension_from_pvt
-from .well_inflow import mass_per_oil_sc_m3
+from .well_inflow import IPR, ipr_flowing_pressure, ipr_of, ipr_open_flow, mass_per_oil_sc_m3, mass_per_rate_unit
 
 _PA_PER_BAR = 1.0e5
 _S_PER_DAY = 86_400.0
@@ -88,19 +88,10 @@ class WellCurve:
 
 
 def bottomhole_pressure(q: float, p_res: float, J: float, model: str, p_b: float) -> float:
-    """Flowing bottom-hole pressure for oil rate q (inverse of the IPR)."""
-    J_pa = J / _PA_PER_BAR
-    if model == "linear":
-        return p_res - q / J_pa
-    pb = min(p_b, p_res)
-    q_b = J_pa * (p_res - pb)
-    if q <= q_b:
-        return p_res - q / J_pa
-    c = 1.0 - (q - q_b) * 1.8 / (J_pa * pb)
-    if c < 0.0:
-        return -1.0                               # beyond the absolute open flow
-    x = (-0.2 + math.sqrt(0.04 + 3.2 * c)) / 1.6
-    return x * pb
+    """Flowing bottom-hole pressure for oil rate q, linear or Vogel IPR
+    (inverse of the IPR; −1 beyond the absolute open flow).  For any IPR use
+    :func:`angelica.closures.well_inflow.ipr_flowing_pressure`."""
+    return ipr_flowing_pressure(IPR(model, productivity_index=J), q, p_res, p_b)
 
 
 _GRAVITY = 9.80665
@@ -298,14 +289,15 @@ def _thermal_key(comp) -> tuple:
             float(comp.formation_diffusivity_m2_per_s), float(comp.production_time_days))
 
 
-def _black_oil_march(fluid, p_res: float, t_res: float, q_oil: float, J: float, model: str, p_b: float,
+def _black_oil_march(fluid, p_res: float, t_res: float, q_oil: float, ipr: IPR, p_b: float,
                      m_per: float, D: float, L: float, dz: float, rough: float, n_seg: int,
                      tubing_corr: str, thermal_key: tuple, exact: bool,
                      keep_profile: bool = False) -> TubingResult | None:
     """Bottom-hole state from the IPR, then the tubing march, for one oil rate."""
     from angelica.properties.black_oil import _dh_dp, black_oil_enthalpy
 
-    p_wf = bottomhole_pressure(q_oil, p_res, J, model, p_b)
+    q_ref = q_oil * m_per / mass_per_rate_unit(fluid, ipr)     # oil, or gas for back-pressure
+    p_wf = ipr_flowing_pressure(ipr, q_ref, p_res, p_b)
     if p_wf <= _P_MIN_PA:
         return None
     m_dot = q_oil * m_per / _S_PER_DAY
@@ -355,7 +347,7 @@ def _black_oil_march(fluid, p_res: float, t_res: float, q_oil: float, J: float, 
 
 
 @lru_cache(maxsize=256)
-def _curve_cached(api, gg, gor, wor, corr, p_res, T, J, model, D, L, dz, rough, n_seg,
+def _curve_cached(api, gg, gor, wor, corr, p_res, T, ipr, D, L, dz, rough, n_seg,
                   tubing_corr="beggs_brill", thermal_key=("isothermal",), gas_cp=2_200.0,
                   gas_k=0.035) -> WellCurve:
     from angelica.properties.black_oil import BlackOilFluid
@@ -363,16 +355,13 @@ def _curve_cached(api, gg, gor, wor, corr, p_res, T, J, model, D, L, dz, rough, 
     fluid = BlackOilFluid(api_gravity=api, gas_gravity=gg, gor_sc_m3_per_m3=gor,
                           wor_sc_m3_per_m3=wor, correlation=corr,
                           gas_specific_heat_j_per_kg_k=gas_cp, gas_thermal_conductivity_w_per_mk=gas_k)
-    p_b = fluid.pvt(p_res, T).bubble_point_pa if model == "vogel" else p_res
+    p_b = fluid.pvt(p_res, T).bubble_point_pa if ipr.uses_bubble_point else p_res
     m_per = mass_per_oil_sc_m3(fluid)
-    J_pa = J / _PA_PER_BAR
-    pb = min(p_b, p_res)
-    q_aof = (J_pa * p_res if model == "linear"
-             else J_pa * (p_res - pb) + J_pa * pb / 1.8)
+    q_aof = ipr_open_flow(ipr, p_res, p_b) * mass_per_rate_unit(fluid, ipr) / m_per   # oil m³/d
     rates, pressures = [], []
     for i in range(_N_RATES):
         q = q_aof * (i / (_N_RATES - 1)) ** 1.5   # denser near q = 0, where the peak lies
-        res = _black_oil_march(fluid, p_res, T, q, J, model, p_b, m_per, D, L, dz, rough, n_seg,
+        res = _black_oil_march(fluid, p_res, T, q, ipr, p_b, m_per, D, L, dz, rough, n_seg,
                                tubing_corr, thermal_key, exact=False)
         if res is None:
             break
@@ -389,7 +378,7 @@ def _well_args(comp, fluid, p_res: float, T: float) -> tuple:
         float(fluid.api_gravity), float(fluid.gas_gravity), float(fluid.gor_sc_m3_per_m3),
         float(fluid.wor_sc_m3_per_m3), str(getattr(fluid, "correlation", "STANDING")),
         round(float(p_res), 0), round(float(T), 3),
-        float(comp.productivity_index_m3_per_day_per_bar), comp.ipr_model,
+        ipr_of(comp),
         float(comp.diameter_m), float(comp.tubing_length_m), float(comp.tubing_height_change_m),
         float(comp.tubing_roughness_m), int(comp.tubing_segments),
         str(getattr(comp, "tubing_correlation", "beggs_brill")), _thermal_key(comp),
@@ -404,16 +393,16 @@ def well_curve(comp, fluid, p_res: float, T: float) -> WellCurve:
 
 
 @lru_cache(maxsize=1024)
-def _tubing_state_cached(m_dot, keep_profile, api, gg, gor, wor, corr, p_res, T, J, model, D, L, dz,
+def _tubing_state_cached(m_dot, keep_profile, api, gg, gor, wor, corr, p_res, T, ipr, D, L, dz,
                          rough, n_seg, tubing_corr, thermal_key, gas_cp, gas_k) -> TubingResult | None:
     from angelica.properties.black_oil import BlackOilFluid
 
     fluid = BlackOilFluid(api_gravity=api, gas_gravity=gg, gor_sc_m3_per_m3=gor,
                           wor_sc_m3_per_m3=wor, correlation=corr,
                           gas_specific_heat_j_per_kg_k=gas_cp, gas_thermal_conductivity_w_per_mk=gas_k)
-    p_b = fluid.pvt(p_res, T).bubble_point_pa if model == "vogel" else p_res
+    p_b = fluid.pvt(p_res, T).bubble_point_pa if ipr.uses_bubble_point else p_res
     m_per = mass_per_oil_sc_m3(fluid)
-    return _black_oil_march(fluid, p_res, T, m_dot * _S_PER_DAY / m_per, J, model, p_b, m_per,
+    return _black_oil_march(fluid, p_res, T, m_dot * _S_PER_DAY / m_per, ipr, p_b, m_per,
                             D, L, dz, rough, n_seg, tubing_corr, thermal_key, exact=True,
                             keep_profile=keep_profile)
 

@@ -124,7 +124,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 ### Stage 4 — wells (items 8, 9, 10, 11)
 - 4.1 **Done in v1.22.0.** Tubing temperature profile (geothermal gradient + Ramey); the well
   delivers its wellhead temperature to the network.
-- 4.2 IPR: Fetkovich, Jones, gas back-pressure.
+- 4.2 **Done in v1.23.0 (Jones not included — no accessible source).** IPR: Fetkovich, Jones, gas back-pressure.
 - 4.3 `Well` with compositional fluids (gas-condensate wells).
 - 4.4 Gas lift: injection depth and rate in `Well`; deliverability vs
   injection rate tutorial.
@@ -435,3 +435,22 @@ Summary:
 - Not validated: flowing wellhead temperatures against field data (Sagar,
   Doty & Schmidt 1991 not accessible); default formation properties are
   typical values, not sourced; heat of solution of released gas neglected.
+
+### 2026-11-23 — Item 4.2: Fetkovich and back-pressure IPR (v1.23.0)
+
+- Four IPR models behind one `IPR` object; the reference phase (oil, or gas
+  for the back-pressure law) is converted to mass by the fluid. In 4.3 the
+  same object will give the gas rate of a compositional well directly.
+- Jones left out: neither the original paper nor a worked example was
+  accessible, and the roadmap rule asks for a source.
+- Done on the way: the pending 4.1 GUI check. Both well dialogs captured;
+  labels shortened and defaults stated.
+- Note for later validations: ipt.ntnu.no times out from here and PetroWiki
+  redirects to onepetro.org (login).
+
+Summary:
+- Validated against data read in a source: none.
+- Validated by consistency: inverses, derivatives, n = 1 limit, GOR
+  conversion, solver vs formula, back-pressure law inside a `Well`.
+- Not validated: against a multirate-test worked example (Fetkovich 1973,
+  Beggs's examples) — the maintainer could supply one.

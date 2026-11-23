@@ -212,10 +212,15 @@ class WellInflow(Fitting):
                (composite Vogel; P_b is the bubble point of the well fluid at
                reservoir temperature, capped at P_r)
 
+      fetkovich:     q_o = C · (P_r² − P_wf²)ⁿ        (pressures in bar)
+      backpressure:  q_g = C · (P_r² − P_wf²)ⁿ        (gas rate, gas wells)
+
     with J = ``productivity_index_m3_per_day_per_bar`` (stock-tank m³ of oil
-    per day per bar).  The mass rate includes the produced gas and water,
-    ṁ = q_o·(ρ_o,sc + GOR·ρ_g,sc + WOR·ρ_w,sc).  If P_wf > P_r the well takes
-    injection at the same J (use a ``CheckValve`` to prevent it).
+    per day per bar), C = ``ipr_coefficient`` (standard m³/d per bar^(2n), of
+    oil or gas) and n = ``ipr_exponent`` (0.5–1).  The mass rate includes the
+    produced gas and water, ṁ = q_o·(ρ_o,sc + GOR·ρ_g,sc + WOR·ρ_w,sc), with
+    q_o = q_g/GOR for the back-pressure equation.  If P_wf > P_r the well
+    takes injection by the same law (use a ``CheckValve`` to prevent it).
 
     Requires ``SteadyBlackOilSolver``.  ``diameter_m`` is the tubing bore used
     only to report a velocity.
@@ -223,19 +228,15 @@ class WellInflow(Fitting):
 
     productivity_index_m3_per_day_per_bar: float = float("nan")
     ipr_model: str = "vogel"
+    ipr_coefficient: float = float("nan")
+    ipr_exponent: float = 1.0
     loss_coefficient: float = 1.0   # unused; keeps the Fitting interface
     is_well_inflow = True           # class attribute read by the flow models
 
     def __post_init__(self) -> None:
-        if math.isnan(self.productivity_index_m3_per_day_per_bar):
-            raise ValueError("WellInflow requires productivity_index_m3_per_day_per_bar.")
-        if self.productivity_index_m3_per_day_per_bar <= 0.0:
-            raise ValueError(
-                "WellInflow productivity_index_m3_per_day_per_bar must be positive "
-                f"(got {self.productivity_index_m3_per_day_per_bar})"
-            )
-        if self.ipr_model not in ("linear", "vogel"):
-            raise ValueError(f"WellInflow ipr_model must be 'linear' or 'vogel' (got {self.ipr_model!r})")
+        from angelica.closures.well_inflow import validate_ipr_fields
+        validate_ipr_fields("WellInflow", self.ipr_model, self.productivity_index_m3_per_day_per_bar,
+                            self.ipr_coefficient, self.ipr_exponent)
 
 
 @dataclass(frozen=True)
@@ -255,7 +256,11 @@ class Well(Fitting):
     Parameters
     ----------
     productivity_index_m3_per_day_per_bar : J, stock-tank m³ oil / d / bar
-    ipr_model : "vogel" (default) or "linear"
+        (linear and Vogel)
+    ipr_model : "vogel" (default), "linear", "fetkovich" or "backpressure"
+        (see ``WellInflow``)
+    ipr_coefficient, ipr_exponent : C and n of the Fetkovich and
+        back-pressure laws
     diameter_m : tubing inner diameter
     tubing_length_m : measured length of the tubing
     tubing_height_change_m : vertical rise from bottom hole to wellhead
@@ -290,6 +295,8 @@ class Well(Fitting):
 
     productivity_index_m3_per_day_per_bar: float = float("nan")
     ipr_model: str = "vogel"
+    ipr_coefficient: float = float("nan")
+    ipr_exponent: float = 1.0
     tubing_length_m: float = float("nan")
     tubing_height_change_m: float = float("nan")
     tubing_roughness_m: float = 4.6e-5
@@ -305,10 +312,9 @@ class Well(Fitting):
     is_well_model = True            # class attribute read by the flow models
 
     def __post_init__(self) -> None:
-        if math.isnan(self.productivity_index_m3_per_day_per_bar) or self.productivity_index_m3_per_day_per_bar <= 0.0:
-            raise ValueError("Well requires a positive productivity_index_m3_per_day_per_bar.")
-        if self.ipr_model not in ("linear", "vogel"):
-            raise ValueError(f"Well ipr_model must be 'linear' or 'vogel' (got {self.ipr_model!r})")
+        from angelica.closures.well_inflow import validate_ipr_fields
+        validate_ipr_fields("Well", self.ipr_model, self.productivity_index_m3_per_day_per_bar,
+                            self.ipr_coefficient, self.ipr_exponent)
         if math.isnan(self.tubing_length_m) or self.tubing_length_m <= 0.0:
             raise ValueError("Well requires a positive tubing_length_m.")
         if math.isnan(self.tubing_height_change_m):

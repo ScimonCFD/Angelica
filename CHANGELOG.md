@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.23.0] — 2026-11-23
+
+### New: Fetkovich and gas back-pressure IPR (roadmap 4.2)
+  - `WellInflow` and `Well` accept `ipr_model="fetkovich"`,
+    q_o = C·(P_r² − P_wf²)ⁿ, and `ipr_model="backpressure"` (gas wells),
+    q_g = C·(P_r² − P_wf²)ⁿ, with pressures in bar, C =
+    `ipr_coefficient` (standard m³/d per bar^(2n)) and n = `ipr_exponent`
+    (0.5–1, default 1).  The back-pressure gas rate is converted to oil with
+    the fluid's GOR; a fluid without gas is rejected.
+  - `productivity_index_m3_per_day_per_bar` is required only for the linear
+    and Vogel models.
+  - New generic functions in `angelica.closures.well_inflow`: `IPR`,
+    `ipr_rate`, `ipr_rate_derivative`, `ipr_flowing_pressure`,
+    `ipr_open_flow`, `mass_per_rate_unit`.  For n < 1 the tangent is infinite
+    at zero drawdown; the network coupling uses it at a drawdown of at least
+    0.1 % of P_r.
+  - GUI: both well dialogs offer the four models and the C and n fields.
+  - Jones (a·q + b·q²) is not included: no accessible source.
+
+### Changed
+  - Well dialog labels shortened and now state the default used when a
+    field is left blank (the thermal fields of files saved before v1.22.0
+    are blank).  Checked visually by capturing both dialogs.
+
+### Tutorials
+  - Black-oil 11: new Part D (Fetkovich IPR in the same network) and a
+    Fetkovich column in the IPR table.  Parts A–C unchanged.
+
+### Validation
+  - Consistency only: inverse and derivative of each law, n = 1 limit,
+    GOR conversion, the solver reproduces the IPR, and a gas well with the
+    back-pressure law inside a `Well`.  The equations were read only in
+    secondary sources; no worked example was accessible (Fetkovich 1973 at
+    NTNU timed out, PetroWiki now redirects to a login page).
+
 ## [1.22.0] — 2026-11-23
 
 ### New: tubing temperature profile in wells (roadmap 4.1)

@@ -135,3 +135,28 @@ def test_component_validation():
     with pytest.raises(ValueError):
         _well(dz=2500.0)                      # rise longer than the tubing
     assert _well(dz=float("nan")).tubing_height_change_m == 2100.0   # default: vertical
+
+
+def test_gas_well_with_backpressure_ipr():
+    """Back-pressure IPR in a Well: the deliverability curve's bottom-hole
+    pressure inverts the IPR at the gas rate GOR·q_o (consistency)."""
+    from angelica.closures.well_inflow import IPR, ipr_rate, mass_per_rate_unit
+    from angelica.closures.well_model import well_tubing_state
+
+    gas = {"api_gravity": 55.0, "gas_gravity": 0.65, "gor_sc_m3_per_m3": 3000.0, "wor_sc_m3_per_m3": 0.0}
+    fluid = BlackOilFluid(**gas)
+    well = Well(start_node=1, end_node=2, diameter_m=0.0762, ipr_model="backpressure", ipr_coefficient=40.0,
+                ipr_exponent=0.8, tubing_length_m=2500.0, tubing_correlation="gray")
+    curve = well_curve(well, fluid, 200 * BAR, 90.0)
+    # at very low rates condensate loads the tubing (liquid loading), so even
+    # this gas well has a small hump; the network uses the branch beyond it
+    assert curve.peak_index < len(curve.oil_rates_sc_m3_per_day) // 3
+    m, _ = curve.mass_flow(60 * BAR)
+    assert m > 0.0
+    state = well_tubing_state(well, fluid, 200 * BAR, 90.0, m)
+    assert state.wellhead_pressure_pa == pytest.approx(60 * BAR, rel=0.01)
+    # bottom-hole pressure from the IPR at this rate
+    ipr = IPR("backpressure", coefficient=40.0, exponent=0.8)
+    q_gas = m * 86_400.0 / mass_per_rate_unit(fluid, ipr)
+    assert q_gas == pytest.approx(3000.0 * m * 86_400.0 / curve.mass_per_oil_sc_m3, rel=1e-9)
+    assert ipr_rate(ipr, 200 * BAR, 150 * BAR) > 0.0

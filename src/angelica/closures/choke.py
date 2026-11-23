@@ -264,17 +264,8 @@ class ChokeFlowModel(MinorLossModel):
         well_fluid = self._well_fluid(link_state)
         if well_fluid is not None:
             # Tangent dṁ/dΔP of the IPR (exact for the linear part).
-            from .well_inflow import mass_per_oil_sc_m3, oil_rate_derivative
-            comp = link_state.component
-            p_res = float(link_state.start_node.pressure_pa)
-            p_wf = float(link_state.end_node.pressure_pa)
-            T = link_state.start_node.temperature_c
-            if T is None:
-                T = getattr(well_fluid, "reference_temperature_c", 60.0)
-            p_b = well_fluid.pvt(p_res, T).bubble_point_pa if comp.ipr_model == "vogel" else p_res
-            dq = oil_rate_derivative(p_res, p_wf, comp.productivity_index_m3_per_day_per_bar,
-                                     comp.ipr_model, p_b)
-            return -max(dq * mass_per_oil_sc_m3(well_fluid) / 86_400.0, 1e-12)
+            from .well_inflow import well_inflow_coupling
+            return well_inflow_coupling(link_state, well_fluid)
         if not self._uses_sachdeva(link_state):
             return super().calculate_coupling(link_state, density, viscosity)
         delta_p = abs(float(link_state.start_node.pressure_pa) - float(link_state.end_node.pressure_pa))

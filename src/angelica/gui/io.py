@@ -518,9 +518,11 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         start_node=current_start,
                         end_node=current_end,
                         diameter_m=_required_float(component, "diameter_m", link.link_id),
-                        productivity_index_m3_per_day_per_bar=_required_float(
-                            component, "productivity_index_m3_per_day_per_bar", link.link_id),
+                        productivity_index_m3_per_day_per_bar=_optional_float(
+                            component, "productivity_index_m3_per_day_per_bar", default=math.nan),
                         ipr_model=component.properties.get("ipr_model", "vogel").strip() or "vogel",
+                        ipr_coefficient=_optional_float(component, "ipr_coefficient", default=math.nan),
+                        ipr_exponent=_optional_float(component, "ipr_exponent", default=1.0),
                         tubing_length_m=tubing_length,
                         tubing_height_change_m=float(rise_text) if rise_text else tubing_length,
                         tubing_roughness_m=_optional_float(component, "tubing_roughness_m", default=4.6e-5),
@@ -549,9 +551,11 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         start_node=current_start,
                         end_node=current_end,
                         diameter_m=_optional_float(component, "diameter_m", default=0.1016),
-                        productivity_index_m3_per_day_per_bar=_required_float(
-                            component, "productivity_index_m3_per_day_per_bar", link.link_id),
+                        productivity_index_m3_per_day_per_bar=_optional_float(
+                            component, "productivity_index_m3_per_day_per_bar", default=math.nan),
                         ipr_model=component.properties.get("ipr_model", "vogel").strip() or "vogel",
+                        ipr_coefficient=_optional_float(component, "ipr_coefficient", default=math.nan),
+                        ipr_exponent=_optional_float(component, "ipr_exponent", default=1.0),
                         component_id=f"link_{link.link_id}_well_inflow_{component.component_id}",
                     )
                 )
