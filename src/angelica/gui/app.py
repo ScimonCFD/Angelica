@@ -4096,6 +4096,10 @@ class NetSimGui:
         add_btn.pack(side="left")
         clear_btn = ttk.Button(vf_frame, text="Clear lines", state="disabled")
         clear_btn.pack(side="left", padx=(4, 0))
+        # Hydrate curve: optional, computed only when asked for
+        hyd_var = tk.BooleanVar(master=win, value=False)
+        hyd_chk = ttk.Checkbutton(vf_frame, text="Hydrate curve", variable=hyd_var, state="disabled")
+        hyd_chk.pack(side="left", padx=(16, 0))
 
         win.transient(self.root)
         win.focus_set()
@@ -4114,7 +4118,7 @@ class NetSimGui:
             self._draw_phase_envelope_plot(
                 plot_canvas, bubble, dew, Tc, Pc,
                 component_names, zs, op_points, quality_lines,
-                hydrate_pts=result_holder.get("hydrate", []),
+                hydrate_pts=result_holder.get("hydrate", []) if hyd_var.get() else [],
             )
 
         def _save_image() -> None:
@@ -4183,7 +4187,7 @@ class NetSimGui:
                     w.writerow(["bubble", f"{T - 273.15:.4f}", f"{P / 1e5:.6f}"])
                 for T, P in dew:
                     w.writerow(["dew", f"{T - 273.15:.4f}", f"{P / 1e5:.6f}"])
-                for T, P in result_holder.get("hydrate", []):
+                for T, P in (result_holder.get("hydrate", []) if hyd_var.get() else []):
                     w.writerow(["hydrate", f"{T - 273.15:.4f}", f"{P / 1e5:.6f}"])
                 if Tc_K and Pc_Pa:
                     w.writerow(["critical",
@@ -4229,6 +4233,41 @@ class NetSimGui:
         clear_btn.config(command=_clear_quality_lines)
         vf_entry.bind("<Return>", lambda _e: _add_quality_line())
 
+        def _toggle_hydrate() -> None:
+            if not hyd_var.get() or "hydrate" in result_holder:
+                _redraw()
+                return
+            hyd_chk.config(state="disabled")
+
+            def _compute_hydrate() -> None:
+                try:
+                    from angelica.properties.hydrate import hydrate_curve
+                    pts = [(pt.temperature_c + 273.15, pt.pressure_pa)
+                           for pt in hydrate_curve(component_names, zs, 0.0, 35.0, 22, eos_name=eos_name)]
+                except Exception:
+                    pts = []
+                result_holder["hydrate"] = pts
+
+                def _done() -> None:
+                    if not win.winfo_exists():
+                        return
+                    hyd_chk.config(state="normal")
+                    if not pts:
+                        hyd_var.set(False)
+                        messagebox.showinfo(
+                            "Hydrate curve",
+                            "No hydrate curve for this composition (no hydrate former, "
+                            "or none stable above 0 °C).", parent=win)
+                    _redraw()
+
+                if win.winfo_exists():
+                    win.after(0, _done)
+
+            import threading
+            threading.Thread(target=_compute_hydrate, daemon=True).start()
+
+        hyd_chk.config(command=_toggle_hydrate)
+
         def _compute() -> None:
             from angelica.properties.phase_envelope import compute_phase_envelope
             try:
@@ -4239,14 +4278,6 @@ class NetSimGui:
                 result_holder["Pc"] = Pc
             except Exception as exc:
                 result_holder["error"] = str(exc)
-            try:
-                from angelica.properties.hydrate import hydrate_curve
-                result_holder["hydrate"] = [
-                    (pt.temperature_c + 273.15, pt.pressure_pa)
-                    for pt in hydrate_curve(component_names, zs, 0.0, 35.0, 36, eos_name=eos_name)
-                ]
-            except Exception:
-                result_holder["hydrate"] = []
             if win.winfo_exists():
                 win.after(0, _on_done)
 
@@ -4268,6 +4299,7 @@ class NetSimGui:
                 )
                 return
             add_btn.config(state="normal")
+            hyd_chk.config(state="normal")
             save_btn.config(state="normal")
             csv_btn.config(state="normal")
             plot_canvas.bind("<Configure>", lambda _e: _redraw())

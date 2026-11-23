@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.1] — 2026-11-23
+
+  - Phase-envelope window: the hydrate curve is now optional.  It is drawn
+    (and computed, and included in the CSV export) only when the new
+    "Hydrate curve" checkbox is ticked; by default the plot shows the
+    envelope alone, as before v1.19.0.
+
 ## [1.21.0] — 2026-11-23
 
 ### New: Hagedorn-Brown and Gray tubing correlations for wells
