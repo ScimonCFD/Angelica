@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.23.2] — 2026-11-23
+
+### Fixed
+  - **A well that cannot sustain its minimum stable rate is now dead, not
+    unconverged.**  Between its static wellhead pressure and the maximum of
+    its deliverability curve a well is bistable (dead, or producing on the
+    stable branch); the link law forced it to produce.  The solver now
+    prefers producing when that is consistent; otherwise the well is dead —
+    shut in, it cannot start against the network — and the solve
+    converges.
+  - **Correction to 1.23.1.**  Its "Known limitation" said that a well held
+    below its minimum stable rate has no steady state and the solver
+    reports `converged=False`.  That was wrong for the case it gave (dead
+    was a valid steady state).  A steady state is missing only when neither
+    state is consistent: dead, the wellhead falls below the static pressure
+    (it would start), and producing at the minimum stable rate lifts it
+    above the maximum (it would die).  Such a well is reported `unstable`
+    and the solve `converged=False`.
+
+### New
+  - `SolveResult.well_states`: one `WellOperatingState` per `Well` with its
+    state (`producing`, `dead_column`, `dead_back_pressure`,
+    `dead_minimum_rate`, `unstable`), the wellhead, static and maximum
+    pressures, the minimum stable rate and a message.
+
+### Tutorials
+  - Black-oil 12: the well table takes each well's state from
+    `well_states`; text on bistable wells corrected.  No number changed.
+
 ## [1.23.1] — 2026-11-23
 
 ### Fixed

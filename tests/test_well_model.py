@@ -179,16 +179,70 @@ def test_weak_well_dies_against_the_manifold_while_the_other_produces():
     assert all(math.isfinite(t) and 0.0 < t < 100.0 for t in res.node_temperatures_c.values())
 
 
-def test_well_at_the_edge_of_its_stable_rate_does_not_crash():
-    """Known limitation, recorded in ROADMAP: the weak well can flow only at or
-    above the rate of its curve's peak (0.9 kg/s here), and with it flowing
-    the manifold rises above that peak.  There is no steady state (the well
-    would head); the solver reports converged=False.  Before v1.23.1 the
-    energy solve on the non-conserving flow field divided ~1 kg/s of inflow by
-    a 1e-9 kg/s outflow and raised OverflowError."""
+def _states(res) -> dict:
+    return {ws.component_id: ws for ws in res.well_states}
+
+
+def test_bistable_well_left_dead_when_it_cannot_sustain_its_minimum_rate():
+    """v1.23.2.  Between its static wellhead pressure (3.04 MPa) and the
+    maximum of its curve (5.49 MPa at 0.94 kg/s) the weak well is bistable.
+    Producing is inconsistent: at its minimum stable rate the manifold rises
+    above 5.49 MPa.  Dead is consistent: with it shut in the manifold is at
+    5.42 MPa, above its static pressure, so it cannot start.  v1.23.1
+    reported converged=False here (and before that, an OverflowError)."""
     res = SteadyBlackOilSolver().solve(_two_well_network(p_weak=180 * BAR, p_sep=15 * BAR))
-    assert not res.converged
+    assert res.converged
+    m_strong, m_weak, _l1, l2, trunk = (cf.mass_flow_kg_per_s for cf in res.component_flows)
+    weak = res.well_states[1]
+    assert weak.state == "dead_minimum_rate"
+    assert weak.static_wellhead_pressure_pa < weak.wellhead_pressure_pa < weak.max_wellhead_pressure_pa
+    assert weak.minimum_stable_rate_kg_per_s == pytest.approx(0.94, abs=0.01)
+    assert "unloading or gas lift" in weak.message
+    assert m_weak == 0.0 and l2 == pytest.approx(0.0, abs=STAGNANT_KG_PER_S)
+    assert m_strong > 5.0 and trunk == pytest.approx(m_strong, rel=1e-3)
+    assert res.well_states[0].state == "producing"
     assert all(math.isfinite(t) and 0.0 < t < 100.0 for t in res.node_temperatures_c.values())
+
+
+def test_bistable_well_produces_when_producing_is_consistent():
+    """Same network, weak reservoir at 200 bar: its wellhead (6.30 MPa) lies
+    in the bistable band (5.31–6.97 MPa) and producing is consistent, so the
+    well produces — the result v1.23.1 already gave (7.876 / 1.946 kg/s)."""
+    res = SteadyBlackOilSolver().solve(_two_well_network(p_weak=200 * BAR, p_sep=15 * BAR))
+    assert res.converged
+    weak = res.well_states[1]
+    assert weak.state == "producing"
+    assert weak.static_wellhead_pressure_pa < weak.wellhead_pressure_pa < weak.max_wellhead_pressure_pa
+    assert res.component_flows[0].mass_flow_kg_per_s == pytest.approx(7.876, rel=1e-3)
+    assert res.component_flows[1].mass_flow_kg_per_s == pytest.approx(1.946, rel=1e-3)
+
+
+def test_well_with_no_steady_state_is_reported_unstable():
+    """The case without a steady state.  Weak reservoir at 205 bar on its own
+    1-in., 3 km flowline, separator at 5 bar.  Dead, its wellhead (5.25 MPa)
+    is below its static pressure (5.87 MPa), so it would start; producing,
+    its minimum stable rate (0.96 kg/s) through the thin line lifts the
+    wellhead above its maximum (7.34 MPa), so it would die.  The solver
+    says so instead of reporting either state as converged."""
+    import dataclasses
+
+    case = _two_well_network(p_weak=205 * BAR, p_sep=5 * BAR)
+    comps = list(case.components)
+    comps[3] = Pipe(start_node=5, end_node=7, diameter_m=0.0254, length_m=3000.0, absolute_roughness_m=4.6e-5)
+    res = SteadyBlackOilSolver().solve(dataclasses.replace(case, components=tuple(comps)))
+    assert not res.converged
+    weak = res.well_states[1]
+    assert weak.state == "unstable"
+    assert weak.wellhead_pressure_pa < weak.static_wellhead_pressure_pa
+    assert "no steady state" in weak.message
+    assert all(math.isfinite(t) for t in res.node_temperatures_c.values())
+
+
+def test_back_pressure_dead_state_is_reported():
+    res = SteadyBlackOilSolver().solve(_two_well_network(p_weak=180 * BAR, p_sep=30 * BAR))
+    assert res.converged
+    assert res.well_states[1].state == "dead_back_pressure"
+    assert res.well_states[1].message.startswith("dead: needs P_wh <")
 
 
 def test_well_rejected_outside_black_oil():

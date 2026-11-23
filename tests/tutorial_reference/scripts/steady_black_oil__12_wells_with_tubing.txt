@@ -79,6 +79,8 @@ Part F — separator pressure (back-pressure on the wells)
     wellhead pressure: Well 2 dies against the manifold while Well 1, with
     more reservoir pressure and gas, keeps producing.
   • A well whose curve peaks at a finite rate (a gassy well like Well 1) cannot
-    flow below that rate.  If the manifold sits where that well would need a
-    smaller rate, there is no steady state (the well heads); the solver then
-    reports converged False instead of inventing a rate.
+    flow below that rate.  Between its static wellhead pressure and that peak
+    it is bistable: dead or producing.  If producing would lift the manifold
+    above the peak, the well stays dead — shut in, it cannot start against
+    the manifold (it would need unloading or gas lift).  result.well_states
+    gives each well's state and the reason.

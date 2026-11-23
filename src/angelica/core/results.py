@@ -130,6 +130,60 @@ class GlobalEnergyBalance:
         return 100.0 * abs(self.energy_error_kw) / ref
 
 
+WELL_STATES = ("producing", "dead_column", "dead_back_pressure", "dead_minimum_rate", "unstable")
+
+
+@dataclass(frozen=True)
+class WellOperatingState:
+    """Operating state of a ``Well`` (IPR + tubing) at the solution.
+
+    ``state``:
+      ``"producing"``           on the stable branch of its deliverability curve
+      ``"dead_column"``         the static column outweighs the reservoir: it
+                                can never flow without artificial lift
+      ``"dead_back_pressure"``  wellhead above the curve's maximum
+      ``"dead_minimum_rate"``   wellhead between the static pressure and the
+                                maximum: producing would need at least the
+                                minimum stable rate, which raises the network
+                                above the maximum.  A dead well cannot start
+                                against this pressure; unloading or gas lift
+                                would be needed.
+      ``"unstable"``            no steady state: dead, its wellhead is below
+                                the static pressure, so it would start;
+                                producing at its minimum stable rate raises
+                                the wellhead above the maximum, so it would
+                                die.  The real well produces intermittently.
+                                The solve reports ``converged=False``.
+    """
+
+    component_id: str
+    state: str
+    wellhead_pressure_pa: float
+    max_wellhead_pressure_pa: float      # maximum of the deliverability curve
+    static_wellhead_pressure_pa: float   # curve at zero rate
+    minimum_stable_rate_kg_per_s: float  # rate at the maximum
+    mass_flow_kg_per_s: float
+
+    @property
+    def message(self) -> str:
+        mpa = 1e-6
+        if self.state == "producing":
+            return "producing"
+        if self.state == "dead_column":
+            return "dead: column heavier than P_r"
+        if self.state == "dead_back_pressure":
+            return f"dead: needs P_wh < {self.max_wellhead_pressure_pa * mpa:.2f} MPa"
+        if self.state == "unstable":
+            return (f"unstable, no steady state: dead it would start (P_wh "
+                    f"{self.wellhead_pressure_pa * mpa:.2f} < static {self.static_wellhead_pressure_pa * mpa:.2f} MPa); "
+                    f"producing its minimum stable rate ({self.minimum_stable_rate_kg_per_s:.2f} kg/s) "
+                    f"it would exceed its maximum {self.max_wellhead_pressure_pa * mpa:.2f} MPa")
+        return (f"dead: cannot sustain its minimum stable rate "
+                f"({self.minimum_stable_rate_kg_per_s:.2f} kg/s) against "
+                f"{self.wellhead_pressure_pa * mpa:.2f} MPa; to start it needs "
+                f"P_wh < {self.static_wellhead_pressure_pa * mpa:.2f} MPa, unloading or gas lift")
+
+
 @dataclass(frozen=True)
 class SolveResult:
     case_name: str
@@ -157,6 +211,7 @@ class SolveResult:
     component_names: tuple[str, ...] = ()
     component_mws: tuple[float, ...] = ()
     node_compositions: dict[int, tuple[float, ...]] = field(default_factory=dict)
+    well_states: tuple[WellOperatingState, ...] = ()
 
     @property
     def link_mass_flows_kg_per_s(self) -> list[float]:

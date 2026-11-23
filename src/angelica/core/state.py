@@ -53,6 +53,12 @@ class PipeState(PressureChangerState):
 class FittingState(PressureChangerState):
     component: Fitting
     reynolds: float = 0.0
+    # ``Well`` links only.  Between the static wellhead pressure and the
+    # maximum of the deliverability curve a well is bistable (dead, or
+    # producing on the stable branch); this remembers which state it is in.
+    well_dead: bool = False
+    well_latch_enabled: bool = True   # False: always produce when it can (P_wh < P_max)
+    well_starts: int = 0              # times the solver restarted it (capped)
 
 
 @dataclass

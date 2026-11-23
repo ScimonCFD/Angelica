@@ -130,11 +130,17 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   injection rate tutorial.
 - Known limitations of the `Well` model (recorded in v1.23.1; fix when one
   gets in the way):
-  - No steady state below the minimum stable rate.  A well whose
-    deliverability curve peaks at q > 0 can flow only at or above that
-    rate; if the network needs less, the solver reports converged=False
-    (the real well heads).  Options, not decided: report it as a named
-    state ("unstable"), or a time-averaged closure.
+  - Bistable wells (corrected in v1.23.2; v1.23.1 wrongly said every well
+    below its minimum stable rate had no steady state).  Between the
+    static wellhead pressure and the curve's maximum a well is dead or
+    producing.  Rule: producing when consistent; else dead when consistent
+    (shut in, its wellhead stays above the static pressure);
+    `result.well_states` names the state.  Only when neither is consistent
+    (dead it would start, producing it would die — a weak well on a thin
+    flowline) is there no steady state: state "unstable",
+    converged=False.  Rule chosen as proposed by the maintainer; with
+    several bistable wells the retry forces all of them to produce
+    together, not every combination.
   - P_wh varies ±0.3 % non-monotonically with the number of tubing
     segments (Beggs-Brill flow-pattern discontinuities; also isothermal).
   - The tabulated curve (60 points, linear interpolation) errs up to 2.5 %
@@ -496,3 +502,40 @@ Summary:
 - Verified: stagnant pipe velocity equals Hagen-Poiseuille to round-off;
   dead-well cases converge with Colebrook and Beggs-Brill flowlines; new
   tests fail on v1.23.0 and pass now.
+
+### 2026-11-23 — Fix: bistable wells (v1.23.2)
+
+- Review of v1.23.1: the case it left unconverged has a physical answer.
+  Weak well: static wellhead 3.04 MPa, curve maximum 5.49 MPa at
+  0.94 kg/s; shut in, the manifold sits at 5.42 MPa, above its static
+  pressure, so it cannot start.  Dead is a valid steady state; the link law
+  forced the well to produce whenever P_wh < P_max.
+- Fix: hysteresis as an active set.  A producing well dies when its
+  wellhead reaches the maximum (only in the turbulent phase: the laminar
+  warm-start pressures swing 1.5–11 MPa and are not physical — a first
+  version that let them switch the well cycled 200 times).  A dead well
+  starts again between outer iterations when its wellhead falls below the
+  static pressure (at most 3 restarts per solve).  A well left dead inside
+  the band is retried forced to produce; producing wins if that solve
+  converges.
+- `SolveResult.well_states` (`WellOperatingState`): producing /
+  dead_column / dead_back_pressure / dead_minimum_rate / unstable, with
+  the pressures, the minimum stable rate and a message.
+- Item 5 of the review — a real case with no steady state: weak reservoir
+  205 bar on its own 1-in., 3 km flowline, separator 5 bar.  Dead: wellhead
+  5.25 MPa < static 5.87 MPa (it would start).  Forced to produce: the
+  solve does not converge (its minimum stable rate of 0.96 kg/s through the
+  thin line exceeds the 7.34 MPa maximum).  Reported "unstable",
+  converged=False.  A first version reported it converged-dead because the
+  outer loop ran out with the well cycling; fixed (a dead well below its
+  static pressure makes the solve unconverged).
+- The 1e-6 kg/s absolute 'network at rest' threshold did not decide
+  convergence in any of the cases run for this fix.
+- No tutorial number changed; tutorial 12 text corrected.
+
+Summary:
+- Validated against data read in a source: none (logic of the steady
+  states).
+- Verified: the five two-well cases of the review and the thin-flowline
+  cases give the state the rule predicts; the bistable case where producing
+  is consistent gives v1.23.1's rates unchanged.

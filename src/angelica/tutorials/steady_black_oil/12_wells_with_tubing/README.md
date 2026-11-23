@@ -108,11 +108,27 @@ At 6 MPa the manifold is above Well 2's maximum wellhead pressure
 Well 1 carries all the production.
 
 A well whose curve peaks at a finite rate — a gassy well like Well 1, whose
-maximum is at 76 m³/d — cannot flow steadily below that rate.  If the
-network would hold its wellhead where it needs a smaller rate (alive, it
-raises the manifold above its peak; dead, the manifold falls below it),
-there is no steady state: the real well heads.  The solver then reports
-`converged False` rather than inventing a rate.
+maximum is at 76 m³/d — cannot flow steadily below that rate.  Between its
+static (shut-in) wellhead pressure and the peak it is **bistable**: dead, or
+producing on the stable branch.  The solver prefers producing when that is
+consistent.  If producing would lift the manifold above the peak, the well
+is dead: shut in, it cannot start against the manifold, and it would need
+unloading or gas lift.  `result.well_states` gives each well's state and
+the reason:
+
+| State | Meaning |
+|---|---|
+| `producing` | on the stable branch |
+| `dead_column` | the static column outweighs the reservoir |
+| `dead_back_pressure` | wellhead above the curve's maximum |
+| `dead_minimum_rate` | bistable band; producing is not consistent, dead is |
+| `unstable` | neither state is consistent (`converged=False`) |
+
+`unstable` needs a dead well whose wellhead falls *below* its static
+pressure (so it would start) while its minimum stable rate lifts the
+wellhead above the maximum — e.g. a weak well on its own thin flowline.  The
+real well then produces intermittently.  (v1.23.1 wrongly said that any well
+below its minimum stable rate had no steady state.)
 
 The GUI file reproduces the 3.0 in case.
 

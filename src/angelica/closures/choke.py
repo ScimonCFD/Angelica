@@ -214,6 +214,9 @@ class ChokeFlowModel(MinorLossModel):
 
     def __init__(self) -> None:
         self._fluid = None
+        # Set by the solver during its turbulent (physical) hydraulic phase:
+        # producing wells may then die at the maximum of their curve.
+        self.well_latch_active = False
 
     def set_fluid(self, fluid) -> None:
         self._fluid = fluid
@@ -238,7 +241,15 @@ class ChokeFlowModel(MinorLossModel):
         if well_model_fluid is not None:
             from .well_model import well_link_curve
             curve = well_link_curve(link_state, well_model_fluid)
-            m_dot, _ = curve.mass_flow(float(link_state.end_node.pressure_pa))
+            p_wh = float(link_state.end_node.pressure_pa)
+            # A producing well dies when the wellhead reaches the curve's
+            # maximum — only in the turbulent (physical) phase; the laminar
+            # warm-start pressures are not physical.  Starting again is
+            # decided by the solver between outer iterations.
+            if (self.well_latch_active and getattr(link_state, "well_latch_enabled", False)
+                    and curve.dies_at(p_wh)):
+                link_state.well_dead = True
+            m_dot, _ = curve.mass_flow(p_wh, getattr(link_state, "well_dead", False))
             return m_dot / (density * link_state.area_m2)
         well_fluid = self._well_fluid(link_state)
         if well_fluid is not None:
@@ -259,7 +270,8 @@ class ChokeFlowModel(MinorLossModel):
             # stable branch).  A dead well gets a near-zero coupling.
             from .well_model import well_link_curve
             curve = well_link_curve(link_state, well_model_fluid)
-            _, dm_dpwh = curve.mass_flow(float(link_state.end_node.pressure_pa))
+            _, dm_dpwh = curve.mass_flow(float(link_state.end_node.pressure_pa),
+                                         getattr(link_state, "well_dead", False))
             return min(dm_dpwh, -1e-12)
         well_fluid = self._well_fluid(link_state)
         if well_fluid is not None:

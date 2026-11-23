@@ -124,6 +124,7 @@ def well_table(result, tubing_id: float) -> float:
     P = result.node_pressures_pa
     T_node = result.node_temperatures_c
     flows = {cf.label.split(":")[-1]: cf.mass_flow_kg_per_s for cf in result.component_flows}
+    states = {ws.component_id: ws for ws in result.well_states}   # why a well is dead
     print(f"  {'Well':7} {'P_wh':>7} {'P_wf':>7} {'ṁ':>7} {'q_oil':>7} {'T_wh':>6}  State")
     print(f"  {'':7} {'(MPa)':>7} {'(MPa)':>7} {'(kg/s)':>7} {'(m³/d)':>7} {'(°C)':>6}")
     total = 0.0
@@ -139,8 +140,7 @@ def well_table(result, tubing_id: float) -> float:
             t_wh = f"{T_node[10 * (i + 1) + 1]:6.1f}"
         else:
             q, m, p_wf, t_wh = 0.0, 0.0, "      —", "     —"
-            state = (f"dead: needs P_wh < {curve.max_wellhead_pressure_pa / 1e6:.2f} MPa"
-                     if curve.max_wellhead_pressure_pa > 0 else "dead: column heavier than P_r")
+            state = states[f"well_{name.replace(' ', '')}"].message
         print(f"  {name:7} {P[10 * (i + 1) + 1] / 1e6:>7.3f} {p_wf} {m:>7.3f} {q:>7.1f} {t_wh}  {state}")
         total += q
     print(f"  Manifold {P[MANIFOLD] / 1e6:.3f} MPa  ·  oil {total:.1f} m³/d  ·  converged {result.converged}")
@@ -253,9 +253,11 @@ def run():
     print("    wellhead pressure: Well 2 dies against the manifold while Well 1, with")
     print("    more reservoir pressure and gas, keeps producing.")
     print("  • A well whose curve peaks at a finite rate (a gassy well like Well 1) cannot")
-    print("    flow below that rate.  If the manifold sits where that well would need a")
-    print("    smaller rate, there is no steady state (the well heads); the solver then")
-    print("    reports converged False instead of inventing a rate.")
+    print("    flow below that rate.  Between its static wellhead pressure and that peak")
+    print("    it is bistable: dead or producing.  If producing would lift the manifold")
+    print("    above the peak, the well stays dead — shut in, it cannot start against")
+    print("    the manifold (it would need unloading or gas lift).  result.well_states")
+    print("    gives each well's state and the reason.")
 
 
 if __name__ == "__main__":

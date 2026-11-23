@@ -8,7 +8,7 @@ from angelica.closures.convection_scheme import ConvectionScheme, HybridScheme
 from angelica.closures.pressure_drop import PressureDropCorrelation
 from angelica.core.case import NetworkCase
 from angelica.core.network import build_network_state
-from angelica.core.results import ComponentFlowResult, SolveResult
+from angelica.core.results import ComponentFlowResult, SolveResult, WellOperatingState
 from angelica.core.settings import SolverSettings
 from angelica.core.state import HeatSourceState, NetworkState, PipeState
 from angelica.properties.base import FluidModel
@@ -48,6 +48,9 @@ class BlackOilSolverSettings:
     temperature_relaxation: float = 1.0
     composition_relaxation: float = 1.0
     pipe_enthalpy_terms: bool = True
+
+
+_MAX_WELL_STARTS = 3   # restarts of one well per solve before it is reported unstable
 
 
 class SteadyBlackOilSolver(BaseSolver):
@@ -99,6 +102,49 @@ class SteadyBlackOilSolver(BaseSolver):
             turbulent_pipe_correlation=turbulent_pipe_correlation,
             fitting_correlation=ChokeFlowModel(),
         )
+
+    def _hydraulic_pass(self, network_state, fluid, progress_callback):
+        """Laminar warm start, then the turbulent solve.  Producing wells may
+        die at the maximum of their curve only during the turbulent solve:
+        the warm-start pressures are not physical."""
+        model = self._hydraulic_solver.fitting_correlation
+        lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
+            network_state, fluid, progress_callback=progress_callback
+        )
+        if hasattr(model, "well_latch_active"):
+            model.well_latch_active = True
+        try:
+            turb_hist, turb_metrics, converged = self._hydraulic_solver._solve_turbulent(
+                network_state, fluid, progress_callback=progress_callback
+            )
+        finally:
+            if hasattr(model, "well_latch_active"):
+                model.well_latch_active = False
+        return lam_hist, lam_metrics, turb_hist, turb_metrics, converged
+
+    @staticmethod
+    def _start_wells(network_state, fluid) -> bool:
+        """Between outer iterations: a dead well whose wellhead pressure has
+        fallen below its static (shut-in) wellhead pressure starts producing.
+        Returns True if any well started.  A well restarted
+        ``_MAX_WELL_STARTS`` times (it dies again each time: no steady state)
+        is left dead and reported as unstable."""
+        from angelica.closures.choke import resolve_link_fluid
+        from angelica.closures.well_model import well_link_curve
+
+        started = False
+        for link in network_state.components:
+            if not (getattr(link, "well_dead", False) and getattr(link, "well_latch_enabled", False)):
+                continue
+            link_fluid = resolve_link_fluid(fluid, link)
+            if link_fluid is None or not hasattr(link_fluid, "pvt"):
+                continue
+            if (link.well_starts < _MAX_WELL_STARTS
+                    and well_link_curve(link, link_fluid).starts_at(float(link.end_node.pressure_pa))):
+                link.well_dead = False
+                link.well_starts += 1
+                started = True
+        return started
 
     def _set_correlation_fluid(self, fluid) -> None:
         """Pass the current (possibly per-pipe) fluid to fluid-aware correlations."""
@@ -361,10 +407,37 @@ class SteadyBlackOilSolver(BaseSolver):
             return None
 
     def solve(self, case: NetworkCase, progress_callback=None) -> SolveResult:
+        """Solve the network.
+
+        Wells (IPR + tubing) are bistable between their static wellhead
+        pressure and the maximum of their deliverability curve: dead, or
+        producing on the stable branch.  The solve follows each well's
+        hysteresis; a well that ends dead inside that band is then given the
+        chance to produce (re-solve with it forced to produce when it can).
+        Producing wins when it is consistent; otherwise the well is dead —
+        it could not start against the network's pressure — and the solution
+        stands.
+        """
+        result = self._solve_once(case, progress_callback)
+        bistable_dead = frozenset(ws.component_id for ws in result.well_states
+                                  if ws.state == "dead_minimum_rate")
+        if not bistable_dead:
+            return result
+        retry = self._solve_once(case, progress_callback, latch_disabled=bistable_dead)
+        producing = {ws.component_id for ws in retry.well_states if ws.state == "producing"}
+        if retry.converged and bistable_dead <= producing:
+            return retry
+        return result
+
+    def _solve_once(self, case: NetworkCase, progress_callback=None,
+                    latch_disabled: frozenset[str] = frozenset()) -> SolveResult:
         from angelica.numerics.energy import solve_energy_system
 
         self._require_fixed_temperature(case)
         network_state = build_network_state(case)
+        for link in network_state.components:
+            if getattr(link.component, "is_well_model", False) and link.component.component_id in latch_disabled:
+                link.well_latch_enabled = False  # type: ignore[attr-defined]
         settings      = self.black_oil_settings
         fluid_model   = case.fluid_model
 
@@ -456,12 +529,9 @@ class SteadyBlackOilSolver(BaseSolver):
             # Give fluid-aware correlations (Beggs-Brill, choke) the current fluid.
             self._set_correlation_fluid(effective_fluid)
 
-            lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
-                network_state, effective_fluid, progress_callback=progress_callback
-            )
-            turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
-                network_state, effective_fluid, progress_callback=progress_callback
-            )
+            lam_hist, lam_metrics, turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_pass(
+                network_state, effective_fluid, progress_callback)
+            wells_started = self._start_wells(network_state, effective_fluid)
             all_lam_hist.extend(lam_hist)
             all_lam_metrics.extend(lam_metrics)
             all_turb_hist.extend(turb_hist)
@@ -504,7 +574,7 @@ class SteadyBlackOilSolver(BaseSolver):
 
             temperature_converged = max_delta_t   < settings.temperature_tolerance_k
             density_converged     = max_rel_delta  < settings.density_rel_tolerance
-            if temperature_converged and density_converged:
+            if temperature_converged and density_converged and not wells_started:
                 break
 
         # ── final synchronous pass ────────────────────────────────────────────
@@ -512,12 +582,8 @@ class SteadyBlackOilSolver(BaseSolver):
         # come from the same solve with the final compositions and PVT.
         # Pressure field is kept as-is (converged state) — no re-initialisation.
         self._set_correlation_fluid(effective_fluid)
-        lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
-            network_state, effective_fluid, progress_callback=progress_callback
-        )
-        turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
-            network_state, effective_fluid, progress_callback=progress_callback
-        )
+        lam_hist, lam_metrics, turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_pass(
+            network_state, effective_fluid, progress_callback)
         all_lam_hist.extend(lam_hist)
         all_lam_metrics.extend(lam_metrics)
         all_turb_hist.extend(turb_hist)
@@ -565,9 +631,11 @@ class SteadyBlackOilSolver(BaseSolver):
                 )
             )
 
+        well_states = self._well_states(network_state, effective_fluid)
+        wells_settled = not any(ws.state == "unstable" for ws in well_states)
         return SolveResult(
             case_name=case.name,
-            converged=hydraulic_converged and density_converged and temperature_converged,
+            converged=hydraulic_converged and density_converged and temperature_converged and wells_settled,
             node_pressures_pa=node_pressures,
             node_temperatures_c=node_temperatures,
             component_flows=component_flows,
@@ -585,4 +653,38 @@ class SteadyBlackOilSolver(BaseSolver):
             ),
             mass_balance_history=mass_balance_history,
             energy_balance_history=energy_balance_history,
+            well_states=well_states,
         )
+
+    @staticmethod
+    def _well_states(network_state, fluid) -> tuple[WellOperatingState, ...]:
+        """Operating state of every ``Well`` link at the solution."""
+        from angelica.closures.choke import resolve_link_fluid
+        from angelica.closures.well_model import well_link_curve
+
+        states = []
+        for link in network_state.components:
+            if not getattr(link.component, "is_well_model", False):
+                continue
+            link_fluid = resolve_link_fluid(fluid, link)
+            if link_fluid is None or not hasattr(link_fluid, "pvt"):
+                continue
+            curve = well_link_curve(link, link_fluid)
+            p_wh = float(link.end_node.pressure_pa)
+            m = float(link.mass_flow_kg_per_s)
+            p_max, p_static = curve.max_wellhead_pressure_pa, curve.static_wellhead_pressure_pa
+            if m > 0.0:
+                state = "producing"
+            elif p_max <= 0.0:
+                state = "dead_column"
+            elif p_wh >= p_max:
+                state = "dead_back_pressure"
+            elif curve.starts_at(p_wh):
+                state = "unstable"
+            else:
+                state = "dead_minimum_rate"
+            states.append(WellOperatingState(
+                component_id=link.component.component_id, state=state, wellhead_pressure_pa=p_wh,
+                max_wellhead_pressure_pa=p_max, static_wellhead_pressure_pa=p_static,
+                minimum_stable_rate_kg_per_s=curve.minimum_stable_rate_kg_per_s, mass_flow_kg_per_s=m))
+        return tuple(states)

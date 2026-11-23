@@ -71,12 +71,35 @@ class WellCurve:
     def max_wellhead_pressure_pa(self) -> float:
         return self.wellhead_pressures_pa[self.peak_index]
 
-    def mass_flow(self, p_wh: float) -> tuple[float, float]:
-        """(ṁ, dṁ/dP_wh) on the stable branch at wellhead pressure ``p_wh``."""
+    @property
+    def static_wellhead_pressure_pa(self) -> float:
+        """Wellhead pressure of the shut-in (q = 0) column."""
+        return self.wellhead_pressures_pa[0]
+
+    @property
+    def minimum_stable_rate_kg_per_s(self) -> float:
+        """Rate at the maximum of the curve: the smallest rate on the stable branch."""
+        return self.oil_rates_sc_m3_per_day[self.peak_index] * self.mass_per_oil_sc_m3 / _S_PER_DAY
+
+    # Hysteresis of a bistable well.  Between the static wellhead pressure and
+    # the curve's maximum a well can be dead or producing on the stable
+    # branch: a producing well dies when P_wh reaches the maximum; a dead well
+    # starts again only when P_wh falls below the static pressure, where the
+    # shut-in column itself would push fluid out.
+    def dies_at(self, p_wh: float) -> bool:
+        return p_wh >= self.max_wellhead_pressure_pa
+
+    def starts_at(self, p_wh: float) -> bool:
+        return p_wh < self.static_wellhead_pressure_pa
+
+    def mass_flow(self, p_wh: float, dead: bool = False) -> tuple[float, float]:
+        """(ṁ, dṁ/dP_wh) on the stable branch at wellhead pressure ``p_wh``;
+        (0, 0) above the maximum, or when the well is ``dead`` (see
+        :meth:`dies_at` / :meth:`starts_at`)."""
         q, p = self.oil_rates_sc_m3_per_day, self.wellhead_pressures_pa
         k = self.mass_per_oil_sc_m3 / _S_PER_DAY
         i0 = self.peak_index
-        if p_wh >= p[i0]:
+        if p_wh >= p[i0] or dead:
             return 0.0, 0.0                       # dead well
         for i in range(i0, len(q) - 1):
             if p[i + 1] <= p_wh <= p[i]:
