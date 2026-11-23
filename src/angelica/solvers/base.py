@@ -172,13 +172,13 @@ class BaseSolver(ABC):
         # Shaft work and Joule-Thomson term of devices
         w_shaft_w = 0.0
         e_jt_w = 0.0
-        q_iso_w = 0.0
+        q_well_w = 0.0          # heat wells give to the formation
+        e_pot_well_w = 0.0      # −ṁ·g·Δz of the well tubing
         for link_id, dt in devices.items():
             delta = abs(dt.mdot) * (dt.cp_out * dt.T_out - dt.cp_up * dt.T_up)
-            if dt.kind == "passthrough" and real_basis:
-                link = next(lk for lk in network_state.components if id(lk) == link_id)
-                q_iso_w += abs(dt.mdot) * (_h_rel(link, dt.down_node.pressure_pa, dt.T_up)
-                                           - _h_rel(link, dt.up_node.pressure_pa, dt.T_up))
+            if dt.kind == "well":
+                q_well_w += dt.heat_loss_w
+                e_pot_well_w += dt.potential_w
             if dt.kind == "pump":
                 if real_basis:
                     link = next(lk for lk in network_state.components if id(lk) == link_id)
@@ -190,8 +190,8 @@ class BaseSolver(ABC):
 
         # Heat from link sources and pipe walls; pipe JT and potential-energy sources
         q_sources_w = 0.0
-        q_wall_w = 0.0
-        e_pot_w = 0.0
+        q_wall_w = q_well_w
+        e_pot_w = e_pot_well_w
         for link in network_state.components:
             if isinstance(link, HeatSourceState):
                 q_sources_w += link.component.power_w
@@ -252,7 +252,6 @@ class BaseSolver(ABC):
             shaft_work_kw=w_shaft_w / 1000.0,
             joule_thomson_kw=e_jt_w / 1000.0,
             potential_energy_kw=e_pot_w / 1000.0,
-            isothermal_device_heat_kw=q_iso_w / 1000.0,
             enthalpy_basis="real" if real_basis else "sensible",
         )
 

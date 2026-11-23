@@ -447,12 +447,9 @@ def _solve_energy_once(
         down_idx = node_index[dt.down_node.node_id]
         abs_mdot_cp = abs(dt.mdot) * dt.cp_up
         if dt.kind == "passthrough":
-            # Incompressible fitting, or a well kept at reservoir temperature:
-            # T_out = T_in (implicit matrix term).  With an enthalpy model the
-            # stream's offsets are added like for any link; the enthalpy the
-            # device changes at constant T is heat exchanged with its
-            # surroundings (the formation, for a well) and is reported by the
-            # global balance as isothermal-device heat.
+            # Incompressible fitting: T_out = T_in (implicit matrix term).
+            # With an enthalpy model the stream's offsets are added like for
+            # any link.
             inflow[down_idx].append((up_idx, abs_mdot_cp))
             outflow_total[up_idx] += abs_mdot_cp
             if use_offsets:
@@ -590,6 +587,9 @@ class DeviceThermalState:
                           h_out = h(T_up, P_up) + w for fluids with enthalpy)
       ``"isenthalpic"``  compressible fitting, h(T_out, P_down) = h(T_up, P_up)
       ``"passthrough"``  incompressible fitting, T_out = T_up
+      ``"well"``         IPR + tubing: T_out is the wellhead temperature of the
+                          tubing model; ``heat_loss_w`` is the heat given to
+                          the formation and ``potential_w`` = −ṁ·g·Δz
     """
 
     mdot: float
@@ -600,6 +600,8 @@ class DeviceThermalState:
     T_out: float
     cp_out: float
     kind: str
+    heat_loss_w: float = 0.0
+    potential_w: float = 0.0
 
 
 def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState | None:
@@ -613,11 +615,9 @@ def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState |
     mdot = float(dev.mass_flow_kg_per_s)
     if abs(mdot) < 1e-30:
         return None
-    # Wells (IPR and IPR + tubing) keep the reservoir temperature until the
-    # tubing thermal model exists: an isenthalpic expansion without the
-    # potential energy of a 2 km lift would be worse than no change.
-    is_well = (getattr(dev.component, "is_well_model", False)
-               or getattr(dev.component, "is_well_inflow", False))
+    # An IPR link (WellInflow) is an ordinary isenthalpic device.  A Well
+    # (IPR + tubing) gets its wellhead state from the tubing model.
+    is_well = getattr(dev.component, "is_well_model", False)
 
     up_node   = dev.start_node if mdot >= 0.0 else dev.end_node
     down_node = dev.end_node   if mdot >= 0.0 else dev.start_node
@@ -630,7 +630,12 @@ def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState |
     P_up   = _p_up   if _p_up   is not None else _p_ref
     P_down = _p_down if _p_down is not None else _p_ref
 
-    h_up = None if is_well else fluid_enthalpy(fluid_model, dev, P_up, T_up)
+    if is_well:
+        well = _well_thermal_state(dev, fluid_model, mdot, up_node, down_node, T_up, cp, P_up, P_down)
+        if well is not None:
+            return well
+        return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_up, cp, "passthrough")
+    h_up = fluid_enthalpy(fluid_model, dev, P_up, T_up)
     if isinstance(dev, PumpState):
         rho = fluid_model.density_for_link(dev)
         w_shaft = (P_down - P_up) / rho
@@ -646,6 +651,30 @@ def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState |
         cp_out = _specific_heat_at(fluid_model, dev, P_down, T_out)
         return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_out, cp_out, "isenthalpic")
     return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_up, cp, "passthrough")
+
+
+def _well_thermal_state(dev, fluid_model, mdot, up_node, down_node, T_up, cp, P_up, P_down):
+    """Wellhead thermal state of a producing ``Well`` link, or None when the
+    tubing model does not apply (back-flow, no black-oil fluid, rate not
+    deliverable): the caller then passes the temperature through."""
+    from angelica.closures.choke import resolve_link_fluid
+    from angelica.closures.well_model import _GRAVITY, well_tubing_state
+
+    link_fluid = resolve_link_fluid(fluid_model, dev)
+    if mdot <= 0.0 or link_fluid is None or not hasattr(link_fluid, "pvt"):
+        return None
+    comp = dev.component
+    res = well_tubing_state(comp, link_fluid, float(P_up), float(T_up), float(mdot))
+    if res is None or res.wellhead_enthalpy_j_per_kg is None:
+        return None
+    # Same enthalpy at the network's wellhead pressure (the march ends at its
+    # own, slightly different, wellhead pressure).
+    T_out = _temperature_from_enthalpy(fluid_model, dev, res.wellhead_enthalpy_j_per_kg, P_down,
+                                       res.wellhead_temperature_c)
+    cp_out = _specific_heat_at(fluid_model, dev, P_down, T_out)
+    return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_out, cp_out, "well",
+                              heat_loss_w=res.formation_heat_w,
+                              potential_w=-mdot * _GRAVITY * float(comp.tubing_height_change_m))
 
 
 def _temperature_from_enthalpy(fluid_model, link, h: float, P: float, T_guess: float) -> float:

@@ -527,6 +527,15 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         tubing_segments=int(_optional_float(component, "tubing_segments", default=25.0)),
                         tubing_correlation=(component.properties.get("tubing_correlation", "beggs_brill").strip()
                                             or "beggs_brill"),
+                        geothermal_gradient_k_per_m=_optional_float(
+                            component, "geothermal_gradient_k_per_m", default=0.03),
+                        formation_conductivity_w_per_mk=_optional_float(
+                            component, "formation_conductivity_w_per_mk", default=2.4),
+                        formation_diffusivity_m2_per_s=_optional_float(
+                            component, "formation_diffusivity_m2_per_s", default=1.0e-6),
+                        production_time_days=_optional_float(component, "production_time_days", default=365.0),
+                        wellbore_diameter_m=_optional_float(component, "wellbore_diameter_m", default=math.nan),
+                        tubing_u_w_per_m2k=_optional_float(component, "tubing_u_w_per_m2k", default=math.inf),
                         component_id=f"link_{link.link_id}_well_{component.component_id}",
                     )
                 )

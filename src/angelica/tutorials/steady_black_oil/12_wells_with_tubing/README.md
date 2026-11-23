@@ -35,32 +35,57 @@ maximum the well is dead and produces nothing.
 
 ## Results (3.0 in tubing)
 
-| Well | P_wh (MPa) | P_wf (MPa) | Oil (m³/d) | |
-|---|---|---|---|---|
-| 1 | 4.08 | 15.18 | 547 | producing |
-| 2 | 2.69 | 17.74 | 170 | producing |
-| 3 | 2.62 | — | 0 | dead: column heavier than P_r |
+| Well | P_wh (MPa) | P_wf (MPa) | Oil (m³/d) | T_wh (°C) | |
+|---|---|---|---|---|---|
+| 1 | 4.04 | 15.17 | 548 | 70.4 | producing |
+| 2 | 2.68 | 18.00 | 160 | 52.7 | producing |
+| 3 | 2.61 | — | 0 | — | dead: column heavier than P_r |
 
-The network converges in 4 outer iterations.  Well 1's deliverability curve
-rises from 11.19 MPa (static) to 11.43 MPa at 76 m³/d before falling — gas
-lightens the column at low rates.  Larger tubing raises total production:
-505 m³/d (50.3 mm), 629 m³/d (62.0 mm), 718 m³/d (76.2 mm).
+Well 1's deliverability curve rises from 10.97 MPa (static) to 11.04 MPa at
+76 m³/d before falling — gas lightens the column at low rates.  Larger
+tubing raises total production: 498 m³/d (50.3 mm), 620 m³/d (62.0 mm),
+708 m³/d (76.2 mm).
 
 ### Tubing correlation (Part D)
 
 | Correlation | Well 1 max P_wh | Total oil |
 |---|---|---|
-| Beggs-Brill | 11.43 MPa | 718 m³/d |
-| Hagedorn-Brown (modified) | 11.80 MPa | 779 m³/d |
-| Gray | 12.69 MPa | 770 m³/d |
+| Beggs-Brill | 11.04 MPa | 708 m³/d |
+| Hagedorn-Brown (modified) | 11.30 MPa | 769 m³/d |
+| Gray | 11.96 MPa | 759 m³/d |
 
 Select it with `Well(..., tubing_correlation="hagedorn_brown")` or in the
 GUI well dialog. Hagedorn-Brown is meant for oil wells, Gray for gas and
 gas-condensate wells (its holdup does not tend to 1 at zero rate). The
 spread between correlations is part of the uncertainty of any well model.
 
-The tubing is isothermal at the reservoir temperature.  The GUI file
-reproduces the 3.0 in case.
+### Tubing temperature (Part E)
+
+The fluid enters the tubing at its reservoir enthalpy and loses heat to the
+formation on the way up (Ramey's model; the rock is at the reservoir
+temperature at the bottom and 0.03 K/m cooler towards the surface).  Well 1
+at 6.7 kg/s:
+
+| Height above bottom (m) | Pressure (MPa) | Fluid (°C) | Formation (°C) |
+|---|---|---|---|
+| 0 | 15.17 | 89.3 | 85.0 |
+| 800 | 10.31 | 84.6 | 61.0 |
+| 1600 | 6.06 | 76.0 | 37.0 |
+| 2000 | 4.06 | 70.4 | 25.0 |
+
+It gives 195 kW to the formation.  The same well would arrive at 42 °C at
+1 kg/s and 64 °C at 4 kg/s: a slow well has time to cool.  The 4 K rise at
+the bottom hole is the liquid expanding at constant enthalpy through the
+drawdown.  The network's energy balance closes to 0.002 kW with the wells'
+formation heat and lifting work as explicit terms.
+
+Thermal inputs of a `Well` (all optional): `geothermal_gradient_k_per_m`,
+`formation_conductivity_w_per_mk` (0 = adiabatic tubing),
+`formation_diffusivity_m2_per_s`, `production_time_days`,
+`wellbore_diameter_m`, `tubing_u_w_per_m2k`.  Not validated against
+measured flowing temperatures.
+
+The GUI file reproduces the 3.0 in case.
 
 ## Run
 

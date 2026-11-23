@@ -4863,15 +4863,23 @@ class NetSimGui:
                         ("tubing_length_m", "Tubing length (m)"),
                         ("tubing_height_change_m", "Vertical rise (m) — blank: vertical well"),
                         ("tubing_roughness_m", "Tubing roughness (m)"),
-                        ("tubing_segments", "Integration segments (−)")],
+                        ("tubing_segments", "Integration segments (−)"),
+                        ("geothermal_gradient_k_per_m", "Geothermal gradient (K per m of depth)"),
+                        ("formation_conductivity_w_per_mk", "Formation conductivity (W/m·K) — 0: adiabatic tubing"),
+                        ("formation_diffusivity_m2_per_s", "Formation diffusivity (m²/s)"),
+                        ("production_time_days", "Time on production (days)"),
+                        ("wellbore_diameter_m", "Wellbore diameter (m) — blank: 8½ in"),
+                        ("tubing_u_w_per_m2k", "Wellbore U (W/m²·K, tubing ID) — blank: none")],
                 choices={"ipr_model": ("IPR model", ("vogel", "linear")),
                          "tubing_correlation": ("Tubing correlation",
                                                 ("beggs_brill", "hagedorn_brown", "gray"))},
-                note=("Reservoir inflow + production tubing (isothermal at the reservoir\n"
-                      "temperature).  Tubing: Beggs-Brill (any), Hagedorn-Brown (oil wells),\n"
-                      "Gray (gas / gas-condensate wells).  Start node = reservoir (P_r);\n"
-                      "end node = wellhead.  The well is dead if the wellhead pressure exceeds\n"
-                      "the maximum of its deliverability curve; it never takes injection."),
+                note=("Reservoir inflow + production tubing.  Tubing: Beggs-Brill (any),\n"
+                      "Hagedorn-Brown (oil wells), Gray (gas / gas-condensate wells).\n"
+                      "Start node = reservoir (P_r, reservoir temperature); end node = wellhead.\n"
+                      "The fluid cools on the way up by heat loss to the formation (Ramey):\n"
+                      "the wellhead node shows the flowing wellhead temperature.\n"
+                      "The well is dead if the wellhead pressure exceeds the maximum of its\n"
+                      "deliverability curve; it never takes injection."),
             )
             return
         if component.component_type == "well_inflow":

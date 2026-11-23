@@ -1,5 +1,61 @@
 # Changelog
 
+## [1.22.0] — 2026-11-23
+
+### New: tubing temperature profile in wells (roadmap 4.1)
+  - A `Well` no longer keeps the reservoir temperature up to the wellhead.
+    The fluid enters the bottom hole at its reservoir enthalpy (isenthalpic
+    inflow) and climbs the tubing losing heat to the formation; the well
+    delivers its flowing wellhead temperature to the network.
+      - First law along the tubing: dh/ds = −g·sinθ − q'/ṁ, so the
+        Joule-Thomson effect, friction heating and the potential energy of
+        the lift are included through the black-oil enthalpy h(P, T).
+      - Heat loss q' = C·(T − T_formation): Ramey's (1962) model, wellbore
+        resistance in series with transient conduction in the rock; the
+        formation temperature falls linearly from the reservoir temperature
+        (geothermal gradient).
+      - The deliverability curve P_wh(q) is integrated with the local
+        tubing temperature, not the reservoir temperature.
+      - New `Well` inputs, all optional: `geothermal_gradient_k_per_m`
+        (0.03), `formation_conductivity_w_per_mk` (2.4; 0 = adiabatic),
+        `formation_diffusivity_m2_per_s` (1e-6), `production_time_days`
+        (365), `wellbore_diameter_m` (8½ in), `tubing_u_w_per_m2k` (inf =
+        formation conduction only).  Also in the GUI well dialog.
+      - `well_tubing_state(well, fluid, P_res, T_res, ṁ, keep_profile=True)`
+        returns the profile (height, P, T, formation T) and the heat given
+        to the formation.
+  - A `WellInflow` (IPR only) link is now an ordinary isenthalpic device:
+    the bottom-hole temperature differs slightly from the reservoir's.
+  - **Energy balance:** the term `isothermal_device_heat_kw` is gone (field
+    removed from `GlobalEnergyBalance` and from the CSV/Excel reports).  It
+    was the enthalpy wells exchanged by being held isothermal, computed as a
+    difference, so the balance closed by construction there.  The heat wells
+    give to the formation is now part of `heat_wall_loss_kw` and the lifting
+    work part of `potential_energy_kw`, both from the tubing model.
+  - Black-oil only: the `Well` component does not exist yet for
+    compositional fluids (roadmap 4.3).
+
+### Changed tutorial results (physical reason)
+  - **Black-oil 12 (wells with tubing).**  Wellhead temperatures: Well 1
+    85 → 70.4 °C, Well 2 80 → 52.7 °C (the slower well cools more).  A
+    colder column is denser: Well 1's static wellhead pressure 11.19 →
+    10.97 MPa, total oil 718 → 708 m³/d (Hagedorn-Brown 779 → 769, Gray
+    770 → 759).  New Part E shows the tubing temperature profile.
+  - **Black-oil 11 (IPR and check valves).**  Bottom-hole temperatures rise
+    by 0.1–0.8 K (liquid expanding at constant enthalpy through the
+    drawdown); pressures change by less than 0.02 %.
+
+### Validation
+  - Integrator against Ramey's analytical solution (incompressible fluid,
+    static column, linear geothermal profile): < 0.001 K at relaxation
+    distances from 7 m to 14 km.
+  - First law on black-oil wells: residual below 0.4 W at 2–6 kg/s; network
+    with a well: 0.002 kW.
+  - The time function f(t) and the relaxation distance were read in a
+    secondary source (OpenGeoSys benchmark documentation).  Not validated
+    against measured flowing temperatures.  The heat of solution of the gas
+    released in the tubing is neglected, as elsewhere in black-oil.
+
 ## [1.21.3] — 2026-11-23
 
 Review follow-ups.  No numerical result changes.

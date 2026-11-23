@@ -33,6 +33,16 @@ branch; if the wellhead pressure exceeds the curve's maximum the well is dead.
 Solving the tubing as an ordinary network pipe does not work: one pressure
 drop can correspond to several flow rates on the J-curve and the pressure
 correction jumps between them.
+
+Temperature
+-----------
+The fluid enters the tubing at its reservoir enthalpy and loses heat to the
+formation on the way up (Ramey's model: transient conduction in the rock,
+which is at the reservoir temperature at the bottom and 0.03 K/m cooler
+towards the surface — here 25 °C at the wellhead of an 85 °C reservoir).
+The faster a well flows, the less time the fluid has to cool, so the
+wellhead temperature rises with the rate.  The network receives each well at
+its flowing wellhead temperature (Part E).
 """
 from __future__ import annotations
 
@@ -44,7 +54,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from angelica.closures import BeggsBrillCorrelation
-from angelica.closures.well_model import bottomhole_pressure, well_curve
+from angelica.closures.well_model import bottomhole_pressure, well_curve, well_tubing_state
 from angelica.core.case import InletFluidBC, NetworkCase, PressureBoundary, ThermalBoundary
 from angelica.core.components import Pipe, Well
 from angelica.properties.black_oil import BlackOilFluid
@@ -105,9 +115,10 @@ def build_case(tubing_id: float = 0.0762, correlation: str = "beggs_brill") -> N
 def well_table(result, tubing_id: float) -> float:
     """Print each well's operating point; return the total oil rate (m³/d)."""
     P = result.node_pressures_pa
+    T_node = result.node_temperatures_c
     flows = {cf.label.split(":")[-1]: cf.mass_flow_kg_per_s for cf in result.component_flows}
-    print(f"  {'Well':7} {'P_wh':>7} {'P_wf':>7} {'ṁ':>7} {'q_oil':>7}  State")
-    print(f"  {'':7} {'(MPa)':>7} {'(MPa)':>7} {'(kg/s)':>7} {'(m³/d)':>7}")
+    print(f"  {'Well':7} {'P_wh':>7} {'P_wf':>7} {'ṁ':>7} {'q_oil':>7} {'T_wh':>6}  State")
+    print(f"  {'':7} {'(MPa)':>7} {'(MPa)':>7} {'(kg/s)':>7} {'(m³/d)':>7} {'(°C)':>6}")
     total = 0.0
     for i, (name, P_r, T, api, gg, gor, wor, J, _L) in enumerate(WELLS):
         fluid = well_fluid(api, gg, gor, wor)
@@ -118,11 +129,12 @@ def well_table(result, tubing_id: float) -> float:
             p_b = fluid.pvt(P_r * 1e6, T).bubble_point_pa
             p_wf = f"{bottomhole_pressure(q, P_r * 1e6, J, 'vogel', p_b) / 1e6:7.2f}"
             state = "producing"
+            t_wh = f"{T_node[10 * (i + 1) + 1]:6.1f}"
         else:
-            q, m, p_wf = 0.0, 0.0, "      —"
+            q, m, p_wf, t_wh = 0.0, 0.0, "      —", "     —"
             state = (f"dead: needs P_wh < {curve.max_wellhead_pressure_pa / 1e6:.2f} MPa"
                      if curve.max_wellhead_pressure_pa > 0 else "dead: column heavier than P_r")
-        print(f"  {name:7} {P[10 * (i + 1) + 1] / 1e6:>7.3f} {p_wf} {m:>7.3f} {q:>7.1f}  {state}")
+        print(f"  {name:7} {P[10 * (i + 1) + 1] / 1e6:>7.3f} {p_wf} {m:>7.3f} {q:>7.1f} {t_wh}  {state}")
         total += q
     print(f"  Manifold {P[MANIFOLD] / 1e6:.3f} MPa  ·  oil {total:.1f} m³/d  ·  converged {result.converged}")
     return total
@@ -150,7 +162,8 @@ def run():
 
     # ── Part B: the network ───────────────────────────────────────────────────
     print("\nPart B — gathering network, 3.0 in tubing")
-    well_table(solver.solve(build_case(0.0762)), 0.0762)
+    base = solver.solve(build_case(0.0762))
+    well_table(base, 0.0762)
 
     # ── Part C: tubing size ───────────────────────────────────────────────────
     print("\nPart C — tubing size (all wells)")
@@ -179,12 +192,35 @@ def run():
         c1 = well_curve(make_well(0, 0.0762, corr), well_fluid(*WELLS[0][3:7]), WELLS[0][1] * 1e6, WELLS[0][2])
         print(f"  {corr:16} {c1.max_wellhead_pressure_pa / 1e6:>12.2f} MPa {q_tot:>11.1f}")
 
+    # ── Part E: tubing temperature ────────────────────────────────────────────
+    print("\nPart E — tubing temperature of Well 1 at its operating rate")
+    m1 = next(cf.mass_flow_kg_per_s for cf in base.component_flows if cf.label.endswith("well_Well1"))
+    name, P_r, T, api, gg, gor, wor, J, _L = WELLS[0]
+    state = well_tubing_state(make_well(0, 0.0762), well_fluid(api, gg, gor, wor), P_r * 1e6, T, m1,
+                              keep_profile=True)
+    print(f"  {'Height above':>13} {'Pressure':>9} {'Fluid':>7} {'Formation':>10}")
+    print(f"  {'bottom (m)':>13} {'(MPa)':>9} {'(°C)':>7} {'(°C)':>10}")
+    for s, P_s, T_s, T_e in state.profile[::5]:
+        print(f"  {s * TUBING_RISE / TUBING_LENGTH:>13.0f} {P_s / 1e6:>9.2f} {T_s:>7.1f} {T_e:>10.1f}")
+    print(f"  Heat given to the formation: {state.formation_heat_w / 1e3:.0f} kW")
+    print("  Wellhead temperature against rate (same well):")
+    for m in (1.0, 2.0, 4.0, m1):
+        r = well_tubing_state(make_well(0, 0.0762), well_fluid(api, gg, gor, wor), P_r * 1e6, T, m)
+        print(f"    {m:5.2f} kg/s → {r.wellhead_temperature_c:5.1f} °C")
+    geb = base.global_energy_balance
+    print(f"  Network energy balance: wells and pipes lose {geb.heat_wall_loss_kw:.0f} kW, "
+          f"lifting takes {-geb.potential_energy_kw:.0f} kW, residual {geb.energy_error_kw:+.3f} kW")
+
     print()
     print("  • Well 3's static oil-and-water column (25 °API, WOR 0.8, 2 000 m) weighs")
     print("    more than its reservoir pressure: it cannot flow without artificial lift.")
     print("  • Larger tubing reduces friction in the high-rate wells; the Well model")
     print("    solves each well's tubing on its own, so the network converges in a")
     print("    few outer iterations even with 2 km two-phase risers.")
+    print("  • The reservoir fluid warms slightly at the sandface (liquid expanding at")
+    print("    constant enthalpy) and then cools along the tubing; the slower well")
+    print("    arrives colder.  Wellhead temperature matters downstream: viscosity,")
+    print("    wax and hydrate margins all start from it.")
     print("  • Hagedorn-Brown suits oil wells, Gray gas and gas-condensate wells; the")
     print("    spread between correlations is part of the uncertainty of any well model.")
 

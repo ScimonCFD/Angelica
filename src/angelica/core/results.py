@@ -93,13 +93,10 @@ class GlobalEnergyBalance:
     enthalpy_in_kw: float       # Σ ṁ × cp × T at inlet boundary nodes
     enthalpy_out_kw: float      # Σ ṁ × cp × T at outlet boundary nodes
     heat_sources_kw: float      # Σ power_w for all HeatSource links
-    heat_wall_loss_kw: float    # Σ U·π·D·L·(T_pipe − T_amb) for all pipes
+    heat_wall_loss_kw: float    # Σ U·π·D·L·(T_pipe − T_amb) for all pipes + heat wells give to the formation
     shaft_work_kw: float = 0.0  # Σ pump / compressor work on the fluid
     joule_thomson_kw: float = 0.0  # Σ ṁ·Δ(cp·T) at constant h (valves and pipes)
-    potential_energy_kw: float = 0.0  # −Σ ṁ·g·Δz along pipes (enthalpy-based fluids)
-    # Real basis: enthalpy changed at constant temperature by devices kept
-    # isothermal (wells at reservoir temperature) = heat they exchange.
-    isothermal_device_heat_kw: float = 0.0
+    potential_energy_kw: float = 0.0  # −Σ ṁ·g·Δz along pipes and well tubing (enthalpy-based fluids)
     # "sensible": fluxes are ṁ·cp·T (liquids, black-oil); "real": fluxes are the
     # fluid's enthalpy ṁ·h(P, T) above the ideal gas at 0 °C (compressible gas,
     # compositional EOS).  With real enthalpy the Joule-Thomson effect is part
@@ -111,7 +108,7 @@ class GlobalEnergyBalance:
         """Residual of the global first-law balance (should be ≈ 0)."""
         jt = self.joule_thomson_kw if self.enthalpy_basis == "sensible" else 0.0
         return (self.enthalpy_in_kw + self.heat_sources_kw + self.shaft_work_kw
-                + jt + self.potential_energy_kw + self.isothermal_device_heat_kw
+                + jt + self.potential_energy_kw
                 - self.heat_wall_loss_kw - self.enthalpy_out_kw)
 
     @property
@@ -129,8 +126,7 @@ class GlobalEnergyBalance:
         ref = max(abs(self.enthalpy_in_kw), abs(self.enthalpy_out_kw), 1e-30)
         if self.enthalpy_basis == "real":
             ref = max(ref, abs(self.heat_sources_kw), abs(self.heat_wall_loss_kw),
-                      abs(self.shaft_work_kw), abs(self.joule_thomson_kw), abs(self.potential_energy_kw),
-                      abs(self.isothermal_device_heat_kw))
+                      abs(self.shaft_work_kw), abs(self.joule_thomson_kw), abs(self.potential_energy_kw))
         return 100.0 * abs(self.energy_error_kw) / ref
 
 

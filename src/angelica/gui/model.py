@@ -324,6 +324,12 @@ class CanvasScene:
                 "tubing_roughness_m": "0.000046",
                 "tubing_segments": "25",
                 "tubing_correlation": "beggs_brill",
+                "geothermal_gradient_k_per_m": "0.03",
+                "formation_conductivity_w_per_mk": "2.4",
+                "formation_diffusivity_m2_per_s": "0.000001",
+                "production_time_days": "365",
+                "wellbore_diameter_m": "",
+                "tubing_u_w_per_m2k": "",
             }
         if component_type == "well_inflow":
             return {

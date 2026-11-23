@@ -122,7 +122,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   *Done when:* each reproduces its textbook worked example within 2 %.
 
 ### Stage 4 — wells (items 8, 9, 10, 11)
-- 4.1 Tubing temperature profile (geothermal gradient + Ramey); the well
+- 4.1 **Done in v1.22.0.** Tubing temperature profile (geothermal gradient + Ramey); the well
   delivers its wellhead temperature to the network.
 - 4.2 IPR: Fetkovich, Jones, gas back-pressure.
 - 4.3 `Well` with compositional fluids (gas-condensate wells).
@@ -407,3 +407,31 @@ Summary:
 - Known limitation: CO2 hydrate at 100 MPa is 9 K low (Henry's law without
   Poynting factor).
 
+### 2026-11-23 — Item 4.1: tubing temperature profile (v1.22.0)
+
+- `Well`: isenthalpic inflow, then a coupled pressure–temperature march up
+  the tubing with heat loss to the formation (Ramey: wellbore resistance +
+  transient rock conduction, linear geothermal profile). The well hands its
+  wellhead temperature to the network; `WellInflow` is isenthalpic.
+- `isothermal_device_heat_kw` removed; formation heat goes into the wall
+  loss and the lift into the potential-energy term.
+- Numerics: explicit temperature march diverged at near-zero rates (stiff:
+  relaxation distance ≪ segment) → exponential integrator per segment. The
+  enthalpy is tracked exactly; the temperature is re-synchronised with it
+  every 5 segments (black-oil cp(P,T) is not exactly ∂h/∂T: up to 8 % at
+  200 bar). Cost: deliverability curve 0.1 → 0.4 s per well, one 25 ms
+  march per well and energy solve.
+- Black-oil only for now: there is no compositional `Well` until 4.3; the
+  integrator takes generic callables so 4.3 can reuse it.
+- Tutorials 11 and 12 changed (CHANGELOG).
+
+Summary:
+- Validated against data read in a source: none.
+- Verified against an analytical solution: Ramey's profile (own derivation
+  of the closed form; f(t) and relaxation distance read in a secondary
+  source, the OpenGeoSys benchmark documentation).
+- Validated by consistency: first law on black-oil wells and on a network
+  with a well; trends with rate, time, insulation.
+- Not validated: flowing wellhead temperatures against field data (Sagar,
+  Doty & Schmidt 1991 not accessible); default formation properties are
+  typical values, not sourced; heat of solution of released gas neglected.

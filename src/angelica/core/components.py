@@ -265,8 +265,27 @@ class Well(Fitting):
     tubing_correlation : "beggs_brill" (default), "hagedorn_brown" (oil wells)
         or "gray" (gas and gas-condensate wells)
 
-    The tubing is taken at reservoir temperature (isothermal).  Requires
-    ``SteadyBlackOilSolver``.
+    Tubing temperature (see ``angelica.closures.well_model``): the fluid
+    enters the bottom hole at its reservoir enthalpy and loses heat to the
+    formation on the way up (Ramey 1962); the well delivers its wellhead
+    temperature to the network.
+
+    geothermal_gradient_k_per_m : fall of the undisturbed formation
+        temperature per metre of vertical depth above the reservoir
+        (default 0.03 K/m; the formation is at the reservoir temperature at
+        the bottom hole)
+    formation_conductivity_w_per_mk : k_e (default 2.4; 0 = adiabatic tubing)
+    formation_diffusivity_m2_per_s : α (default 1.0e-6)
+    production_time_days : time on production, for the transient formation
+        conduction f(t) (default 365)
+    wellbore_diameter_m : diameter at the cement/formation interface
+        (default: the larger of 0.2159 m — an 8½-in. hole — and 1.5 × tubing
+        diameter)
+    tubing_u_w_per_m2k : overall coefficient of the wellbore (tubing wall,
+        annulus, casing, cement) referred to the tubing inner diameter;
+        default inf = no wellbore resistance (formation conduction only)
+
+    Requires ``SteadyBlackOilSolver``.
     """
 
     productivity_index_m3_per_day_per_bar: float = float("nan")
@@ -276,6 +295,12 @@ class Well(Fitting):
     tubing_roughness_m: float = 4.6e-5
     tubing_segments: int = 25
     tubing_correlation: str = "beggs_brill"
+    geothermal_gradient_k_per_m: float = 0.03
+    formation_conductivity_w_per_mk: float = 2.4
+    formation_diffusivity_m2_per_s: float = 1.0e-6
+    production_time_days: float = 365.0
+    wellbore_diameter_m: float = float("nan")
+    tubing_u_w_per_m2k: float = float("inf")
     loss_coefficient: float = 1.0   # unused; keeps the Fitting interface
     is_well_model = True            # class attribute read by the flow models
 
@@ -296,6 +321,18 @@ class Well(Fitting):
             raise ValueError(
                 "Well tubing_correlation must be 'beggs_brill', 'hagedorn_brown' or 'gray' "
                 f"(got {self.tubing_correlation!r})")
+        if math.isnan(self.wellbore_diameter_m):
+            object.__setattr__(self, "wellbore_diameter_m", max(0.2159, 1.5 * self.diameter_m))
+        if self.wellbore_diameter_m < self.diameter_m:
+            raise ValueError("Well wellbore_diameter_m cannot be smaller than the tubing diameter.")
+        if self.geothermal_gradient_k_per_m < 0.0:
+            raise ValueError("Well geothermal_gradient_k_per_m must be non-negative.")
+        if self.formation_conductivity_w_per_mk < 0.0:
+            raise ValueError("Well formation_conductivity_w_per_mk must be non-negative.")
+        if self.formation_diffusivity_m2_per_s <= 0.0 or self.production_time_days <= 0.0:
+            raise ValueError("Well formation_diffusivity_m2_per_s and production_time_days must be positive.")
+        if math.isnan(self.tubing_u_w_per_m2k) or self.tubing_u_w_per_m2k < 0.0:
+            raise ValueError("Well tubing_u_w_per_m2k must be non-negative (inf = no wellbore resistance).")
 
 
 @dataclass(frozen=True)
