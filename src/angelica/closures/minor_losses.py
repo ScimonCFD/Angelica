@@ -22,8 +22,8 @@ def _reject_well_inflow(link_state) -> None:
     comp = link_state.component
     if getattr(comp, "is_well_inflow", False) or getattr(comp, "is_well_model", False):
         raise ValueError(
-            "WellInflow / Well links need black-oil PVT: solve the case with "
-            "SteadyBlackOilSolver."
+            "WellInflow / Well links need a black-oil or compositional fluid: solve the "
+            "case with SteadyBlackOilSolver or SteadyCompositionalSolver."
         )
 
 

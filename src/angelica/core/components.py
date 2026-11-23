@@ -222,7 +222,9 @@ class WellInflow(Fitting):
     q_o = q_g/GOR for the back-pressure equation.  If P_wf > P_r the well
     takes injection by the same law (use a ``CheckValve`` to prevent it).
 
-    Requires ``SteadyBlackOilSolver``.  ``diameter_m`` is the tubing bore used
+    Requires ``SteadyBlackOilSolver`` or ``SteadyCompositionalSolver``; for
+    a compositional stream the standard volumes come from a flash to
+    standard conditions (``angelica.closures.well_fluid``).  ``diameter_m`` is the tubing bore used
     only to report a velocity.
     """
 
@@ -290,7 +292,10 @@ class Well(Fitting):
         annulus, casing, cement) referred to the tubing inner diameter;
         default inf = no wellbore resistance (formation conduction only)
 
-    Requires ``SteadyBlackOilSolver``.
+    Requires ``SteadyBlackOilSolver`` or ``SteadyCompositionalSolver``
+    (gas and gas-condensate wells; the fluid is flashed once on a PVT table
+    for the tubing, see ``angelica.closures.well_fluid``).  The solution's
+    ``well_states`` give each well's state (producing or why it is dead).
     """
 
     productivity_index_m3_per_day_per_bar: float = float("nan")

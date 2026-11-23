@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 
+from angelica.closures.choke import ChokeFlowModel
 from angelica.closures.convection_scheme import ConvectionScheme, HybridScheme
 from angelica.closures.pressure_drop import PressureDropCorrelation
 from angelica.core.case import NetworkCase
@@ -14,6 +15,7 @@ from angelica.properties.compositional_fluid import CompositionalFluid
 
 from .base import BaseSolver
 from .steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
+from .wells import WellNetworkMixin
 
 
 @dataclass
@@ -50,7 +52,7 @@ class CompositionalSolverSettings:
     pipe_enthalpy_terms: bool = True
 
 
-class SteadyCompositionalSolver(BaseSolver):
+class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
     """Steady-state compositional pipe network solver.
 
     Models fluid mixtures of arbitrary components using the ``thermo`` library
@@ -106,6 +108,9 @@ class SteadyCompositionalSolver(BaseSolver):
         self._hydraulic_solver = SteadyIsothermalIncompressibleSolver(
             settings=self.hydraulic_settings,
             turbulent_pipe_correlation=turbulent_pipe_correlation,
+            # K-factor fittings as before; also IPR (WellInflow) and IPR +
+            # tubing (Well) links with the compositional fluid.
+            fitting_correlation=ChokeFlowModel(),
         )
 
     # ── Composition propagation ───────────────────────────────────────────────
@@ -242,7 +247,8 @@ class SteadyCompositionalSolver(BaseSolver):
         except Exception:  # a report must never break a converged solve
             return None
 
-    def solve(self, case: NetworkCase, progress_callback=None) -> SolveResult:
+    def _solve_once(self, case: NetworkCase, progress_callback=None,
+                    latch_disabled: frozenset[str] = frozenset()) -> SolveResult:
         from angelica.numerics.energy import solve_energy_system
 
         if not isinstance(case.fluid_model, CompositionalFluid):
@@ -265,12 +271,14 @@ class SteadyCompositionalSolver(BaseSolver):
                 )
 
         network_state = build_network_state(case)
+        self._disable_well_latch(network_state, latch_disabled)
         settings = self.compositional_settings
 
-        # Fluid-aware correlations (Beggs-Brill) read phase properties from the fluid.
-        corr = self._hydraulic_solver.turbulent_pipe_correlation
-        if hasattr(corr, "set_fluid"):
-            corr.set_fluid(fluid)
+        # Fluid-aware correlations (Beggs-Brill, wells) read phase properties from the fluid.
+        for corr in (self._hydraulic_solver.turbulent_pipe_correlation,
+                     self._hydraulic_solver.fitting_correlation):
+            if hasattr(corr, "set_fluid"):
+                corr.set_fluid(fluid)
 
         # ── initialise thermal BCs ────────────────────────────────────────────
         for tb in case.thermal_inlets:
@@ -325,12 +333,9 @@ class SteadyCompositionalSolver(BaseSolver):
 
             old_densities = [fluid.density_for_link(link) for link in network_state.components]
 
-            lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
-                network_state, fluid, progress_callback=progress_callback
-            )
-            turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
-                network_state, fluid, progress_callback=progress_callback
-            )
+            lam_hist, lam_metrics, turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_pass(
+                network_state, fluid, progress_callback)
+            wells_started = self._start_wells(network_state, fluid)
             all_lam_hist.extend(lam_hist)
             all_lam_metrics.extend(lam_metrics)
             all_turb_hist.extend(turb_hist)
@@ -370,18 +375,14 @@ class SteadyCompositionalSolver(BaseSolver):
 
             temperature_converged = max_delta_t  < settings.temperature_tolerance_k
             density_converged     = max_rel_delta < settings.density_rel_tolerance
-            if temperature_converged and density_converged:
+            if temperature_converged and density_converged and not wells_started:
                 break
 
         # Final synchronous pass — always runs so that the reported flow field
         # and temperature field come from the same solve with the final compositions.
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
-        lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
-            network_state, fluid, progress_callback=progress_callback
-        )
-        turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_solver._solve_turbulent(
-            network_state, fluid, progress_callback=progress_callback
-        )
+        lam_hist, lam_metrics, turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_pass(
+            network_state, fluid, progress_callback)
         all_lam_hist.extend(lam_hist)
         all_lam_metrics.extend(lam_metrics)
         all_turb_hist.extend(turb_hist)
@@ -455,9 +456,12 @@ class SteadyCompositionalSolver(BaseSolver):
                 sum(m * zs[i] for m, zs in _arr) / _tot for i in range(_nc)
             )
 
+        well_states = self._well_states(network_state, fluid)
+        wells_settled = not any(ws.state == "unstable" for ws in well_states)
         return SolveResult(
             case_name=case.name,
-            converged=(hydraulic_converged and density_converged and temperature_converged),
+            converged=(hydraulic_converged and density_converged and temperature_converged
+                       and wells_settled),
             node_pressures_pa=node_pressures,
             node_temperatures_c=node_temperatures,
             component_flows=component_flows,
@@ -476,4 +480,5 @@ class SteadyCompositionalSolver(BaseSolver):
             component_names=fluid.component_names,
             component_mws=fluid.component_mws,
             node_compositions=node_compositions,
+            well_states=well_states,
         )

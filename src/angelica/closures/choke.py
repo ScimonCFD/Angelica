@@ -200,10 +200,10 @@ class ChokeFlowModel(MinorLossModel):
     """Device model of the black-oil solver.
 
     - ``Choke`` links: Sachdeva critical / subcritical two-phase flow;
-    - ``WellInflow`` links: linear or composite-Vogel IPR
-      (``angelica.closures.well_inflow``);
+    - ``WellInflow`` links: IPR (``angelica.closures.well_inflow``);
     - ``Well`` links: IPR + production tubing, stable branch of the
       deliverability curve (``angelica.closures.well_model``);
+    (wells take a black-oil or a compositional fluid);
     - everything else (ordinary fittings, check valves, orifice-model chokes,
       fluids without black-oil PVT): the K-factor equation of
       ``MinorLossModel``.
@@ -231,9 +231,11 @@ class ChokeFlowModel(MinorLossModel):
     def _well_fluid(self, link_state, flag: str = "is_well_inflow"):
         if not getattr(link_state.component, flag, False):
             return None
+        from angelica.properties.compositional_fluid import CompositionalFluid
+
         link_fluid = resolve_link_fluid(self._fluid, link_state)
-        if link_fluid is None or not hasattr(link_fluid, "pvt"):
-            raise ValueError("WellInflow (IPR) links need a black-oil fluid.")
+        if link_fluid is None or not (hasattr(link_fluid, "pvt") or isinstance(link_fluid, CompositionalFluid)):
+            raise ValueError("WellInflow and Well links need a black-oil or compositional fluid.")
         return link_fluid
 
     def calculate_velocity(self, link_state, delta_p, density, viscosity, tolerance=None) -> float:

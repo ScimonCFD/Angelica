@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.24.0] — 2026-11-23
+
+### New: wells with compositional fluids (roadmap 4.3)
+  - `Well` (IPR + tubing) and `WellInflow` (IPR) work in
+    `SteadyCompositionalSolver`: gas and gas-condensate wells with the
+    Peng-Robinson (or SRK) equation of state, the same IPR models (gas
+    back-pressure law for gas wells), Gray / Beggs-Brill / Hagedorn-Brown
+    tubing, Ramey heat loss, bistable-well logic and `well_states`.
+  - Standard volumes from a flash of the stream to standard conditions
+    (15.56 °C, 1 atm), with the Peneloux volume correction: the gas rate
+    of the back-pressure law and the condensate/oil rate of the other IPRs.
+    A dry gas with an oil-rate IPR is rejected with a clear message.
+  - The tubing uses a PVT table per well (about 900 flashes, 5–10 s, then
+    interpolated): wellhead pressure within 0.05 % and temperature within
+    0.01 K of a march that flashes at every step.
+  - The well's heat to the formation is taken from the EOS enthalpies at
+    both ends, so the network energy balance closes.
+  - GUI: Well and Well IPR available in compositional mode.
+
+### Changed
+  - The well models read the fluid through an adapter
+    (`angelica.closures.well_fluid`); `well_curve` and `well_tubing_state`
+    take an optional `link_state` (for the composition).  Black-oil results
+    unchanged.
+  - The bistable-well logic is shared by both solvers
+    (`angelica.solvers.wells.WellNetworkMixin`).
+
+### Tutorials
+  - New compositional 09: a gas well and a gas-condensate well into a
+    manifold — curves, network, tubing profile (liquid condensing as the
+    fluid climbs), and the condensate well dying first against a high
+    separator pressure.
+
+### Validation
+  - Consistency only: table vs direct flash, dry gas vs an independent
+    single-phase integration (0.045 %), standard-volume mass vs the
+    black-oil formula (0.1 %), first law, IPR-only link vs the formula.
+  - Recorded, not adjusted: for a volatile oil, black-oil and compositional
+    wellhead pressures differ by 2–22 % (ROADMAP log), mostly from the
+    untranslated EOS liquid density in the flow model and the different
+    bubble points.
+  - Not validated against a published gas-well example.
+
 ## [1.23.2] — 2026-11-23
 
 ### Fixed

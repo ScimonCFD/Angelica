@@ -670,26 +670,41 @@ def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState |
 
 def _well_thermal_state(dev, fluid_model, mdot, up_node, down_node, T_up, cp, P_up, P_down):
     """Wellhead thermal state of a producing ``Well`` link, or None when the
-    tubing model does not apply (back-flow, no black-oil fluid, rate not
+    tubing model does not apply (back-flow, unsupported fluid, rate not
     deliverable): the caller then passes the temperature through."""
     from angelica.closures.choke import resolve_link_fluid
+    from angelica.closures.well_fluid import well_fluid_for
     from angelica.closures.well_model import _GRAVITY, well_tubing_state
 
     link_fluid = resolve_link_fluid(fluid_model, dev)
-    if mdot <= 0.0 or link_fluid is None or not hasattr(link_fluid, "pvt"):
+    if mdot <= 0.0 or well_fluid_for(link_fluid, dev) is None:
         return None
     comp = dev.component
-    res = well_tubing_state(comp, link_fluid, float(P_up), float(T_up), float(mdot))
+    res = well_tubing_state(comp, link_fluid, float(P_up), float(T_up), float(mdot), link_state=dev)
     if res is None or res.wellhead_enthalpy_j_per_kg is None:
         return None
-    # Same enthalpy at the network's wellhead pressure (the march ends at its
-    # own, slightly different, wellhead pressure).
-    T_out = _temperature_from_enthalpy(fluid_model, dev, res.wellhead_enthalpy_j_per_kg, P_down,
-                                       res.wellhead_temperature_c)
+    potential_w = -mdot * _GRAVITY * float(comp.tubing_height_change_m)
+    wf = well_fluid_for(link_fluid, dev, comp, round(float(P_up), 0), round(float(T_up), 3))
+    if wf.exact_enthalpy:
+        # Same enthalpy at the network's wellhead pressure (the march ends at
+        # its own, slightly different, wellhead pressure).
+        T_out = _temperature_from_enthalpy(fluid_model, dev, res.wellhead_enthalpy_j_per_kg, P_down,
+                                           res.wellhead_temperature_c)
+        heat_loss_w = res.formation_heat_w
+    else:
+        # PVT-table fluid: the wellhead temperature from the table at the
+        # network's wellhead pressure; the heat given to the formation from
+        # the fluid's own enthalpy at both ends, so the network balance
+        # closes exactly: Q = ṁ·(h_in − h_out) − ṁ·g·Δz.
+        T_out = wf.temperature_from_h(res.wellhead_enthalpy_j_per_kg, float(P_down), res.wellhead_temperature_c)
+        h_in = fluid_enthalpy(fluid_model, dev, float(P_up), float(T_up))
+        h_out = fluid_enthalpy(fluid_model, dev, float(P_down), T_out)
+        if h_in is None or h_out is None:
+            return None
+        heat_loss_w = mdot * (h_in - h_out) + potential_w
     cp_out = _specific_heat_at(fluid_model, dev, P_down, T_out)
     return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_out, cp_out, "well",
-                              heat_loss_w=res.formation_heat_w,
-                              potential_w=-mdot * _GRAVITY * float(comp.tubing_height_change_m))
+                              heat_loss_w=heat_loss_w, potential_w=potential_w)
 
 
 def _temperature_from_enthalpy(fluid_model, link, h: float, P: float, T_guess: float) -> float:

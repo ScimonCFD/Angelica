@@ -49,8 +49,8 @@ import math
 from dataclasses import dataclass
 from functools import lru_cache
 
-from .beggs_brill import beggs_brill_gradient, phase_properties_from_pvt, surface_tension_from_pvt
-from .well_inflow import IPR, ipr_flowing_pressure, ipr_of, ipr_open_flow, mass_per_oil_sc_m3, mass_per_rate_unit
+from .beggs_brill import beggs_brill_gradient
+from .well_inflow import IPR, ipr_flowing_pressure, ipr_of, ipr_open_flow
 
 _PA_PER_BAR = 1.0e5
 _S_PER_DAY = 86_400.0
@@ -265,18 +265,20 @@ def integrate_tubing(
     return TubingResult(P, T, t_bh, q_form, h_end, tuple(profile))
 
 
-def _gradient_function(fluid, m_dot: float, D: float, L: float, dz: float, roughness: float,
+def _gradient_function(wf, m_dot: float, D: float, L: float, dz: float, roughness: float,
                        correlation: str):
-    """Total pressure gradient (Pa/m) of a black-oil fluid in the tubing."""
+    """Total pressure gradient (Pa/m) in the tubing; ``wf`` is a well-fluid
+    adapter (:mod:`angelica.closures.well_fluid`) or a black-oil fluid."""
     from .well_correlations import gray_gradient, hagedorn_brown_gradient
+    from .well_fluid import BlackOilWellFluid
 
+    if hasattr(wf, "pvt"):
+        wf = BlackOilWellFluid(wf)
     theta = math.asin(max(-1.0, min(1.0, dz / L)))
     area = math.pi * D * D / 4.0
 
     def gradient(P: float, T: float) -> float:
-        pvt = fluid.pvt(P, T)
-        C_L, rho_l, rho_g, mu_l, mu_g = phase_properties_from_pvt(pvt)
-        sigma = surface_tension_from_pvt(pvt, float(fluid.api_gravity))
+        C_L, rho_l, rho_g, mu_l, mu_g, sigma = wf.phase_properties(P, T)
         rho_ns = C_L * rho_l + (1.0 - C_L) * rho_g
         v_m = m_dot / (rho_ns * area)
         if correlation == "hagedorn_brown":
@@ -298,8 +300,9 @@ def tubing_wellhead_pressure(
     """Wellhead pressure of an *isothermal* tubing at temperature ``T``; None
     if the pressure falls below ~1.2 bar before the wellhead (rate not
     deliverable).  ``correlation``: "beggs_brill", "hagedorn_brown" or "gray".
-    The ``Well`` component uses :func:`well_tubing_state`, which also solves
-    the temperature."""
+    ``fluid``: a black-oil fluid or a well-fluid adapter.  The ``Well``
+    component uses :func:`well_tubing_state`, which also solves the
+    temperature."""
     res = integrate_tubing(p_wf, T, m_dot, D, L, dz, n_seg,
                            _gradient_function(fluid, m_dot, D, L, dz, roughness, correlation))
     return None if res is None else res.wellhead_pressure_pa
@@ -312,80 +315,52 @@ def _thermal_key(comp) -> tuple:
             float(comp.formation_diffusivity_m2_per_s), float(comp.production_time_days))
 
 
-def _black_oil_march(fluid, p_res: float, t_res: float, q_oil: float, ipr: IPR, p_b: float,
-                     m_per: float, D: float, L: float, dz: float, rough: float, n_seg: int,
-                     tubing_corr: str, thermal_key: tuple, exact: bool,
-                     keep_profile: bool = False) -> TubingResult | None:
-    """Bottom-hole state from the IPR, then the tubing march, for one oil rate."""
-    from angelica.properties.black_oil import _dh_dp, black_oil_enthalpy
-
-    q_ref = q_oil * m_per / mass_per_rate_unit(fluid, ipr)     # oil, or gas for back-pressure
+def _march(wf, p_res: float, t_res: float, q: float, ipr: IPR, p_b: float,
+           m_per: float, D: float, L: float, dz: float, rough: float, n_seg: int,
+           tubing_corr: str, thermal_key: tuple, exact: bool,
+           keep_profile: bool = False) -> TubingResult | None:
+    """Bottom-hole state from the IPR, then the tubing march, for one rate
+    ``q`` of the curve's base unit (``m_per`` kg per standard m³)."""
+    q_ref = q * m_per / wf.mass_per_rate(ipr)     # rate of the IPR's reference phase
     p_wf = ipr_flowing_pressure(ipr, q_ref, p_res, p_b)
     if p_wf <= _P_MIN_PA:
         return None
-    m_dot = q_oil * m_per / _S_PER_DAY
-    gradient = _gradient_function(fluid, m_dot, D, L, dz, rough, tubing_corr)
+    m_dot = q * m_per / _S_PER_DAY
+    gradient = _gradient_function(wf, m_dot, D, L, dz, rough, tubing_corr)
     if thermal_key[0] == "isothermal":
         return integrate_tubing(p_wf, t_res, m_dot, D, L, dz, n_seg, gradient, keep_profile=keep_profile)
     _, g_geo, d_wb, u_wb, k_e, alpha, days = thermal_key
-    params = fluid._pvt_params()
-
-    def dh_dp(P: float, T: float) -> float:
-        return _dh_dp(params, P, T)
-
-    def cp(P: float, T: float) -> float:
-        return fluid.pvt(P, T).mixture_specific_heat_j_per_kg_k
-
-    def enthalpy(P: float, T: float) -> float:
-        return black_oil_enthalpy(params, P, T)
-
-    def temperature_from_h(h: float, P: float, T0: float) -> float:
-        # two secant steps from the cp-based estimate (already within ~0.1 K)
-        h0 = enthalpy(P, T0)
-        T1 = T0 + (h - h0) / cp(P, T0)
-        if abs(T1 - T0) < 1e-6:
-            return T1
-        h1 = enthalpy(P, T1)
-        if h1 == h0:
-            return T1
-        T2 = T1 + (h - h1) * (T1 - T0) / (h1 - h0)
-        if abs(T2 - T1) < 1e-4:
-            return T2
-        h2 = enthalpy(P, T2)
-        return T2 if h2 == h1 else T2 + (h - h2) * (T2 - T1) / (h2 - h1)
 
     # isenthalpic inflow: h(P_wf, T_bh) = h(P_res, T_res)
     if exact:
-        t_bh = temperature_from_h(enthalpy(p_res, t_res), p_wf, t_res)
+        t_bh = wf.temperature_from_h(wf.enthalpy(p_res, t_res), p_wf, t_res)
     else:
         p_m = 0.5 * (p_res + p_wf)
-        t_bh = t_res + dh_dp(p_m, t_res) * (p_res - p_wf) / cp(p_m, t_res)
+        t_bh = t_res + wf.dh_dp(p_m, t_res) * (p_res - p_wf) / wf.cp(p_m, t_res)
     thermal = TubingThermal(
         formation_conductance_w_per_mk(D, d_wb, u_wb, k_e, alpha, days * _S_PER_DAY),
         g_geo * dz / L, t_res)
     return integrate_tubing(
-        p_wf, t_bh, m_dot, D, L, dz, n_seg, gradient, thermal, dh_dp, cp,
-        enthalpy if exact else None, temperature_from_h if exact else None,
+        p_wf, t_bh, m_dot, D, L, dz, n_seg, gradient, thermal, wf.dh_dp, wf.cp,
+        wf.enthalpy if exact else None, wf.temperature_from_h if exact else None,
         sync_every=5 if exact else 0, keep_profile=keep_profile)
 
 
-@lru_cache(maxsize=256)
-def _curve_cached(api, gg, gor, wor, corr, p_res, T, ipr, D, L, dz, rough, n_seg,
-                  tubing_corr="beggs_brill", thermal_key=("isothermal",), gas_cp=2_200.0,
-                  gas_k=0.035) -> WellCurve:
-    from angelica.properties.black_oil import BlackOilFluid
+def _bubble_point_for(wf, ipr: IPR, p_res: float, T: float) -> float:
+    return wf.bubble_point_pa(p_res, T) if ipr.uses_bubble_point else p_res
 
-    fluid = BlackOilFluid(api_gravity=api, gas_gravity=gg, gor_sc_m3_per_m3=gor,
-                          wor_sc_m3_per_m3=wor, correlation=corr,
-                          gas_specific_heat_j_per_kg_k=gas_cp, gas_thermal_conductivity_w_per_mk=gas_k)
-    p_b = fluid.pvt(p_res, T).bubble_point_pa if ipr.uses_bubble_point else p_res
-    m_per = mass_per_oil_sc_m3(fluid)
-    q_aof = ipr_open_flow(ipr, p_res, p_b) * mass_per_rate_unit(fluid, ipr) / m_per   # oil m³/d
+
+@lru_cache(maxsize=256)
+def _curve_cached(wf, p_res, T, ipr, D, L, dz, rough, n_seg, tubing_corr="beggs_brill",
+                  thermal_key=("isothermal",)) -> WellCurve:
+    p_b = _bubble_point_for(wf, ipr, p_res, T)
+    m_per = wf.mass_per_base_unit_for(ipr)
+    q_aof = ipr_open_flow(ipr, p_res, p_b) * wf.mass_per_rate(ipr) / m_per   # base units, m³/d
     rates, pressures = [], []
     for i in range(_N_RATES):
         q = q_aof * (i / (_N_RATES - 1)) ** 1.5   # denser near q = 0, where the peak lies
-        res = _black_oil_march(fluid, p_res, T, q, ipr, p_b, m_per, D, L, dz, rough, n_seg,
-                               tubing_corr, thermal_key, exact=False)
+        res = _march(wf, p_res, T, q, ipr, p_b, m_per, D, L, dz, rough, n_seg,
+                     tubing_corr, thermal_key, exact=False)
         if res is None:
             break
         rates.append(q)
@@ -396,52 +371,51 @@ def _curve_cached(api, gg, gor, wor, corr, p_res, T, ipr, D, L, dz, rough, n_seg
     return WellCurve(tuple(rates), tuple(pressures), m_per, peak)
 
 
-def _well_args(comp, fluid, p_res: float, T: float) -> tuple:
+def _well_args(comp, fluid, p_res: float, T: float, link_state=None) -> tuple:
+    from .well_fluid import well_fluid_for
+
+    p_res, T = round(float(p_res), 0), round(float(T), 3)
+    wf = well_fluid_for(fluid, link_state, comp, p_res, T)
+    if wf is None:
+        raise ValueError("Well links need a black-oil or compositional fluid.")
     return (
-        float(fluid.api_gravity), float(fluid.gas_gravity), float(fluid.gor_sc_m3_per_m3),
-        float(fluid.wor_sc_m3_per_m3), str(getattr(fluid, "correlation", "STANDING")),
-        round(float(p_res), 0), round(float(T), 3),
-        ipr_of(comp),
+        wf, p_res, T, ipr_of(comp),
         float(comp.diameter_m), float(comp.tubing_length_m), float(comp.tubing_height_change_m),
         float(comp.tubing_roughness_m), int(comp.tubing_segments),
         str(getattr(comp, "tubing_correlation", "beggs_brill")), _thermal_key(comp),
-        float(getattr(fluid, "gas_specific_heat_j_per_kg_k", 2_200.0)),
-        float(getattr(fluid, "gas_thermal_conductivity_w_per_mk", 0.035)),
     )
 
 
-def well_curve(comp, fluid, p_res: float, T: float) -> WellCurve:
-    """Deliverability curve of a ``Well`` component for a black-oil fluid."""
-    return _curve_cached(*_well_args(comp, fluid, p_res, T))
+def well_curve(comp, fluid, p_res: float, T: float, link_state=None) -> WellCurve:
+    """Deliverability curve of a ``Well`` component.  ``fluid``: black-oil,
+    or compositional (the composition is the link's, ``link_state.zs``, or
+    the fluid's default).  For a compositional well the curve's rates are
+    of the IPR's reference phase (gas for the back-pressure law)."""
+    return _curve_cached(*_well_args(comp, fluid, p_res, T, link_state))
 
 
 @lru_cache(maxsize=1024)
-def _tubing_state_cached(m_dot, keep_profile, api, gg, gor, wor, corr, p_res, T, ipr, D, L, dz,
-                         rough, n_seg, tubing_corr, thermal_key, gas_cp, gas_k) -> TubingResult | None:
-    from angelica.properties.black_oil import BlackOilFluid
-
-    fluid = BlackOilFluid(api_gravity=api, gas_gravity=gg, gor_sc_m3_per_m3=gor,
-                          wor_sc_m3_per_m3=wor, correlation=corr,
-                          gas_specific_heat_j_per_kg_k=gas_cp, gas_thermal_conductivity_w_per_mk=gas_k)
-    p_b = fluid.pvt(p_res, T).bubble_point_pa if ipr.uses_bubble_point else p_res
-    m_per = mass_per_oil_sc_m3(fluid)
-    return _black_oil_march(fluid, p_res, T, m_dot * _S_PER_DAY / m_per, ipr, p_b, m_per,
-                            D, L, dz, rough, n_seg, tubing_corr, thermal_key, exact=True,
-                            keep_profile=keep_profile)
+def _tubing_state_cached(m_dot, keep_profile, wf, p_res, T, ipr, D, L, dz, rough, n_seg,
+                         tubing_corr, thermal_key) -> TubingResult | None:
+    p_b = _bubble_point_for(wf, ipr, p_res, T)
+    m_per = wf.mass_per_base_unit_for(ipr)
+    return _march(wf, p_res, T, m_dot * _S_PER_DAY / m_per, ipr, p_b, m_per,
+                  D, L, dz, rough, n_seg, tubing_corr, thermal_key, exact=True,
+                  keep_profile=keep_profile)
 
 
 def well_tubing_state(comp, fluid, p_res: float, T: float, m_dot: float,
-                      keep_profile: bool = False) -> TubingResult | None:
+                      keep_profile: bool = False, link_state=None) -> TubingResult | None:
     """Tubing solution of a ``Well`` at mass rate ``m_dot`` (kg/s): wellhead
     pressure and temperature, bottom-hole temperature, heat given to the
     formation and (``keep_profile``) the profile (s, P, T, T_formation).
     None when the rate is not deliverable."""
     m_key = float(f"{m_dot:.7g}")
-    return _tubing_state_cached(m_key, bool(keep_profile), *_well_args(comp, fluid, p_res, T))
+    return _tubing_state_cached(m_key, bool(keep_profile), *_well_args(comp, fluid, p_res, T, link_state))
 
 
 def well_link_curve(link_state, fluid) -> WellCurve:
     T = link_state.start_node.temperature_c
     if T is None:
         T = getattr(fluid, "reference_temperature_c", 60.0)
-    return well_curve(link_state.component, fluid, float(link_state.start_node.pressure_pa), T)
+    return well_curve(link_state.component, fluid, float(link_state.start_node.pressure_pa), T, link_state)

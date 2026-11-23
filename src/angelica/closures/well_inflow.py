@@ -197,20 +197,35 @@ def mass_per_oil_sc_m3(fluid) -> float:
     return rho_o + fluid.gor_sc_m3_per_m3 * rho_g + fluid.wor_sc_m3_per_m3 * _WATER_DENSITY_SC
 
 
-def well_inflow_point(link_state, fluid) -> WellInflowPoint:
-    """Evaluate a WellInflow link at the current node pressures."""
+def _inflow_state(link_state, fluid):
+    """(IPR, P_res, P_wf, P_b, kg per reference m³, adapter) of a WellInflow link."""
+    from .well_fluid import well_fluid_for
+
     comp = link_state.component
     p_res = float(link_state.start_node.pressure_pa)
     p_wf = float(link_state.end_node.pressure_pa)
     T = link_state.start_node.temperature_c
     if T is None:
         T = getattr(fluid, "reference_temperature_c", 60.0)
+    wf = well_fluid_for(fluid, link_state)
+    if wf is None:
+        raise ValueError("WellInflow (IPR) links need a black-oil or compositional fluid.")
     ipr = ipr_of(comp)
-    p_b = fluid.pvt(p_res, T).bubble_point_pa if ipr.uses_bubble_point else p_res
+    p_b = wf.bubble_point_pa(p_res, T) if ipr.uses_bubble_point else p_res
+    return ipr, p_res, p_wf, p_b, wf.mass_per_rate(ipr), wf
+
+
+def well_inflow_point(link_state, fluid) -> WellInflowPoint:
+    """Evaluate a WellInflow link at the current node pressures.  For a
+    compositional gas stream without liquid at standard conditions the oil
+    rate is nan."""
+    ipr, p_res, p_wf, p_b, m_ref, wf = _inflow_state(link_state, fluid)
     q_ref = ipr_rate(ipr, p_res, p_wf, p_b)
-    m_ref = mass_per_rate_unit(fluid, ipr)
-    m_oil = mass_per_oil_sc_m3(fluid)
     m_dot = q_ref * m_ref / _S_PER_DAY
+    try:
+        m_oil = wf.mass_per_rate(IPR("linear", productivity_index=1.0))
+    except ValueError:
+        m_oil = float("nan")
     return WellInflowPoint(
         reservoir_pressure_pa=p_res,
         flowing_pressure_pa=p_wf,
@@ -223,13 +238,6 @@ def well_inflow_point(link_state, fluid) -> WellInflowPoint:
 
 def well_inflow_coupling(link_state, fluid) -> float:
     """dṁ/dP_wf (< 0) of a WellInflow link at the current node pressures."""
-    comp = link_state.component
-    p_res = float(link_state.start_node.pressure_pa)
-    p_wf = float(link_state.end_node.pressure_pa)
-    T = link_state.start_node.temperature_c
-    if T is None:
-        T = getattr(fluid, "reference_temperature_c", 60.0)
-    ipr = ipr_of(comp)
-    p_b = fluid.pvt(p_res, T).bubble_point_pa if ipr.uses_bubble_point else p_res
+    ipr, p_res, p_wf, p_b, m_ref, _wf = _inflow_state(link_state, fluid)
     dq = ipr_rate_derivative(ipr, p_res, p_wf, p_b)
-    return -max(dq * mass_per_rate_unit(fluid, ipr) / _S_PER_DAY, 1e-12)
+    return -max(dq * m_ref / _S_PER_DAY, 1e-12)

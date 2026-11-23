@@ -417,6 +417,24 @@ class GuiNewFeatureTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "ipr_coefficient"):
             build_network_case_from_scene(scene)
 
+    def test_well_in_compositional_mode(self):
+        """v1.24.0: a Well added in compositional mode reaches the case (it was
+        rejected as black-oil only)."""
+        from angelica.core.components import Pipe, Well
+        scene = self._scene("steady_compositional/08_hydrate_risk_subsea")
+        self.assertEqual(scene.physics_mode, "compositional")
+        link = scene.links[0]
+        link = scene.add_link_component(link.link_id, "well")
+        comp = link.components[-1]
+        scene.update_link_component_properties(link.link_id, comp.component_id, {
+            **comp.properties, "ipr_model": "backpressure", "ipr_coefficient": "150", "ipr_exponent": "0.8",
+            "tubing_length_m": "3000", "tubing_correlation": "gray"})
+        case = build_network_case_from_scene(scene)
+        well = next(c for c in case.components if isinstance(c, Well))
+        self.assertEqual((well.ipr_model, well.tubing_correlation), ("backpressure", "gray"))
+        self.assertAlmostEqual(well.tubing_height_change_m, 3000.0)      # blank rise = length
+        self.assertTrue(any(isinstance(c, Pipe) for c in case.components))
+
     def test_per_well_api_and_gas_gravity(self):
         case = build_network_case_from_scene(self._scene("steady_black_oil/06_gathering_network_elevation"))
         bcs = {bc.node_id: bc for bc in case.inlet_fluid_bcs}

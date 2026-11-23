@@ -507,9 +507,10 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                     )
                 )
             elif component.component_type == "well":
-                if not is_black_oil:
+                if not (is_black_oil or is_compositional):
                     raise ValueError(
-                        f"Connection #{link.link_id} has a Well (IPR + tubing), which needs black-oil mode."
+                        f"Connection #{link.link_id} has a Well (IPR + tubing), which needs black-oil "
+                        "or compositional mode."
                     )
                 tubing_length = _required_float(component, "tubing_length_m", link.link_id)
                 rise_text = component.properties.get("tubing_height_change_m", "").strip()
@@ -542,9 +543,9 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                     )
                 )
             elif component.component_type == "well_inflow":
-                if not is_black_oil:
+                if not (is_black_oil or is_compositional):
                     raise ValueError(
-                        f"Connection #{link.link_id} has a Well IPR, which needs black-oil mode."
+                        f"Connection #{link.link_id} has a Well IPR, which needs black-oil or compositional mode."
                     )
                 components.append(
                     WellInflow(

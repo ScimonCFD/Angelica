@@ -125,7 +125,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - 4.1 **Done in v1.22.0.** Tubing temperature profile (geothermal gradient + Ramey); the well
   delivers its wellhead temperature to the network.
 - 4.2 **Done in v1.23.0 (Jones not included — no accessible source).** IPR: Fetkovich, Jones, gas back-pressure.
-- 4.3 `Well` with compositional fluids (gas-condensate wells).
+- 4.3 **Done in v1.24.0.** `Well` with compositional fluids (gas-condensate wells).
 - 4.4 Gas lift: injection depth and rate in `Well`; deliverability vs
   injection rate tutorial.
 - Known limitations of the `Well` model (recorded in v1.23.1; fix when one
@@ -145,6 +145,13 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
     segments (Beggs-Brill flow-pattern discontinuities; also isothermal).
   - The tabulated curve (60 points, linear interpolation) errs up to 2.5 %
     in P_wh at the high-rate end.
+  - Compositional liquids flow with untranslated Peng-Robinson densities
+    (pre-existing in the compositional flow model; Peneloux is applied to
+    standard volumes and surface tension only).  Below 1 % for the
+    tutorial-09 condensate in the tubing; 12 % for an n-C16-rich
+    stock-tank oil.  A volume-translation option for the flow model would
+    change existing compositional results, so it would be opt-in: not done,
+    maintainer to decide.
 
 ### Stage 5 — equipment (items 13, 14, 15, 16)
 - 5.1 Separator node with gas / liquid (/ water) outlets.
@@ -539,3 +546,43 @@ Summary:
 - Verified: the five two-well cases of the review and the thin-flowline
   cases give the state the rule predicts; the bistable case where producing
   is consistent gives v1.23.1's rates unchanged.
+
+### 2026-11-23 — Item 4.3: compositional wells (v1.24.0)
+
+- One fluid adapter for the well models (`angelica.closures.well_fluid`):
+  black-oil wraps the existing correlations (all black-oil results
+  bit-identical, checked by regenerating every tutorial reference);
+  compositional uses a PVT table per well — a flash costs 10–15 ms and a
+  curve needs tens of thousands of evaluations (direct flashing: ~3 min per
+  curve; table: 5–10 s).
+- Table error, measured against a march flashing at every step: P_wh
+  0.05 %, T_wh 0.01 K.  A first, geometric-only pressure grid had 55 bar
+  between nodes at 250 bar and enthalpy errors up to 2.9 kJ/kg in dense gas
+  (P_wh 0.45 %, well heat 2.8 % off); now at most 10 bar between nodes.
+- Standard volumes from a flash to 15.56 °C, 1 atm with Peneloux-translated
+  phase volumes: untranslated PR made an n-C16-rich stock-tank oil 671
+  kg/m³ (translated 760; n-hexadecane is 773), overstating oil rates by
+  13 %.
+- Energy: a table fluid's well heat is taken from the EOS enthalpies at
+  both ends, so the network balance closes exactly; the independent check
+  is that it equals the table march's own heat (0.07 %).
+- The bistable-well logic moved to a mixin shared by both solvers
+  (`angelica.solvers.wells`); `WellInflow` also works with compositional
+  streams.
+- Black-oil vs compositional, same volatile oil (black-oil GOR, API and gas
+  gravity taken from the EOS stream's standard flash), linear IPR, 2 500 m
+  tubing: the mass per stock-tank m³ agrees to 0.1 %.  Wellhead pressures:
+  oil 1 (GOR 203, API 55) within 2–5 %; oil 2 (GOR 86, API 52) EOS 13–22 %
+  higher.  Causes: the EOS column is lighter (untranslated liquid density,
+  see the limitation above) and Standing's bubble point differs from the
+  EOS one (8.1 vs 10.7 MPa for oil 2).  Nothing adjusted.
+- Tutorial compositional 09 (gas and condensate wells).  GUI: the Well and
+  Well IPR buttons now appear in compositional mode; the dialog is the same.
+
+Summary:
+- Validated against data read in a source: none.
+- Validated by consistency: table vs direct flash; dry gas vs an
+  independent single-phase integration (0.045 %); standard-volume mass
+  against the black-oil formula (0.1 %); first law; IPR-only link
+  reproduces the back-pressure law.
+- Not validated: against a published gas-well example (none accessible).

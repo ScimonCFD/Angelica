@@ -3581,7 +3581,7 @@ class NetSimGui:
             ),
             width=12,
         ).pack(anchor="w", pady=4)
-        if self.scene.physics_mode == "black_oil":
+        if self.scene.physics_mode in ("black_oil", "compositional"):
             ttk.Button(
                 palette,
                 text="Well",
@@ -4881,7 +4881,8 @@ class NetSimGui:
                       "The fluid cools on the way up by heat loss to the formation (Ramey):\n"
                       "the wellhead node shows the flowing wellhead temperature.\n"
                       "The well is dead if the wellhead pressure exceeds the maximum of its\n"
-                      "deliverability curve; it never takes injection."),
+                      "deliverability curve; it never takes injection.\n"
+                      "Black-oil or compositional mode (gas wells: back-pressure IPR + Gray)."),
             )
             return
         if component.component_type == "well_inflow":
