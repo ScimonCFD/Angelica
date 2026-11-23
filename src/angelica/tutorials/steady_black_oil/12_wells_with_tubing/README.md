@@ -85,6 +85,35 @@ Thermal inputs of a `Well` (all optional): `geothermal_gradient_k_per_m`,
 `wellbore_diameter_m`, `tubing_u_w_per_m2k`.  Not validated against
 measured flowing temperatures.
 
+> **The default `tubing_u_w_per_m2k = inf` is a bound, not a best estimate.**
+> It means the tubing wall, annulus, casing and cement offer no resistance
+> to heat flow: only the rock limits it.  The heat loss is therefore an
+> upper bound and the wellhead temperatures above are lower bounds — the
+> real well arrives warmer.  Give the overall coefficient of the completion
+> (referred to the tubing inner diameter) when it is known; a gas- or
+> liquid-filled annulus typically lowers the heat loss substantially.
+
+### Back-pressure (Part F)
+
+Raising the separator pressure lifts the manifold:
+
+| Separator | Manifold | Well 1 oil | Well 2 oil |
+|---|---|---|---|
+| 1.5 MPa | 2.61 MPa | 548 m³/d | 160 m³/d |
+| 4.0 MPa | 4.38 MPa | 493 m³/d | 40 m³/d |
+| 6.0 MPa | 6.18 MPa | 415 m³/d | 0 |
+
+At 6 MPa the manifold is above Well 2's maximum wellhead pressure
+(5.29 MPa): Well 2 dies against the manifold, its flowline stagnates, and
+Well 1 carries all the production.
+
+A well whose curve peaks at a finite rate — a gassy well like Well 1, whose
+maximum is at 76 m³/d — cannot flow steadily below that rate.  If the
+network would hold its wellhead where it needs a smaller rate (alive, it
+raises the manifold above its peak; dead, the manifold falls below it),
+there is no steady state: the real well heads.  The solver then reports
+`converged False` rather than inventing a rate.
+
 The GUI file reproduces the 3.0 in case.
 
 ## Run

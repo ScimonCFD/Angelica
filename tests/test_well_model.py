@@ -27,6 +27,7 @@ from angelica.solvers import SteadyBlackOilSolver, SteadyIsothermalIncompressibl
 
 BAR = 1e5
 RICH = {"api_gravity": 40.0, "gas_gravity": 0.70, "gor_sc_m3_per_m3": 150.0, "wor_sc_m3_per_m3": 0.1}
+STAGNANT_KG_PER_S = 1e-5   # flow left in a stagnant pipe by the solver's pressure tolerance
 
 
 def _well(J=6.0, D=0.0762, L=2100.0, dz=2000.0, model="vogel", **kw) -> Well:
@@ -115,6 +116,79 @@ def test_dead_well_in_network_produces_nothing():
     res = SteadyBlackOilSolver().solve(_network(p_res=120 * BAR))   # static column > P_res − P_sep
     assert res.converged
     assert res.component_flows[0].mass_flow_kg_per_s == pytest.approx(0.0, abs=1e-9)
+
+
+@pytest.mark.parametrize("correlation", ["colebrook", "beggs_brill"])
+@pytest.mark.parametrize("p_sep_over_max", [1.01, 1.4, 1.3 * 220 / 85.5])   # last: above P_res
+def test_well_dead_by_back_pressure_converges(correlation, p_sep_over_max):
+    """v1.23.1.  The separator is above the maximum of the deliverability
+    curve, so the well cannot flow.  Before the fix the flowline, stagnant at
+    ΔP = 0, carried a phantom ρ·A·1e-6 kg/s (the iteration floor stored as
+    its velocity); with dense oil at the separator that exceeded the
+    'network at rest' threshold and the solve never converged."""
+    from angelica.closures import BeggsBrillCorrelation
+
+    p_res = 220 * BAR
+    p_max = well_curve(_well(), BlackOilFluid(**RICH), p_res, 85.0).max_wellhead_pressure_pa
+    assert p_max == pytest.approx(85.5 * BAR, rel=0.01)
+    p_sep = p_sep_over_max * p_max
+    solver = (SteadyBlackOilSolver(turbulent_pipe_correlation=BeggsBrillCorrelation())
+              if correlation == "beggs_brill" else SteadyBlackOilSolver())
+    case = _network(p_res=p_res, p_sep=p_sep)
+    res = solver.solve(case)
+    assert res.converged
+    well, flowline = res.component_flows
+    assert well.mass_flow_kg_per_s == 0.0
+    # The flowline carries the laminar flow of the residual ΔP the solver
+    # accepts (pressure tolerance 1e-3 Pa → ~1e-6 kg/s in 3 km of 4-in. pipe).
+    assert flowline.mass_flow_kg_per_s == pytest.approx(0.0, abs=STAGNANT_KG_PER_S)
+    assert res.node_pressures_pa[2] == pytest.approx(p_sep, abs=1.0)
+
+
+def _two_well_network(p_weak: float, p_sep: float) -> NetworkCase:
+    """A strong well (300 bar) and a weak one sharing a flowline to the separator."""
+    def flowline(a, b, L):
+        return Pipe(start_node=a, end_node=b, diameter_m=0.1016, length_m=L, absolute_roughness_m=4.6e-5)
+    weak = Well(start_node=4, end_node=5, diameter_m=0.0762, productivity_index_m3_per_day_per_bar=6.0,
+                tubing_length_m=2100.0, tubing_height_change_m=2000.0)
+    return NetworkCase(
+        name="two-wells",
+        fluid_model=BlackOilFluid(**RICH),
+        pressure_inlets=(PressureBoundary(node_id=1, pressure_pa=300 * BAR),
+                         PressureBoundary(node_id=4, pressure_pa=p_weak)),
+        pressure_outlets=(PressureBoundary(node_id=9, pressure_pa=p_sep),),
+        thermal_inlets=(ThermalBoundary(node_id=1, temperature_c=85.0, bc_type="fixed_temperature"),
+                        ThermalBoundary(node_id=4, temperature_c=85.0, bc_type="fixed_temperature")),
+        inlet_fluid_bcs=(InletFluidBC(node_id=1, **RICH), InletFluidBC(node_id=4, **RICH)),
+        components=(_well(), weak, flowline(2, 7, 1000.0), flowline(5, 7, 1000.0), flowline(7, 9, 8000.0)),
+    )
+
+
+def test_weak_well_dies_against_the_manifold_while_the_other_produces():
+    """The strong well holds the manifold at ~5.9 MPa, above the weak well's
+    maximum wellhead pressure (5.5 MPa): the weak well is dead, its flowline
+    stagnant, and all the oil comes from the strong well."""
+    res = SteadyBlackOilSolver().solve(_two_well_network(p_weak=180 * BAR, p_sep=30 * BAR))
+    assert res.converged
+    m_strong, m_weak, _l1, l2, trunk = (cf.mass_flow_kg_per_s for cf in res.component_flows)
+    p_max_weak = well_curve(_well(), BlackOilFluid(**RICH), 180 * BAR, 85.0).max_wellhead_pressure_pa
+    assert res.node_pressures_pa[5] > p_max_weak
+    assert m_weak == 0.0 and l2 == pytest.approx(0.0, abs=STAGNANT_KG_PER_S)
+    assert m_strong > 5.0
+    assert trunk == pytest.approx(m_strong, rel=1e-3)     # nodal tolerance of the solver
+    assert all(math.isfinite(t) and 0.0 < t < 100.0 for t in res.node_temperatures_c.values())
+
+
+def test_well_at_the_edge_of_its_stable_rate_does_not_crash():
+    """Known limitation, recorded in ROADMAP: the weak well can flow only at or
+    above the rate of its curve's peak (0.9 kg/s here), and with it flowing
+    the manifold rises above that peak.  There is no steady state (the well
+    would head); the solver reports converged=False.  Before v1.23.1 the
+    energy solve on the non-conserving flow field divided ~1 kg/s of inflow by
+    a 1e-9 kg/s outflow and raised OverflowError."""
+    res = SteadyBlackOilSolver().solve(_two_well_network(p_weak=180 * BAR, p_sep=15 * BAR))
+    assert not res.converged
+    assert all(math.isfinite(t) and 0.0 < t < 100.0 for t in res.node_temperatures_c.values())
 
 
 def test_well_rejected_outside_black_oil():

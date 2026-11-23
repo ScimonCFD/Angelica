@@ -74,6 +74,36 @@ class ColebrookFrictionTests(unittest.TestCase):
 
         self.assertTrue(math.isfinite(residual))
 
+    @staticmethod
+    def _stagnant_pipe() -> SimpleNamespace:
+        return SimpleNamespace(
+            velocity_m_per_s=0.0, reynolds=0.0, friction_factor=0.02,
+            area_m2=math.pi * 0.1016 ** 2 / 4.0,
+            component=SimpleNamespace(length_m=500.0, diameter_m=0.1016, height_change_m=0.0,
+                                      absolute_roughness_m=4.6e-5),
+        )
+
+    def test_stagnant_pipe_carries_no_phantom_flow(self) -> None:
+        """v1.23.1: the 1e-6 m/s floor of the iteration guesses used to be
+        stored as the pipe velocity, so a pipe behind a dead well carried
+        ±ρ·A·1e-6 kg/s and the network never converged.  At ΔP = 0 the
+        velocity is zero; at a tiny ΔP it is Hagen-Poiseuille's
+        v = D²·ΔP/(32·μ·L).  In the laminar range the fixed-point map gives
+        that value whatever the guess, so the agreement is to round-off
+        (checked to 6 decimals).  Solver defaults: tolerance 1e-4."""
+        corr = ColebrookPipeCorrelation()
+        rho, mu = 700.0, 1e-3
+        ps = self._stagnant_pipe()
+        self.assertEqual(abs(corr.calculate_velocity(ps, 0.0, rho, mu, tolerance=1e-4)), corr._MIN_STORED_VELOCITY)
+        for dp in (5e-4, -5e-4):
+            ps = self._stagnant_pipe()
+            v = corr.calculate_velocity(ps, dp, rho, mu, tolerance=1e-4)
+            v_hp = 0.1016 ** 2 * dp / (32.0 * mu * 500.0)
+            self.assertAlmostEqual(v / v_hp, 1.0, places=6)
+            # the coupling is the laminar one, independent of the velocity
+            c_lam = -2.0 * ps.area_m2 * 0.1016 / ((64.0 * mu / (rho * 0.1016)) * 500.0)
+            self.assertAlmostEqual(corr.calculate_coupling(ps, rho, mu) / c_lam, 1.0, places=6)
+
 
 class HazenWilliamsPipeCorrelationTests(unittest.TestCase):
     """Verify HazenWilliams velocity and coupling against hand-calculated values.

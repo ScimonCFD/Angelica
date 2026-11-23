@@ -137,6 +137,21 @@ def solve_energy_system(
 _SOURCE_RELAXATION = 0.5
 
 
+def _mixing_denominator(total_in: float, total_out: float) -> float:
+    """Σ ṁ·cp that divides the inflowing enthalpy in a junction's mixing
+    equation: the outflow, or the inflow at a sink.
+
+    The two sums differ in a converged network too (each link has its own
+    cp), so the outflow is kept whenever it is comparable to the inflow.  A
+    node whose outflow is below 1/1000 of its inflow — a ratio cp
+    differences between links cannot produce — is treated as a sink.  That
+    happens only on a flow field that does not conserve mass (e.g. a well
+    switching between dead and producing while the hydraulics have not
+    converged), where dividing ~1 kg/s of inflow by a ~1e-9 kg/s outflow
+    gave temperatures of 1e10 °C and an overflow (v1.23.1)."""
+    return total_out if total_out > 1e-3 * total_in else total_in
+
+
 def _has_enthalpy(fluid_model) -> bool:
     return hasattr(fluid_model, "enthalpy_for_link") or hasattr(fluid_model, "enthalpy_j_per_kg")
 
@@ -518,7 +533,7 @@ def _solve_energy_once(
                     add(row, row, 1.0)
                     rhs[row] = T_ref
                 else:
-                    denom = total_out if total_out > 1e-30 else total_in
+                    denom = _mixing_denominator(total_in, total_out)
                     add(row, row, -denom)
                     for col, weight in inflow[row]:
                         add(row, col, weight)
@@ -532,7 +547,7 @@ def _solve_energy_once(
                 add(row, row, 1.0)
                 rhs[row] = T_ref
             else:
-                denom = total_out if total_out > 1e-30 else total_in
+                denom = _mixing_denominator(total_in, total_out)
                 add(row, row, -denom)
                 for col, weight in inflow[row]:
                     add(row, col, weight)

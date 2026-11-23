@@ -42,7 +42,13 @@ which is at the reservoir temperature at the bottom and 0.03 K/m cooler
 towards the surface — here 25 °C at the wellhead of an 85 °C reservoir).
 The faster a well flows, the less time the fluid has to cool, so the
 wellhead temperature rises with the rate.  The network receives each well at
-its flowing wellhead temperature (Part E).
+its flowing wellhead temperature (Part E).  With the default
+``tubing_u_w_per_m2k = inf`` the annulus, casing and cement offer no
+resistance: the heat loss is an upper bound and the wellhead temperature a
+lower bound.
+
+Part F raises the separator pressure until one well dies against the
+manifold.
 """
 from __future__ import annotations
 
@@ -85,7 +91,8 @@ def make_well(i: int, tubing_id: float, correlation: str = "beggs_brill") -> Wel
                 tubing_correlation=correlation)
 
 
-def build_case(tubing_id: float = 0.0762, correlation: str = "beggs_brill") -> NetworkCase:
+def build_case(tubing_id: float = 0.0762, correlation: str = "beggs_brill",
+               p_sep: float = P_SEP) -> NetworkCase:
     components, inlets, thermal, fluids = [], [], [], []
     for i, (name, P_r, T, api, gg, gor, wor, _J, L) in enumerate(WELLS):
         res, wh = 10 * (i + 1), 10 * (i + 1) + 1
@@ -105,7 +112,7 @@ def build_case(tubing_id: float = 0.0762, correlation: str = "beggs_brill") -> N
         name=f"Wells with tubing ({tubing_id * 1000:.1f} mm ID)",
         fluid_model=well_fluid(*WELLS[1][3:7]),
         pressure_inlets=tuple(inlets),
-        pressure_outlets=(PressureBoundary(node_id=SEPARATOR, pressure_pa=P_SEP),),
+        pressure_outlets=(PressureBoundary(node_id=SEPARATOR, pressure_pa=p_sep),),
         thermal_inlets=tuple(thermal),
         inlet_fluid_bcs=tuple(fluids),
         components=tuple(components),
@@ -211,6 +218,25 @@ def run():
     print(f"  Network energy balance: wells and pipes lose {geb.heat_wall_loss_kw:.0f} kW, "
           f"lifting takes {-geb.potential_energy_kw:.0f} kW, residual {geb.energy_error_kw:+.3f} kW")
 
+    # ── Part F: back-pressure ─────────────────────────────────────────────────
+    print("\nPart F — separator pressure (back-pressure on the wells)")
+    print(f"  {'Separator':>10} {'Manifold':>9} {'Well 1':>8} {'Well 2':>8}   (oil, m³/d)")
+    last = None
+    for p_sep in (1.5e6, 4.0e6, 6.0e6):
+        res = solver.solve(build_case(0.0762, p_sep=p_sep))
+        rates = []
+        for i in (0, 1):
+            nm, P_r, T, api, gg, gor, wor, _J, _L = WELLS[i]
+            m = next(cf.mass_flow_kg_per_s for cf in res.component_flows
+                     if cf.label.endswith(f"well_{nm.replace(' ', '')}"))
+            rates.append(max(m, 0.0) * 86_400.0 / well_curve(make_well(i, 0.0762), well_fluid(api, gg, gor, wor),
+                                                            P_r * 1e6, T).mass_per_oil_sc_m3)
+        print(f"  {p_sep / 1e6:>6.1f} MPa {res.node_pressures_pa[MANIFOLD] / 1e6:>5.2f} MPa "
+              f"{rates[0]:>8.1f} {rates[1]:>8.1f}   converged {res.converged}")
+        last = res
+    print("  At 6 MPa:")
+    well_table(last, 0.0762)
+
     print()
     print("  • Well 3's static oil-and-water column (25 °API, WOR 0.8, 2 000 m) weighs")
     print("    more than its reservoir pressure: it cannot flow without artificial lift.")
@@ -223,6 +249,13 @@ def run():
     print("    wax and hydrate margins all start from it.")
     print("  • Hagedorn-Brown suits oil wells, Gray gas and gas-condensate wells; the")
     print("    spread between correlations is part of the uncertainty of any well model.")
+    print("  • Raising the separator pressure lifts the manifold above Well 2's maximum")
+    print("    wellhead pressure: Well 2 dies against the manifold while Well 1, with")
+    print("    more reservoir pressure and gas, keeps producing.")
+    print("  • A well whose curve peaks at a finite rate (a gassy well like Well 1) cannot")
+    print("    flow below that rate.  If the manifold sits where that well would need a")
+    print("    smaller rate, there is no steady state (the well heads); the solver then")
+    print("    reports converged False instead of inventing a rate.")
 
 
 if __name__ == "__main__":

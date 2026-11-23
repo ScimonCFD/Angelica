@@ -128,6 +128,17 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - 4.3 `Well` with compositional fluids (gas-condensate wells).
 - 4.4 Gas lift: injection depth and rate in `Well`; deliverability vs
   injection rate tutorial.
+- Known limitations of the `Well` model (recorded in v1.23.1; fix when one
+  gets in the way):
+  - No steady state below the minimum stable rate.  A well whose
+    deliverability curve peaks at q > 0 can flow only at or above that
+    rate; if the network needs less, the solver reports converged=False
+    (the real well heads).  Options, not decided: report it as a named
+    state ("unstable"), or a time-averaged closure.
+  - P_wh varies ±0.3 % non-monotonically with the number of tubing
+    segments (Beggs-Brill flow-pattern discontinuities; also isothermal).
+  - The tabulated curve (60 points, linear interpolation) errs up to 2.5 %
+    in P_wh at the high-rate end.
 
 ### Stage 5 — equipment (items 13, 14, 15, 16)
 - 5.1 Separator node with gas / liquid (/ water) outlets.
@@ -454,3 +465,34 @@ Summary:
   conversion, solver vs formula, back-pressure law inside a `Well`.
 - Not validated: against a multirate-test worked example (Fetkovich 1973,
   Beggs's examples) — the maintainer could supply one.
+
+### 2026-11-23 — Fix: well dead by back-pressure (v1.23.1)
+
+- Found by an independent review of v1.21.3–v1.23.0: a `Well` whose
+  wellhead is held above the maximum of its curve (high separator or
+  manifold pressure) gave the right answer (no flow) with converged=False.
+- Cause: `ColebrookPipeCorrelation._assign_pipe_state` stored the 1e-6 m/s
+  floor of the iteration guesses as the pipe velocity.  The stagnant
+  flowline carried ±ρ·A·1e-6 kg/s, flipping sign each iteration; with dense
+  oil (~4e-6 kg/s) that exceeded the solver's 'network at rest' threshold
+  (1e-6 kg/s).  The other dead-well case (column heavier than P_r) converged
+  only because the gassy fluid at 1.5 MPa was light enough to stay below it.
+  Fix: store the solved velocity (Hagen-Poiseuille as ΔP → 0); the
+  coupling stays the laminar one.  No tutorial result changed.
+- Found on the way: in a two-well network with the weak well at the edge of
+  its stable rate the energy solve raised OverflowError (1e10 °C at a node
+  receiving ~1 kg/s and passing on 1e-9 kg/s on a non-converged flow field).
+  Fix: such a node (outflow < 1/1000 of inflow) is mixed as a sink.  A first
+  attempt (denominator max(in, out)) changed every tutorial by up to 3.7 K —
+  in and out are Σ ṁ·cp with each link's own cp and differ in a converged
+  network — and was discarded.  The case itself has no steady state (see
+  the Stage 4 limitations).
+- Tutorial 12: Part F (separator pressure; Well 2 dies against the
+  manifold); README states that the default `tubing_u_w_per_m2k = inf` is
+  an upper bound on the heat loss.
+
+Summary:
+- Validated against data read in a source: none (numerical fix).
+- Verified: stagnant pipe velocity equals Hagen-Poiseuille to round-off;
+  dead-well cases converge with Colebrook and Beggs-Brill flowlines; new
+  tests fail on v1.23.0 and pass now.

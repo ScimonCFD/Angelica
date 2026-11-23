@@ -117,6 +117,9 @@ class LaminarPipeCorrelation(PressureDropCorrelation):
 
 
 class ColebrookPipeCorrelation(PressureDropCorrelation):
+    # Smallest stored |velocity| (m/s); equals the floor of calculate_coupling.
+    _MIN_STORED_VELOCITY = 1e-12
+
     def calculate_velocity(
         self,
         pipe_state,
@@ -302,10 +305,17 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
         friction_factor_max_iterations: int,
         laminar_turbulent_transition_re: float = 2300.0,
     ) -> None:
-        safe_velocity = self._safe_velocity_guess(velocity)
+        # Store the solved velocity, not the 1e-6 m/s floor used for the
+        # iteration guesses: a stagnant pipe (ΔP ≈ 0, e.g. behind a dead well)
+        # would otherwise carry a phantom ±ρ·A·1e-6 kg/s whose sign flips
+        # every iteration.  The friction factor is evaluated at the same
+        # velocity (floored only to keep Re > 0), so the coupling f·|v| stays
+        # the laminar 64·μ/(ρ·D) as v → 0.
+        stored_velocity = velocity if abs(velocity) >= self._MIN_STORED_VELOCITY else (
+            self._MIN_STORED_VELOCITY if velocity >= 0.0 else -self._MIN_STORED_VELOCITY)
         friction_factor, reynolds = self._friction_factor_for_velocity(
             pipe_state,
-            safe_velocity,
+            stored_velocity,
             density,
             viscosity,
             tolerance,
@@ -314,7 +324,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
             friction_factor_max_iterations,
             laminar_turbulent_transition_re,
         )
-        pipe_state.velocity_m_per_s = safe_velocity
+        pipe_state.velocity_m_per_s = stored_velocity
         pipe_state.reynolds = reynolds
         pipe_state.friction_factor = friction_factor
 

@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.23.1] — 2026-11-23
+
+### Fixed
+  - **A well dead by back-pressure did not converge.**  When the separator
+    or manifold held a `Well`'s wellhead above the maximum of its
+    deliverability curve, the solver returned the right answer (no flow)
+    with `converged=False`.  The Colebrook pipe model stored the 1e-6 m/s
+    floor of its iteration guesses as the velocity of a stagnant pipe, so
+    the dead well's flowline carried a phantom ±ρ·A·1e-6 kg/s whose sign
+    flipped every iteration.  A stagnant pipe now gets its laminar
+    (Hagen-Poiseuille) velocity.  No tutorial result changes.
+  - **OverflowError in the energy solve** of a network whose flow field did
+    not conserve mass (a well switching between dead and producing): a node
+    receiving ~1 kg/s and passing on ~1e-9 kg/s reached 1e10 °C.  A node
+    whose outflow is below 1/1000 of its inflow is now mixed as a sink.
+
+### Known limitation (documented)
+  - A well whose deliverability curve peaks at a finite rate cannot flow
+    below that rate.  If the network would hold it where it needs a smaller
+    rate there is no steady state (the real well heads) and the solver
+    reports `converged=False`.  Recorded in ROADMAP (stage 4).
+
+### Tutorials
+  - Black-oil 12: new Part F, separator pressure raised until Well 2 dies
+    against the manifold.  Parts A–E unchanged.  The README now stresses
+    that the default `tubing_u_w_per_m2k = inf` (no annulus resistance)
+    gives an upper bound on the heat loss and a lower bound on the wellhead
+    temperature.
+
 ## [1.23.0] — 2026-11-23
 
 ### New: Fetkovich and gas back-pressure IPR (roadmap 4.2)

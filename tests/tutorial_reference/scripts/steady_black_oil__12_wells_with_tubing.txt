@@ -51,6 +51,19 @@ Part E — tubing temperature of Well 1 at its operating rate
      6.70 kg/s →  70.4 °C
   Network energy balance: wells and pipes lose 966 kW, lifting takes 175 kW, residual -0.002 kW
 
+Part F — separator pressure (back-pressure on the wells)
+   Separator  Manifold   Well 1   Well 2   (oil, m³/d)
+     1.5 MPa  2.61 MPa    548.2    159.9   converged True
+     4.0 MPa  4.38 MPa    492.9     40.3   converged True
+     6.0 MPa  6.18 MPa    415.1      0.0   converged True
+  At 6 MPa:
+  Well       P_wh    P_wf       ṁ   q_oil   T_wh  State
+            (MPa)   (MPa)  (kg/s)  (m³/d)   (°C)
+  Well 1    6.649   17.89   5.071   415.1   67.4  producing
+  Well 2    6.177       —   0.000     0.0      —  dead: needs P_wh < 5.29 MPa
+  Well 3    6.177       —   0.000     0.0      —  dead: column heavier than P_r
+  Manifold 6.177 MPa  ·  oil 415.1 m³/d  ·  converged True
+
   • Well 3's static oil-and-water column (25 °API, WOR 0.8, 2 000 m) weighs
     more than its reservoir pressure: it cannot flow without artificial lift.
   • Larger tubing reduces friction in the high-rate wells; the Well model
@@ -62,3 +75,10 @@ Part E — tubing temperature of Well 1 at its operating rate
     wax and hydrate margins all start from it.
   • Hagedorn-Brown suits oil wells, Gray gas and gas-condensate wells; the
     spread between correlations is part of the uncertainty of any well model.
+  • Raising the separator pressure lifts the manifold above Well 2's maximum
+    wellhead pressure: Well 2 dies against the manifold while Well 1, with
+    more reservoir pressure and gas, keeps producing.
+  • A well whose curve peaks at a finite rate (a gassy well like Well 1) cannot
+    flow below that rate.  If the manifold sits where that well would need a
+    smaller rate, there is no steady state (the well heads); the solver then
+    reports converged False instead of inventing a rate.
