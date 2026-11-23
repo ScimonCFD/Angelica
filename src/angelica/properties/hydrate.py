@@ -192,49 +192,94 @@ def _dry_basis(component_names, zs):
     return names, tuple(x / s for x in z)
 
 
-@lru_cache(maxsize=4096)
-def _formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: float, eos_name: str):
+def _solve_formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: float, eos_name: str,
+                              p_guess: float | None = None):
+    """(P_eq, structure) with the lowest formation pressure, or None.
+
+    With ``p_guess`` (e.g. the previous point of a curve) the root is
+    bracketed by ×1.25 steps around it; otherwise by stepping up from 0.2 bar
+    (at very high pressure the Δv·P term can make the empty lattice stable
+    again, so the ends of the range may share a sign).  Regula falsi
+    (Illinois) refines the bracket to 1e-5 in ln P.
+    """
     from .compositional_fluid import _get_flash_obj
     cas = _get_flash_obj(names, eos_name).constants.CASs
     if not any(c in HYDRATE_FORMER_CAS and z > 0.0 for c, z in zip(cas, zs)):
         return None
+    ln_lo_lim, ln_hi_lim = math.log(2e4), math.log(1.5e8)
+    step = math.log(1.25)
     best = None
-    for si, st in enumerate(STRUCTURES):
-        def F(lnP: float) -> float:
+    sii_formers = {"74-98-6", "75-28-5", "106-97-8"}          # propane, butanes: sII only
+    order = (1, 0) if any(c in sii_formers and z > 0.0 for c, z in zip(cas, zs)) else (0, 1)
+    for si in order:
+        st = STRUCTURES[si]
+
+        def F(lnP: float, st=st, si=si) -> float:
             P = math.exp(lnP)
             fug = _former_fugacities(names, zs, T, P, eos_name)
             return _dmu_water_liquid(st, T, P, water_mole_fraction(T, fug)) - _dmu_water_hydrate(si, T, fug)
 
-        # Step up in ln P (×1.25) until the first sign change: at very high
-        # pressure the Δv·P term can make the empty lattice stable again, so
-        # the ends of the range may share a sign.
-        step = math.log(1.25)
-        a = math.log(2e4)
-        f_a = F(a)
+        if best is not None and F(math.log(best[0])) > 0.0:
+            continue                          # not stable at the other structure's pressure
         bracket = None
-        while a < math.log(1.5e8):
-            b = a + step
-            f_b = F(b)
-            if f_a > 0.0 >= f_b:
-                bracket = (a, b, f_a, f_b)
-                break
-            a, f_a = b, f_b
+        guess = best[0] if best is not None else p_guess
+        if guess is not None:
+            a = min(max(math.log(guess), ln_lo_lim), ln_hi_lim)
+            f_a = F(a)
+            if f_a > 0.0:                      # below the root: step up
+                while a < ln_hi_lim and bracket is None:
+                    b = a + step
+                    f_b = F(b)
+                    if f_b <= 0.0:
+                        bracket = (a, b, f_a, f_b)
+                    a, f_a = b, f_b
+            else:                              # above the root: step down
+                b, f_b = a, f_a
+                while b > ln_lo_lim and bracket is None:
+                    a = b - step
+                    f_a = F(a)
+                    if f_a > 0.0:
+                        bracket = (a, b, f_a, f_b)
+                    b, f_b = a, f_a
+        if bracket is None:
+            a = ln_lo_lim
+            f_a = F(a)
+            while a < ln_hi_lim:
+                b = a + step
+                f_b = F(b)
+                if f_a > 0.0 >= f_b:
+                    bracket = (a, b, f_a, f_b)
+                    break
+                a, f_a = b, f_b
         if bracket is None:
             continue                          # this structure does not form in range
-        lo, hi, f_lo, _f_hi = bracket
+        lo, hi, f_lo, f_hi = bracket
+        side = 0
+        x = 0.5 * (lo + hi)
         for _ in range(60):
-            mid = 0.5 * (lo + hi)
-            f_mid = F(mid)
-            if f_lo * f_mid <= 0.0:
-                hi = mid
-            else:
-                lo, f_lo = mid, f_mid
-            if hi - lo < 1e-6:
+            x = hi - f_hi * (hi - lo) / (f_hi - f_lo) if f_hi != f_lo else 0.5 * (lo + hi)
+            fx = F(x)
+            if abs(fx) < 1e-12 or hi - lo < 1e-5:
                 break
-        P_eq = math.exp(0.5 * (lo + hi))
+            if fx > 0.0:
+                lo, f_lo = x, fx
+                if side == 1:
+                    f_hi *= 0.5
+                side = 1
+            else:
+                hi, f_hi = x, fx
+                if side == -1:
+                    f_lo *= 0.5
+                side = -1
+        P_eq = math.exp(x)
         if best is None or P_eq < best[0]:
             best = (P_eq, st.name)
     return best
+
+
+@lru_cache(maxsize=4096)
+def _formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: float, eos_name: str):
+    return _solve_formation_pressure(names, zs, T, eos_name)
 
 
 def hydrate_formation_pressure(component_names, zs, temperature_c: float, eos_name: str = "PR") -> HydratePoint | None:
@@ -310,14 +355,24 @@ def hydrate_formation_temperature(component_names, zs, pressure_pa: float, eos_n
 
 
 def hydrate_curve(component_names, zs, t_min_c: float = 0.0, t_max_c: float = 30.0,
-                  n: int = 31, eos_name: str = "PR") -> list[HydratePoint]:
-    """Formation curve: points (T, P_formation, structure) from t_min to t_max."""
-    pts = []
+                  n: int = 31, eos_name: str = "PR", p_max_pa: float = 1.0e8) -> list[HydratePoint]:
+    """Formation curve: points (T, P_formation, structure) from t_min to t_max,
+    stopping after the first point above ``p_max_pa`` (the curve is steep, and
+    points far above a plot's range only cost time).  Each point starts its
+    search from the previous one (warm start)."""
+    names, z = _dry_basis(component_names, zs)
+    z_r = tuple(round(x, 8) for x in z)
+    pts: list[HydratePoint] = []
+    guess = None
     for i in range(n):
         T = t_min_c + (t_max_c - t_min_c) * i / max(n - 1, 1)
-        p = hydrate_formation_pressure(component_names, zs, T, eos_name)
-        if p is not None and p.pressure_pa < 1.0e8:
-            pts.append(p)
+        res = _solve_formation_pressure(names, z_r, max(T, 0.0) + 273.15, eos_name.upper(), guess)
+        if res is None:
+            continue
+        guess = res[0]
+        pts.append(HydratePoint(T, res[0], res[1]))
+        if res[0] > p_max_pa:
+            break
     return pts
 
 

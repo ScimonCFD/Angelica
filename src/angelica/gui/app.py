@@ -4043,12 +4043,18 @@ class NetSimGui:
             s = sum(zs_dry)
             zs = tuple(z / s for z in zs_dry) if s > 0 else zs_dry
 
+        prefix = f"link_{link.link_id}_"
+        free_water = any(
+            getattr(cf, "free_water_fraction", 0.0) > 0.0
+            for cf in self.latest_result.component_flows if prefix in cf.label
+        )
         self._open_phase_envelope_dialog(
             title=f"Phase Envelope — Connection #{link.link_id}",
             component_names=names,
             zs=zs,
             op_points=op_pts,
             eos_name=eos_name,
+            free_water=free_water,
         )
 
     def _open_phase_envelope_dialog(
@@ -4058,6 +4064,7 @@ class NetSimGui:
         zs: "tuple[float, ...]",
         op_points: "list[tuple[float, float]] | None" = None,
         eos_name: str = "PR",
+        free_water: "bool | None" = None,
     ) -> None:
         win = tk.Toplevel(self.root)
         win.title(title)
@@ -4119,6 +4126,7 @@ class NetSimGui:
                 plot_canvas, bubble, dew, Tc, Pc,
                 component_names, zs, op_points, quality_lines,
                 hydrate_pts=result_holder.get("hydrate", []) if hyd_var.get() else [],
+                hydrate_free_water=free_water,
             )
 
         def _save_image() -> None:
@@ -4242,8 +4250,12 @@ class NetSimGui:
             def _compute_hydrate() -> None:
                 try:
                     from angelica.properties.hydrate import hydrate_curve
+                    env_p = [p for _t, p in result_holder.get("bubble", []) + result_holder.get("dew", [])]
+                    op_p = [p for _t, p in (op_points or [])]
+                    p_top = 1.3 * max(env_p + op_p + [1.0e6])      # just above the plot's range
                     pts = [(pt.temperature_c + 273.15, pt.pressure_pa)
-                           for pt in hydrate_curve(component_names, zs, 0.0, 35.0, 22, eos_name=eos_name)]
+                           for pt in hydrate_curve(component_names, zs, 0.0, 40.0, 21, eos_name=eos_name,
+                                                   p_max_pa=p_top)]
                 except Exception:
                     pts = []
                 result_holder["hydrate"] = pts
@@ -4320,6 +4332,7 @@ class NetSimGui:
         op_points: "list[tuple[float, float]] | None" = None,
         quality_lines: "list | None" = None,
         hydrate_pts: "list[tuple[float, float]] | None" = None,
+        hydrate_free_water: "bool | None" = None,
     ) -> None:
         canvas.delete("all")
         W = int(canvas.winfo_width() or 700)
@@ -4462,19 +4475,30 @@ class NetSimGui:
         # Operating points (link inlet / outlet), single- or two-phase alike
         op_color = "#e69c00"
         op_labels = ["Inlet", "Outlet"]
+        xs_op = [_cx(t) for t, _p in op_C]
         for idx, (T_op, P_op) in enumerate(op_C):
             lbl = op_labels[idx] if idx < len(op_labels) else f"Pt{idx + 1}"
             xp, yp = _cx(T_op), _cy(P_op)
             r = 5
             canvas.create_oval(xp - r, yp - r, xp + r, yp + r,
                                fill=op_color, outline=self._t["plot_axis"])
-            # Label to the left when the point sits near the right border
-            right_side = xp < ML + plot_w - 150
-            canvas.create_text(xp + 8 if right_side else xp - 8,
-                               yp + (-8 if idx == 0 else 8),
-                               anchor="w" if right_side else "e",
-                               text=f"{lbl.lower()} {T_op:.1f} °C, {P_op:.1f} bar",
-                               font=("TkDefaultFont", 8), fill=op_color)
+            # Put the label on the side away from the other point (so it does
+            # not run over it), unless that side has no room in the plot.
+            # (centred above / below the point when that side has no room).
+            others = [x for j, x in enumerate(xs_op) if j != idx]
+            right_side = not others or all(x <= xp for x in others)
+            room = (ML + plot_w - xp) if right_side else (xp - ML)
+            text = f"{lbl.lower()} {T_op:.1f} °C, {P_op:.1f} bar"
+            if room > 150:
+                canvas.create_text(xp + 8 if right_side else xp - 8,
+                                   yp + (-8 if idx == 0 else 8),
+                                   anchor="w" if right_side else "e",
+                                   text=text, font=("TkDefaultFont", 8), fill=op_color)
+            else:
+                x_c = min(max(xp, ML + 80), ML + plot_w - 80)
+                canvas.create_text(x_c, yp - 9 if idx == 0 else yp + 9,
+                                   anchor="s" if idx == 0 else "n",
+                                   text=text, font=("TkDefaultFont", 8), fill=op_color)
 
         # Quality lines (constant vapor fraction)
         ql_color = "#5aaa6a"
@@ -4500,7 +4524,11 @@ class NetSimGui:
                 )
 
         # Hydrate formation curve (water assumed present), clipped to the axes
-        hyd_color = "#8e44ad"
+        # Solid when the link carries free water; dashed grey when it does not
+        # (hydrate cannot form there — the curve is shown for reference only).
+        dry = hydrate_free_water is False
+        hyd_color = "#9a8fa3" if dry else "#8e44ad"
+        hyd_dash = (5, 4) if dry else ()
         hyd_drawn = False
         if hydrate_pts and len(hydrate_pts) >= 2:
             pts_c = [(_to_C(t), _to_bar(p)) for t, p in hydrate_pts]
@@ -4512,13 +4540,15 @@ class NetSimGui:
                     p2 = P_max_d
                 if t1 < T_min_d or t2 > T_max_d:
                     continue
-                canvas.create_line(_cx(t1), _cy(p1), _cx(t2), _cy(p2), fill=hyd_color, width=2.5)
+                canvas.create_line(_cx(t1), _cy(p1), _cx(t2), _cy(p2), fill=hyd_color, width=2.5,
+                                   dash=hyd_dash)
                 hyd_drawn = True
 
         # Legend
         legend: list[tuple[str, str, "tuple | None"]] = []
         if hyd_drawn:
-            legend.append(("Hydrate curve (free water)", hyd_color, ()))
+            legend.append(("Hydrate curve (no free water in this link)" if dry
+                           else "Hydrate curve (free water)", hyd_color, hyd_dash))
         if bubble_pts:
             legend.append(("Bubble curve", bubble_color, ()))
         if dew_pts:

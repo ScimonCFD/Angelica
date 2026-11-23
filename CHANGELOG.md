@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.21.2] — 2026-11-23
+
+### Fixed (phase-envelope window)
+  - **Hydrate curve on a dry link.**  The curve assumes free water; on a link
+    that carries none (e.g. the lean-gas pipes of compositional tutorial 06)
+    it was drawn exactly like on a wet link, contradicting the canvas, which
+    correctly shows no hydrate risk there.  It is now drawn dashed grey with
+    the legend "Hydrate curve (no free water in this link)".
+  - **Hydrate curve speed.**  Each point started its pressure search at
+    0.2 bar and bisected to 1e-6; points now start from the previous one
+    (warm start), use regula falsi, solve only the structure that forms
+    first, and the curve stops just above the plot's pressure range.
+    Lean natural gas: about 6 s → 0.6 s.
+  - Operating-point labels are placed away from the other point (or
+    centred above/below it near the plot border), so the inlet and outlet
+    labels no longer run over each other's markers.
+
 ## [1.21.1] — 2026-11-23
 
   - Phase-envelope window: the hydrate curve is now optional.  It is drawn
