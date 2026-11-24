@@ -29,6 +29,7 @@ from angelica.core.components import (
     HeatSource,
     Pipe,
     Pump,
+    SeparatorOutlet,
     Well,
     WellInflow,
 )
@@ -546,6 +547,21 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                                           component.properties.get("gas_lift_zs", "").replace(";", ",").split(",")
                                           if z.strip()),
                         component_id=f"link_{link.link_id}_well_{component.component_id}",
+                    )
+                )
+            elif component.component_type == "separator_outlet":
+                if not (is_black_oil or is_compositional):
+                    raise ValueError(
+                        f"Connection #{link.link_id} has a separator outlet, which needs black-oil or "
+                        "compositional mode."
+                    )
+                components.append(
+                    SeparatorOutlet(
+                        start_node=current_start,
+                        end_node=current_end,
+                        diameter_m=_optional_float(component, "diameter_m", default=0.0762),
+                        phase=component.properties.get("phase", "liquid").strip() or "liquid",
+                        component_id=f"link_{link.link_id}_separator_outlet_{component.component_id}",
                     )
                 )
             elif component.component_type == "well_inflow":

@@ -14,6 +14,7 @@ from angelica.core.state import HeatSourceState, NetworkState, PipeState
 from angelica.properties.compositional_fluid import CompositionalFluid
 
 from .base import BaseSolver
+from .separators import SEPARATOR_FRACTION_TOLERANCE, SeparatorNetworkMixin
 from .steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
 from .wells import WellNetworkMixin
 
@@ -52,7 +53,7 @@ class CompositionalSolverSettings:
     pipe_enthalpy_terms: bool = True
 
 
-class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
+class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
     """Steady-state compositional pipe network solver.
 
     Models fluid mixtures of arbitrary components using the ``thermo`` library
@@ -123,6 +124,7 @@ class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
         node_zs_prev: dict[int, tuple[float, ...]] | None = None,
         relaxation: float = 1.0,
         component_mws: tuple[float, ...] | None = None,
+        outgoing=None,
     ) -> dict[int, tuple[float, ...]]:
         """Propagate inlet mole fractions through the network and write to PipeState.zs.
 
@@ -139,6 +141,10 @@ class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
             z_eff = relaxation * z_new + (1 - relaxation) * z_prev
         This damps composition oscillations in looped networks with mixing
         junctions (classic 2-cycle instability).
+
+        ``outgoing`` (separators, see
+        ``SeparatorNetworkMixin._separator_outgoing``) gives the composition
+        of a link leaving a separator node.
 
         Returns the per-node composition dict so the caller can store it for
         the next outer iteration.
@@ -167,7 +173,9 @@ class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
                 else:
                     up_id, down_id = ps.end_node.node_id, ps.start_node.node_id
                     mdot = -mdot
-                z_up = node_zs.get(up_id, default_zs)
+                z_up = outgoing(ps, up_id, node_zs, default_zs) if outgoing is not None else None
+                if z_up is None:
+                    z_up = node_zs.get(up_id, default_zs)
                 if component_mws:
                     mw = sum(z * m for z, m in zip(z_up, component_mws))
                     mdot = mdot / mw if mw > 0.0 else mdot     # molar flow (kmol/s)
@@ -211,7 +219,8 @@ class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
         for _, ps in pipe_states:
             mdot = ps.mass_flow_kg_per_s
             up_id = ps.start_node.node_id if mdot >= 0.0 else ps.end_node.node_id
-            ps.zs = node_zs.get(up_id, default_zs)
+            z_out = outgoing(ps, up_id, node_zs, default_zs) if outgoing is not None else None
+            ps.zs = z_out if z_out is not None else node_zs.get(up_id, default_zs)
 
         return node_zs
 
@@ -278,6 +287,7 @@ class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
 
         network_state = build_network_state(case)
         self._disable_well_latch(network_state, latch_disabled)
+        self._setup_separators(network_state)
         settings = self.compositional_settings
 
         # Fluid-aware correlations (Beggs-Brill, wells) read phase properties from the fluid.
@@ -325,6 +335,15 @@ class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
         temperature_converged = False
         node_zs_outer: dict[int, tuple[float, ...]] = {}
 
+        from angelica.closures.separator import compositional_split
+
+        def split_fn(node, zs):
+            T = node.temperature_c if node.temperature_c is not None else T_init
+            return compositional_split(fluid, zs, float(node.pressure_pa), T)
+
+        outgoing = self._separator_outgoing(network_state, split_fn)
+        separator_change = 0.0
+
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
         for _outer in range(settings.max_outer_iterations):
 
@@ -332,19 +351,31 @@ class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
             self._set_gas_lift_sources(network_state, fluid)
 
             # Propagate compositions from inlets → PipeState.zs
-            if case.inlet_composition_bcs:
+            # (separators also need it: their outlets carry different phases)
+            if case.inlet_composition_bcs or network_state.separators:
                 node_zs_outer = self._propagate_compositions(
                     network_state, case, default_zs,
                     node_zs_prev=node_zs_outer,
                     relaxation=settings.composition_relaxation,
                     component_mws=fluid.component_mws,
+                    outgoing=outgoing,
                 )
+                separator_change = self._update_separator_outlets(
+                    network_state, node_zs_outer, default_zs, split_fn)
 
             old_densities = [fluid.density_for_link(link) for link in network_state.components]
 
             lam_hist, lam_metrics, turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_pass(
                 network_state, fluid, progress_callback)
             wells_started = self._start_wells(network_state, fluid)
+            if network_state.separators:
+                # Compositions consistent with the new flow field for the
+                # energy solve: links downstream of a separator outlet that
+                # carried no flow before this pass still had the default.
+                node_zs_outer = self._propagate_compositions(
+                    network_state, case, default_zs, node_zs_prev=node_zs_outer,
+                    relaxation=settings.composition_relaxation,
+                    component_mws=fluid.component_mws, outgoing=outgoing)
             all_lam_hist.extend(lam_hist)
             all_lam_metrics.extend(lam_metrics)
             all_turb_hist.extend(turb_hist)
@@ -384,7 +415,8 @@ class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
 
             temperature_converged = max_delta_t  < settings.temperature_tolerance_k
             density_converged     = max_rel_delta < settings.density_rel_tolerance
-            if temperature_converged and density_converged and not wells_started:
+            separators_settled = separator_change < SEPARATOR_FRACTION_TOLERANCE
+            if temperature_converged and density_converged and separators_settled and not wells_started:
                 break
 
         # Final synchronous pass — always runs so that the reported flow field
@@ -470,7 +502,7 @@ class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
         return SolveResult(
             case_name=case.name,
             converged=(hydraulic_converged and density_converged and temperature_converged
-                       and wells_settled),
+                       and wells_settled and separator_change < SEPARATOR_FRACTION_TOLERANCE),
             node_pressures_pa=node_pressures,
             node_temperatures_c=node_temperatures,
             component_flows=component_flows,
@@ -490,4 +522,5 @@ class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
             component_mws=fluid.component_mws,
             node_compositions=node_compositions,
             well_states=well_states,
+            separators=self._separator_results(network_state),
         )

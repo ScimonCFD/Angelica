@@ -186,6 +186,46 @@ class WellOperatingState:
 
 
 @dataclass(frozen=True)
+class SeparatorOutletResult:
+    """One ``SeparatorOutlet`` link at the solution."""
+
+    component_id: str
+    phase: str
+    mass_flow_kg_per_s: float
+    valve_pressure_drop_pa: float    # P_separator − P_outlet node (level-control valve)
+
+
+@dataclass(frozen=True)
+class SeparatorResult:
+    """Phase split of a separator node at the solution.
+
+    Masses are of the phases in the vessel (gas, oil with its dissolved gas,
+    free water).  Standard rates: the gas phase's gas, the oil phase's
+    stock-tank liquid and the water, at 101 325 Pa and 15.56 °C.
+    """
+
+    node_id: int
+    pressure_pa: float
+    temperature_c: float
+    feed_mass_flow_kg_per_s: float
+    gas_mass_flow_kg_per_s: float
+    oil_mass_flow_kg_per_s: float
+    water_mass_flow_kg_per_s: float
+    gas_rate_sm3_per_day: float
+    oil_rate_sm3_per_day: float
+    water_rate_m3_per_day: float
+    outlets: tuple[SeparatorOutletResult, ...] = ()
+
+    @property
+    def message(self) -> str:
+        low = [o.component_id or o.phase for o in self.outlets if o.valve_pressure_drop_pa < 0.0]
+        if low:
+            return ("outlet pressure above the separator at " + ", ".join(low)
+                    + ": the liquid needs a pump")
+        return "ok"
+
+
+@dataclass(frozen=True)
 class SolveResult:
     case_name: str
     converged: bool
@@ -213,6 +253,7 @@ class SolveResult:
     component_mws: tuple[float, ...] = ()
     node_compositions: dict[int, tuple[float, ...]] = field(default_factory=dict)
     well_states: tuple[WellOperatingState, ...] = ()
+    separators: tuple[SeparatorResult, ...] = ()
 
     @property
     def link_mass_flows_kg_per_s(self) -> list[float]:

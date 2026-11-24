@@ -40,7 +40,7 @@ or more (human-equivalent).
 | 10 | Wells with compositional fluids (gas and condensate wells) | `Well` is black-oil only | A | M | Consistency with item 5; gas-well deliverability examples |
 | 11 | Gas lift (injection point in tubing) | None | B | M | Brown, *The Technology of Artificial Lift Methods*; Economides examples (gradient curves vs GLR) |
 | 12 | ESP (stage curves, viscosity and gas derating) | None | C | M | Takacs, *Electrical Submersible Pumps Manual* examples; affinity laws |
-| 13 | Separator (phase split node, gas / oil / water outlets) | None | A | M | Mass and component balance; outlet streams equal an independent `thermo` flash |
+| 13 | Separator (phase split node, gas / oil / water outlets) | Done in v1.26.0 (`SeparatorOutlet`) | A | M | Mass and component balance; outlet streams equal an independent `thermo` flash |
 | 14 | Compressor (polytropic / isentropic, efficiency, power, discharge T; curves) | Pump head curve only | A | M | GPSA *Engineering Data Book* §13 examples; isentropic limit against EOS entropy |
 | 15 | Pressure regulator / back-pressure controller | None | B | M | Analytical: set-point held when feasible, open or closed otherwise |
 | 16 | Heater/cooler with outlet-temperature spec | Fixed duty only | B | S | Energy balance |
@@ -154,7 +154,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
     maintainer to decide.
 
 ### Stage 5 — equipment (items 13, 14, 15, 16)
-- 5.1 Separator node with gas / liquid (/ water) outlets.
+- 5.1 **Done in v1.26.0.** Separator node with gas / liquid (/ water) outlets (`SeparatorOutlet`).
 - 5.2 Compressor: polytropic or isentropic with efficiency; power and
   discharge temperature; specified ΔP, pressure ratio or power.
 - 5.3 Heater/cooler with outlet-temperature spec.
@@ -617,3 +617,44 @@ Summary:
   consistency, compositional molar mixing.
 - Not validated: gas-lift performance against published data; lift-gas
   temperature at the valve (assumed equal to the formation's).
+
+### 2026-11-24 — Item 5.1: separator (v1.26.0)
+
+- A separator is a node with `SeparatorOutlet` links leaving it
+  ("liquid", "oil" + "water", or "water" alone).  The node's feed is
+  split at its P and T; an outlet's flow is its phases' mass fraction of
+  the current feed (the level-control valve: flow set by the split, ΔP
+  reported), the gas leaves through the node's other links or its
+  pressure boundary by mass balance.  Rejected alternative: a separator
+  as a boundary on both outlets — overdetermined (P_sep and the split
+  cannot both follow from two downstream pressures); a real separator's
+  liquid valve absorbs that difference.
+- The pressure correction includes the outlet's dependence on the feed
+  (δṁ_out = f·Σ δṁ_feed): with the outlet flow lagged, an LP separator in
+  series (f ≈ 1) diverged.  Compositions are propagated again after the
+  hydraulic pass when there are separators, so the first energy solve does
+  not see default compositions downstream of the outlets.
+- Black-oil split = the PVT's own in-situ split (oil with Rs, free gas,
+  water); compositional = PR flash + immiscible water.  The outlet streams
+  propagate as their own compositions.
+- Found on the way: the energy equation of a boundary node with
+  throughflow (a pressure boundary that also passes flow on) divided the
+  inflowing enthalpy by the outflow only: −256 °C in the new separator
+  train tutorial, 3.6 K too hot in a black-oil test.  Fixed (mixing
+  temperature of the arriving streams).  No existing tutorial had such a
+  node: references unchanged.
+- Checked with numbers before writing: stock-tank liquid has a maximum in
+  HP separator pressure (≈18 bar one stage, ≈30 bar two stages) and a
+  second stage gains 2–5 % (compositional tutorial 10); in black-oil the
+  stock-tank oil does not depend on the separator pressure (tutorial 14).
+
+Summary:
+- Validated against data read in a source: none.
+- Validated by consistency: black-oil gas fraction = in-situ free-gas mass
+  fraction (round-off); compositional split = independent phase-split
+  routine (1e-9) with species conserved; enthalpy additivity of the split
+  (≤ 0.0015 K·cp black-oil, 6e-6 K·cp compositional); network mass and
+  energy balances; GUI file = script.
+- Not validated: against a published separator test or plant data.
+  Black-oil: one gas gravity for free and dissolved gas; gas outlets carry
+  ~0.1 % phantom oil (GOR 10⁶ convention).

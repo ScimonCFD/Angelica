@@ -381,6 +381,54 @@ class Well(Fitting):
         return self.gas_lift_rate_sm3_per_day > 0.0
 
 
+SEPARATOR_PHASES = ("liquid", "oil", "water")
+
+
+@dataclass(frozen=True)
+class SeparatorOutlet(Fitting):
+    """Liquid outlet of a separator: the link from the separator vessel to
+    the node where its liquid leaves.
+
+    The separator is the ``start_node``: the streams arriving there are
+    flashed at the node's pressure and temperature, the phases named by
+    ``phase`` leave through this link and the rest — the gas — through the
+    node's other links (or into the node's pressure boundary).
+
+    ``phase``:
+      ``"liquid"``  oil (condensate) and free water together: a two-phase
+                    separator
+      ``"oil"``     the hydrocarbon liquid only; needs a ``"water"`` outlet
+                    on the same separator (three-phase separator)
+      ``"water"``   free water only; alone, a free-water knockout (the oil
+                    stays with the gas)
+
+    The link's flow is the mass of those phases, whatever the pressure
+    difference: it stands for the level-control valve, whose pressure drop
+    P_separator − P_end is reported (negative: the liquid could not flow to
+    the outlet without a pump).  The fluid crosses it isenthalpically.
+
+    Black-oil: the oil leaves with the gas still dissolved at the separator,
+    Rs(P, T); the free gas, GOR − Rs, is the gas.  Free and dissolved gas
+    have the same gravity (a black-oil assumption).  Compositional: PT flash
+    of the hydrocarbons; free water by the immiscible-water model (water
+    vapour stays in the gas).
+
+    Requires ``SteadyBlackOilSolver`` or ``SteadyCompositionalSolver``.
+    ``diameter_m`` is the outlet bore, used only to report a velocity.  The
+    solution's ``separators`` give each separator's split and rates.
+    """
+
+    phase: str = "liquid"
+    loss_coefficient: float = 1.0   # unused; keeps the Fitting interface
+    is_separator_outlet = True      # class attribute read by the flow models
+
+    def __post_init__(self) -> None:
+        if self.phase not in SEPARATOR_PHASES:
+            raise ValueError(f"SeparatorOutlet phase must be one of {SEPARATOR_PHASES} (got {self.phase!r})")
+        if self.start_node == self.end_node:
+            raise ValueError("SeparatorOutlet start_node and end_node must differ.")
+
+
 @dataclass(frozen=True)
 class Pump(PressureChanger):
     """Centrifugal pump (or compressor) defined by a head curve.

@@ -3604,6 +3604,17 @@ class NetSimGui:
                 ),
                 width=12,
             ).pack(anchor="w", pady=4)
+            ttk.Button(
+                palette,
+                text="Separator",
+                command=lambda: self._add_component_to_link(
+                    link.link_id,
+                    "separator_outlet",
+                    components_list,
+                    properties_frame,
+                ),
+                width=12,
+            ).pack(anchor="w", pady=4)
         if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil", "compositional"):
             ttk.Button(
                 palette,
@@ -3859,11 +3870,12 @@ class NetSimGui:
             if comp.component_type == "pipe":
                 canvas.create_line(x0c, y0c, x1c, y1c, fill=pipe_color, width=2)
                 legend_seen.setdefault("Pipe", (pipe_color, ()))
-            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow", "well"):
+            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow", "well", "separator_outlet"):
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=fitting_color, width=2, dash=(6, 3))
                 legend_seen.setdefault(
                     {"fitting": "Fitting", "choke": "Choke", "check_valve": "Check valve",
-                     "well_inflow": "Well IPR", "well": "Well"}[comp.component_type],
+                     "well_inflow": "Well IPR", "well": "Well",
+                     "separator_outlet": "Separator outlet"}[comp.component_type],
                     (fitting_color, (6, 3)))
             elif comp.component_type == "pump":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
@@ -3898,7 +3910,8 @@ class NetSimGui:
                                    fill=pipe_color)
             else:
                 lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke",
-                           "check_valve": "check", "well_inflow": "IPR", "well": "well"}
+                           "check_valve": "check", "well_inflow": "IPR", "well": "well",
+                           "separator_outlet": "sep. outlet"}
                 clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
                 lbl = lbl_map.get(comp.component_type, comp.component_type)
                 clr = clr_map.get(comp.component_type, fitting_color)
@@ -4711,11 +4724,12 @@ class NetSimGui:
             if comp.component_type == "pipe":
                 canvas.create_line(x0c, y0c, x1c, y1c, fill=temp_color, width=2)
                 legend_seen.setdefault("Pipe", (temp_color, ()))
-            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow", "well"):
+            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow", "well", "separator_outlet"):
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=fitting_color, width=2, dash=(6, 3))
                 legend_seen.setdefault(
                     {"fitting": "Fitting", "choke": "Choke", "check_valve": "Check valve",
-                     "well_inflow": "Well IPR", "well": "Well"}[comp.component_type],
+                     "well_inflow": "Well IPR", "well": "Well",
+                     "separator_outlet": "Separator outlet"}[comp.component_type],
                     (fitting_color, (6, 3)))
             elif comp.component_type == "pump":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
@@ -4748,7 +4762,8 @@ class NetSimGui:
                                    fill=temp_color)
             else:
                 lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke",
-                           "check_valve": "check", "well_inflow": "IPR", "well": "well"}
+                           "check_valve": "check", "well_inflow": "IPR", "well": "well",
+                           "separator_outlet": "sep. outlet"}
                 clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
                 lbl = lbl_map.get(comp.component_type, comp.component_type)
                 clr = clr_map.get(comp.component_type, fitting_color)
@@ -4889,6 +4904,20 @@ class NetSimGui:
                       "Black-oil or compositional mode (gas wells: back-pressure IPR + Gray).\n"
                       "Gas lift: the lift gas joins at the injection depth and leaves at the\n"
                       "wellhead node.  Gravity: black-oil; mole fractions: compositional."),
+            )
+            return
+        if component.component_type == "separator_outlet":
+            self._render_simple_component_properties(
+                component, properties_frame, link_id, components_list,
+                fields=[("diameter_m", f"Outlet bore ({self._unit_label('diameter')})")],
+                choices={"phase": ("Phases taken", ("liquid", "oil", "water"))},
+                note=("The connection's start node is the separator: the streams arriving\n"
+                      "there are flashed at its pressure and temperature.  This outlet takes\n"
+                      "the liquid (oil + water), the oil (with a 'water' outlet: three-phase)\n"
+                      "or the water (alone: free-water knockout); the gas leaves through the\n"
+                      "node's other connections or its pressure boundary.  Put it first in\n"
+                      "its connection.  Its flow is set by the split (level-control valve):\n"
+                      "an outlet pressure above the separator's means the liquid needs a pump."),
             )
             return
         if component.component_type == "well_inflow":
@@ -5496,6 +5525,8 @@ class NetSimGui:
             return f"Check valve #{display_index}"
         if component.component_type == "well_inflow":
             return f"Well IPR #{display_index}"
+        if component.component_type == "separator_outlet":
+            return f"Separator outlet #{display_index}"
         if component.component_type == "well":
             return f"Well #{display_index}"
         return f"{component.component_type.capitalize()} #{display_index}"

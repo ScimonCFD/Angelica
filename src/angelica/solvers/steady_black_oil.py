@@ -15,6 +15,7 @@ from angelica.properties.base import FluidModel
 from angelica.properties.black_oil import BlackOilComposition, mix_black_oil_streams
 
 from .base import BaseSolver
+from .separators import SEPARATOR_FRACTION_TOLERANCE, SeparatorNetworkMixin
 from .steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
 from .wells import WellNetworkMixin
 
@@ -51,7 +52,7 @@ class BlackOilSolverSettings:
     pipe_enthalpy_terms: bool = True
 
 
-class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
+class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
     """Steady-state black-oil three-phase pipe network solver.
 
     Models gas, oil, and water as a homogeneous (no-slip) mixture whose
@@ -119,6 +120,7 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
         default_comp: BlackOilComposition,
         node_comp_prev: dict[int, BlackOilComposition] | None = None,
         relaxation: float = 1.0,
+        outgoing=None,
     ) -> tuple[dict[int, BlackOilComposition], dict[int, BlackOilComposition]]:
         """Return a per-pipe-index composition map after one propagation pass.
 
@@ -126,7 +128,9 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
         following the current flow field.  At each junction the incoming
         streams are mixed conserving standard volumes
         (:func:`~angelica.properties.black_oil.mix_black_oil_streams`).  Pipes in which flow
-        is ambiguous or zero inherit the default composition.
+        is ambiguous or zero inherit the default composition.  ``outgoing``
+        (separators, see ``SeparatorNetworkMixin._separator_outgoing``) gives
+        the composition of a link leaving a separator node.
 
         Returns
         -------
@@ -169,7 +173,9 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
                     up_id, down_id = ps.end_node.node_id, ps.start_node.node_id
                     ṁ = -ṁ
 
-                comp = node_comp.get(up_id, default_comp)
+                comp = outgoing(ps, up_id, node_comp, default_comp) if outgoing is not None else None
+                if comp is None:
+                    comp = node_comp.get(up_id, default_comp)
                 incoming[down_id].append((ṁ, comp))
             for nid_s, node_s in network_state.nodes.items():
                 for m_s, stream in node_s.source_streams:     # lift gas (GasStream)
@@ -217,7 +223,8 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
                 up_id = ps.start_node.node_id
             else:
                 up_id = ps.end_node.node_id
-            pipe_comp[idx] = node_comp.get(up_id, default_comp)
+            comp = outgoing(ps, up_id, node_comp, default_comp) if outgoing is not None else None
+            pipe_comp[idx] = comp if comp is not None else node_comp.get(up_id, default_comp)
 
 
         return pipe_comp, node_comp
@@ -368,11 +375,13 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
         self._require_fixed_temperature(case)
         network_state = build_network_state(case)
         self._disable_well_latch(network_state, latch_disabled)
+        self._setup_separators(network_state)
         settings      = self.black_oil_settings
         fluid_model   = case.fluid_model
 
-        # Determine whether per-inlet composition is active
-        use_per_inlet = bool(case.inlet_fluid_bcs)
+        # Determine whether per-inlet composition is active (separators also
+        # need per-link compositions: their outlets carry different phases)
+        use_per_inlet = bool(case.inlet_fluid_bcs) or bool(network_state.separators)
         if use_per_inlet:
             # Build default composition from the global fluid_model as fallback
             from angelica.properties.black_oil import BlackOilFluid
@@ -434,6 +443,18 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
         node_comp_prev: dict[int, BlackOilComposition] | None = None
         effective_fluid: FluidModel = fluid_model  # default; updated inside loop when use_per_inlet
 
+        from angelica.closures.separator import black_oil_split
+
+        def split_fn(node, comp):
+            T = node.temperature_c if node.temperature_c is not None else T_init
+            return black_oil_split(comp, float(node.pressure_pa), T,
+                                   getattr(fluid_model, "correlation", "STANDING"),
+                                   getattr(fluid_model, "gas_specific_heat_j_per_kg_k", 2_200.0),
+                                   getattr(fluid_model, "gas_thermal_conductivity_w_per_mk", 0.035))
+
+        outgoing = self._separator_outgoing(network_state, split_fn)
+        separator_change = 0.0
+
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
         for _outer in range(settings.max_outer_iterations):
 
@@ -446,7 +467,10 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
                     network_state, case, default_comp,  # type: ignore[arg-type]
                     node_comp_prev=node_comp_prev,
                     relaxation=settings.composition_relaxation,
+                    outgoing=outgoing,
                 )
+                separator_change = self._update_separator_outlets(
+                    network_state, node_comp_prev, default_comp, split_fn)
                 effective_fluid = self._build_mixed_fluid(
                     network_state, pipe_comps, default_comp, T_init,  # type: ignore[arg-type]
                     base_fluid=fluid_model,
@@ -465,6 +489,16 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
             lam_hist, lam_metrics, turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_pass(
                 network_state, effective_fluid, progress_callback)
             wells_started = self._start_wells(network_state, effective_fluid)
+            if network_state.separators:
+                # Compositions consistent with the new flow field for the
+                # energy solve (see the compositional solver).
+                pipe_comps, node_comp_prev = self._propagate_compositions(
+                    network_state, case, default_comp,  # type: ignore[arg-type]
+                    node_comp_prev=node_comp_prev, relaxation=settings.composition_relaxation,
+                    outgoing=outgoing)
+                effective_fluid = self._build_mixed_fluid(
+                    network_state, pipe_comps, default_comp, T_init,  # type: ignore[arg-type]
+                    base_fluid=fluid_model)
             all_lam_hist.extend(lam_hist)
             all_lam_metrics.extend(lam_metrics)
             all_turb_hist.extend(turb_hist)
@@ -507,7 +541,8 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
 
             temperature_converged = max_delta_t   < settings.temperature_tolerance_k
             density_converged     = max_rel_delta  < settings.density_rel_tolerance
-            if temperature_converged and density_converged and not wells_started:
+            separators_settled = separator_change < SEPARATOR_FRACTION_TOLERANCE
+            if temperature_converged and density_converged and separators_settled and not wells_started:
                 break
 
         # ── final synchronous pass ────────────────────────────────────────────
@@ -568,7 +603,8 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
         wells_settled = not any(ws.state == "unstable" for ws in well_states)
         return SolveResult(
             case_name=case.name,
-            converged=hydraulic_converged and density_converged and temperature_converged and wells_settled,
+            converged=(hydraulic_converged and density_converged and temperature_converged and wells_settled
+                       and separator_change < SEPARATOR_FRACTION_TOLERANCE),
             node_pressures_pa=node_pressures,
             node_temperatures_c=node_temperatures,
             component_flows=component_flows,
@@ -587,4 +623,5 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
             mass_balance_history=mass_balance_history,
             energy_balance_history=energy_balance_history,
             well_states=well_states,
+            separators=self._separator_results(network_state),
         )

@@ -1,0 +1,31 @@
+==========================================================================
+Tutorial 10 — A separator train (Peng-Robinson)
+==========================================================================
+
+Part A — export 30 bar, flare 5 bar
+  Converged: True
+                      P      T   Feed    Gas    Oil  Water      Gas    Oil
+                  (bar)   (°C) (kg/s) (kg/s) (kg/s) (kg/s) (kSm³/d) (m³/d)
+  HP separator    31.42   46.9  42.14  19.29  22.26  0.590   1834.1 2373.6
+  LP separator     5.02   37.3  22.26   1.69  20.57  0.000    111.3 2491.0
+  HP_water_LCV  :  0.590 kg/s, LCV drop  +26.36 bar
+  HP_oil_LCV    : 22.262 kg/s, LCV drop  +22.93 bar
+  LP_liquid_LCV : 20.573 kg/s, LCV drop   +2.95 bar
+  Stock tank: 2491.0 m³/d after two stages; 2373.6 m³/d if the HP oil went straight to the tank
+  Mass balance -0.0008 kg/s, energy balance -0.034 kW
+
+Part B — HP separator pressure (flare 5 bar); liquid per tonne of feed
+   Export   P_HP   T_HP    Feed  One stage  Two stages
+    (bar)  (bar)   (°C)  (kg/s)     (m³/t)      (m³/t)
+        5   11.8   34.9   43.93     0.6543      0.6647
+       15   18.1   39.9   43.41     0.6589      0.6779
+       30   31.4   46.9   42.14     0.6519      0.6841
+       50   50.7   53.4   39.44     0.6343      0.6781
+       80   80.2   59.8   32.26     0.6068      0.6601
+
+Part C — LP stage pressure, set by the flare pressure (export 30 bar)
+    P_LP   T_LP  Two stages  vs one stage
+   (bar)   (°C)      (m³/t)
+    2.09   29.4      0.6683         +2.5%
+    5.02   37.3      0.6841         +4.9%
+   10.00   42.1      0.6787         +4.1%

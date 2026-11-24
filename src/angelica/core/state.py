@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .components import Fitting, HeatSource, Pipe, PressureChanger, Pump
 
@@ -64,6 +64,11 @@ class FittingState(PressureChangerState):
     well_dead: bool = False
     well_latch_enabled: bool = True   # False: always produce when it can (P_wh < P_max)
     well_starts: int = 0              # times the solver restarted it (capped)
+    # ``SeparatorOutlet`` links only: mass fraction of the separator feed that
+    # leaves through this link, and the other links at the separator node
+    # (their flows into the node are the feed).
+    separator_fraction: float = 0.0
+    separator_feed_links: tuple = ()
 
 
 @dataclass
@@ -84,3 +89,6 @@ class HeatSourceState(PressureChangerState):
 class NetworkState:
     nodes: dict[int, NodeState]
     components: list[PressureChangerState]
+    # separator node id → its ``SeparatorOutlet`` link states (set by the solvers)
+    separators: dict = field(default_factory=dict)
+    separator_splits: dict = field(default_factory=dict)   # node id → SeparatorSplit

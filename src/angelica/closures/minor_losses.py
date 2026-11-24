@@ -25,6 +25,11 @@ def _reject_well_inflow(link_state) -> None:
             "WellInflow / Well links need a black-oil or compositional fluid: solve the "
             "case with SteadyBlackOilSolver or SteadyCompositionalSolver."
         )
+    if getattr(comp, "is_separator_outlet", False):
+        raise ValueError(
+            "SeparatorOutlet links need a black-oil or compositional fluid: solve the "
+            "case with SteadyBlackOilSolver or SteadyCompositionalSolver."
+        )
 
 
 class MinorLossModel(PressureDropCorrelation):

@@ -1,5 +1,44 @@
 # Changelog
 
+## [1.26.0] — 2026-11-24
+
+### New: separator (roadmap 5.1)
+  - `SeparatorOutlet` link (black-oil and compositional): its start node is a
+    separator.  The streams arriving there are split at the node's pressure
+    and temperature; the outlet takes `phase="liquid"` (oil + water,
+    two-phase separator), `"oil"` (with a `"water"` outlet: three-phase) or
+    `"water"` (alone: free-water knockout); the gas leaves through the
+    node's other links or its pressure boundary.  The separator node can be
+    an ordinary node (its pressure set by the gas line) or a pressure
+    boundary.
+  - The outlet stands for the level-control valve: its flow is set by the
+    split and its pressure drop reported; a negative drop flags that the
+    liquid needs a pump.  The fluid crosses it isenthalpically.
+  - Black-oil: oil with Rs(P, T), free gas GOR − Rs, water — the black-oil
+    PVT's own phase split.  Compositional: PR flash, immiscible free water.
+  - `result.separators`: feed, gas/oil/water masses, standard rates (gas
+    Sm³/d, stock-tank oil Sm³/d, water m³/d), LCV pressure drops; also in
+    `print_solve_result`.
+  - GUI: "Separator" component (black-oil and compositional modes).
+  - The pressure correction treats an outlet implicitly: its flow is set
+    from the current feed and its dependence on the feed links enters the
+    matrix (a lagged outlet flow diverged when nearly all the feed is
+    liquid, as in an LP separator).
+  - Tutorials black-oil 14 (three-phase separator, export pressure, LCV
+    needing a pump) and compositional 10 (separator train: optimum
+    separator pressure, gain of a second stage), both with GUI files.
+
+### Fixed
+  - **Temperature of a boundary node with throughflow.**  A pressure
+    boundary that also passes flow on (e.g. a separator at fixed pressure
+    whose gas leaves through the boundary) divided the inflowing enthalpy
+    by the outflow only; it is now at the mixing temperature of the
+    arriving streams.  The error was 3.6 K in a black-oil test case and gave
+    −256 °C in the separator-train tutorial.  No existing tutorial had such
+    a node; their results are unchanged.
+  - Tutorial index (`src/angelica/tutorials/README.md`) listed only part of
+    the tutorials, with wrong paths; regenerated.
+
 ## [1.25.0] — 2026-11-24
 
 ### New: gas lift (roadmap 4.4)

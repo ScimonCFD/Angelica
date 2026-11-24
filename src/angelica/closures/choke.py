@@ -239,6 +239,10 @@ class ChokeFlowModel(MinorLossModel):
         return link_fluid
 
     def calculate_velocity(self, link_state, delta_p, density, viscosity, tolerance=None) -> float:
+        if getattr(link_state.component, "is_separator_outlet", False):
+            # Level-control valve: passes the separated phases whatever ΔP.
+            from .separator import separator_outlet_mass_flow
+            return separator_outlet_mass_flow(link_state) / (density * link_state.area_m2)
         well_model_fluid = self._well_fluid(link_state, "is_well_model")
         if well_model_fluid is not None:
             from .well_model import well_link_curve
@@ -266,6 +270,8 @@ class ChokeFlowModel(MinorLossModel):
         return v if delta_p > 0.0 else -v
 
     def calculate_coupling(self, link_state, density, viscosity) -> float:
+        if getattr(link_state.component, "is_separator_outlet", False):
+            return -1e-12        # flow set by the separator split, not by ΔP
         well_model_fluid = self._well_fluid(link_state, "is_well_model")
         if well_model_fluid is not None:
             # ΔP = P_res − P_wh with P_res fixed:  dṁ/dΔP = −dṁ/dP_wh  (> 0 on the

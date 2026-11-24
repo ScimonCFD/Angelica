@@ -389,6 +389,9 @@ def _solve_energy_once(
     # does not incorrectly flag the downstream node as degenerate.
     explicit_inflow_total: dict[int, float] = dict.fromkeys(range(N_nodes), 0.0)
     explicit_rhs: dict[int, float] = dict.fromkeys(range(N_nodes), 0.0)
+    # The part of explicit_rhs written by streams LEAVING a node (their
+    # offsets at the node), dropped at boundary nodes (see below).
+    explicit_rhs_up: dict[int, float] = dict.fromkeys(range(N_nodes), 0.0)
 
     # Enthalpy-consistent mixing.  Each link transports ṁ·cp_link·T, and cp
     # differs from link to link (pressure, temperature, phase split), so a
@@ -442,6 +445,7 @@ def _solve_energy_once(
             T_ex = getattr(ps, "exit_temperature_c", None)
             T_ex_star = T_ex if T_ex is not None else T_up_star
             explicit_rhs[up_row] += abs(mdot) * _offset(ps, up_node.pressure_pa, T_up_star, cp)
+            explicit_rhs_up[up_row] += abs(mdot) * _offset(ps, up_node.pressure_pa, T_up_star, cp)
             explicit_rhs[down_row] -= abs(mdot) * _offset(ps, down_node.pressure_pa, T_ex_star, cp)
             arriving[down_row].append((ps, abs(mdot), cp))
 
@@ -471,6 +475,7 @@ def _solve_energy_once(
             if use_offsets:
                 m_abs = abs(dt.mdot)
                 explicit_rhs[up_idx] += m_abs * _offset(dev, dt.up_node.pressure_pa, dt.T_up, dt.cp_up)
+                explicit_rhs_up[up_idx] += m_abs * _offset(dev, dt.up_node.pressure_pa, dt.T_up, dt.cp_up)
                 explicit_rhs[down_idx] -= m_abs * _offset(dev, dt.down_node.pressure_pa, dt.T_up, dt.cp_up)
                 arriving[down_idx].append((dev, m_abs, dt.cp_up))
         else:
@@ -481,6 +486,7 @@ def _solve_energy_once(
             if use_offsets:
                 m_abs = abs(dt.mdot)
                 explicit_rhs[up_idx] += m_abs * _offset(dev, dt.up_node.pressure_pa, dt.T_up, dt.cp_up)
+                explicit_rhs_up[up_idx] += m_abs * _offset(dev, dt.up_node.pressure_pa, dt.T_up, dt.cp_up)
                 explicit_rhs[down_idx] -= m_abs * _offset(dev, dt.down_node.pressure_pa, dt.T_out, dt.cp_out)
                 arriving[down_idx].append((dev, m_abs, dt.cp_out))
         if dt.lift_mdot > 0.0:
@@ -492,14 +498,36 @@ def _solve_energy_once(
             else:
                 explicit_rhs[down_idx] -= dt.lift_mdot * dt.lift_cp * dt.T_out
 
-    def _sink_offset(nid: int, row: int) -> float:
-        """Offset of the fluid leaving the network at a node with no outflow."""
-        if not use_offsets or outflow_total[row] > 1e-30:
+    def _sink_offset(nid: int, row: int, boundary: bool = False) -> float:
+        """Offset of the fluid leaving the network at a node with no outflow
+        (or, ``boundary``, at a boundary node: the arriving streams)."""
+        if not use_offsets or (outflow_total[row] > 1e-30 and not boundary):
             return 0.0
         node = network_state.nodes[nid]
         T_star = node.temperature_c if node.temperature_c is not None else T_ref
         return (sum(m * _offset(link, node.pressure_pa, T_star, cp_w) for link, m, cp_w in arriving[row])
                 + source_arriving[row])
+
+    def _junction_row(nid: int, row: int, total_in: float, total_out: float) -> None:
+        """Mixing equation of a node with inflow.
+
+        Interior node: Σ ṁ·cp·T arriving = (Σ ṁ·cp leaving)·T_node.  At a
+        boundary node the boundary takes or gives the difference between
+        inflow and outflow (e.g. a separator at fixed pressure, whose gas
+        leaves through the boundary while its liquid flows on): the node is
+        at the mixing temperature of the arriving streams, which then leave
+        through the links and the boundary alike.  Dividing by the outflow
+        there gave wrong temperatures (−256 °C in a separator train,
+        v1.26.0)."""
+        boundary = network_state.nodes[nid].is_boundary
+        denom = total_in if boundary else _mixing_denominator(total_in, total_out)
+        add(row, row, -denom)
+        for col, weight in inflow[row]:
+            add(row, col, weight)
+        if boundary:
+            rhs[row] = explicit_rhs[row] - explicit_rhs_up[row] + _sink_offset(nid, row, boundary=True)
+        else:
+            rhs[row] = explicit_rhs[row] + _sink_offset(nid, row)
 
     thermal_inlet_map = {}
     for node in network_state.nodes.values():
@@ -543,11 +571,7 @@ def _solve_energy_once(
                     add(row, row, 1.0)
                     rhs[row] = T_ref
                 else:
-                    denom = _mixing_denominator(total_in, total_out)
-                    add(row, row, -denom)
-                    for col, weight in inflow[row]:
-                        add(row, col, weight)
-                    rhs[row] = explicit_rhs[row] + _sink_offset(nid, row)
+                    _junction_row(nid, row, total_in, total_out)
 
         else:
             # Mixing equation (default for junctions and unspecified boundary nodes)
@@ -557,11 +581,7 @@ def _solve_energy_once(
                 add(row, row, 1.0)
                 rhs[row] = T_ref
             else:
-                denom = _mixing_denominator(total_in, total_out)
-                add(row, row, -denom)
-                for col, weight in inflow[row]:
-                    add(row, col, weight)
-                rhs[row] = explicit_rhs[row] + _sink_offset(nid, row)
+                _junction_row(nid, row, total_in, total_out)
 
     # ── solve ─────────────────────────────────────────────────────────────
     A_mat = sp.csr_matrix((vals, (rows, cols)), shape=(N_total, N_total))

@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 NODE_TYPES = ("source", "sink", "junction")
-LINK_COMPONENT_TYPES = ("pipe", "fitting", "pump", "heat_source", "choke", "check_valve", "well_inflow", "well")
+LINK_COMPONENT_TYPES = ("pipe", "fitting", "pump", "heat_source", "choke", "check_valve", "well_inflow", "well",
+                        "separator_outlet")
 DEFAULT_LIBRARY_MATERIAL = {
     "library_key": "water_liquid",
     "definition_mode": "library",
@@ -336,6 +337,11 @@ class CanvasScene:
                 "gas_lift_depth_m": "",
                 "gas_lift_gas_gravity": "",
                 "gas_lift_zs": "",
+            }
+        if component_type == "separator_outlet":
+            return {
+                "diameter_m": "0.0762",
+                "phase": "liquid",
             }
         if component_type == "well_inflow":
             return {

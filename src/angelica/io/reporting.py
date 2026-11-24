@@ -342,6 +342,9 @@ def print_solve_result(result, detailed: bool = False) -> None:
     _print_node_table(result.node_pressures_pa, result.node_temperatures_c or None)
     print("")
     _print_component_table(result.component_flows)
+    if getattr(result, "separators", ()):
+        print("")
+        _print_separator_table(result.separators)
     if result.turbulent_metrics:
         print("")
         _print_final_turbulent_metrics(result.turbulent_metrics[-1])
@@ -356,6 +359,17 @@ def print_solve_result(result, detailed: bool = False) -> None:
         if result.turbulent_metrics:
             print("")
             _print_iteration_metrics_history("Turbulent Iteration Metrics", result.turbulent_metrics)
+
+
+def _print_separator_table(separators) -> None:
+    print("Separators")
+    print(f"  {'Node':>5} {'P (MPa)':>8} {'T (°C)':>7} {'Feed kg/s':>10} {'Gas kg/s':>9} {'Oil kg/s':>9} "
+          f"{'Water kg/s':>10} {'Gas Sm³/d':>11} {'Oil Sm³/d':>10} {'Water m³/d':>10}  Note")
+    for s in separators:
+        print(f"  {s.node_id:>5} {s.pressure_pa / 1e6:>8.3f} {s.temperature_c:>7.2f} "
+              f"{s.feed_mass_flow_kg_per_s:>10.3f} {s.gas_mass_flow_kg_per_s:>9.3f} {s.oil_mass_flow_kg_per_s:>9.3f} "
+              f"{s.water_mass_flow_kg_per_s:>10.3f} {s.gas_rate_sm3_per_day:>11.0f} {s.oil_rate_sm3_per_day:>10.1f} "
+              f"{s.water_rate_m3_per_day:>10.1f}  {s.message}")
 
 
 def print_detailed_solve_result(result) -> None:
