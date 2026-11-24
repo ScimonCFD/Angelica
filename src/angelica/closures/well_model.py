@@ -179,8 +179,13 @@ class TubingResult:
     wellhead_temperature_c: float
     bottomhole_temperature_c: float
     formation_heat_w: float            # heat given to the formation (> 0: fluid cools)
-    wellhead_enthalpy_j_per_kg: float | None
+    wellhead_enthalpy_j_per_kg: float | None   # of the wellhead stream (with lift gas)
     profile: tuple[tuple[float, float, float, float], ...] = ()   # (s, P, T, T_formation)
+    # gas lift (zero / nan without it)
+    lift_mass_flow_kg_per_s: float = 0.0
+    injection_pressure_pa: float = float("nan")
+    injection_temperature_c: float = float("nan")      # lift gas arriving at the valve
+    outlet_fluid: object = None                       # adapter of the wellhead stream
 
 
 def integrate_tubing(
@@ -318,32 +323,74 @@ def _thermal_key(comp) -> tuple:
 def _march(wf, p_res: float, t_res: float, q: float, ipr: IPR, p_b: float,
            m_per: float, D: float, L: float, dz: float, rough: float, n_seg: int,
            tubing_corr: str, thermal_key: tuple, exact: bool,
-           keep_profile: bool = False) -> TubingResult | None:
+           keep_profile: bool = False, lift: tuple | None = None) -> TubingResult | None:
     """Bottom-hole state from the IPR, then the tubing march, for one rate
-    ``q`` of the curve's base unit (``m_per`` kg per standard m³)."""
+    ``q`` of the curve's base unit (``m_per`` kg per standard m³).
+
+    ``lift`` = (lift-gas adapter, lift mass rate kg/s, injection depth m
+    below the wellhead along the tubing) for a gas-lifted well."""
     q_ref = q * m_per / wf.mass_per_rate(ipr)     # rate of the IPR's reference phase
     p_wf = ipr_flowing_pressure(ipr, q_ref, p_res, p_b)
     if p_wf <= _P_MIN_PA:
         return None
     m_dot = q * m_per / _S_PER_DAY
-    gradient = _gradient_function(wf, m_dot, D, L, dz, rough, tubing_corr)
+    thermal = None
     if thermal_key[0] == "isothermal":
-        return integrate_tubing(p_wf, t_res, m_dot, D, L, dz, n_seg, gradient, keep_profile=keep_profile)
-    _, g_geo, d_wb, u_wb, k_e, alpha, days = thermal_key
-
-    # isenthalpic inflow: h(P_wf, T_bh) = h(P_res, T_res)
-    if exact:
-        t_bh = wf.temperature_from_h(wf.enthalpy(p_res, t_res), p_wf, t_res)
+        t_bh = t_res
     else:
-        p_m = 0.5 * (p_res + p_wf)
-        t_bh = t_res + wf.dh_dp(p_m, t_res) * (p_res - p_wf) / wf.cp(p_m, t_res)
-    thermal = TubingThermal(
-        formation_conductance_w_per_mk(D, d_wb, u_wb, k_e, alpha, days * _S_PER_DAY),
-        g_geo * dz / L, t_res)
-    return integrate_tubing(
-        p_wf, t_bh, m_dot, D, L, dz, n_seg, gradient, thermal, wf.dh_dp, wf.cp,
-        wf.enthalpy if exact else None, wf.temperature_from_h if exact else None,
-        sync_every=5 if exact else 0, keep_profile=keep_profile)
+        _, g_geo, d_wb, u_wb, k_e, alpha, days = thermal_key
+        # isenthalpic inflow: h(P_wf, T_bh) = h(P_res, T_res)
+        if exact:
+            t_bh = wf.temperature_from_h(wf.enthalpy(p_res, t_res), p_wf, t_res)
+        else:
+            p_m = 0.5 * (p_res + p_wf)
+            t_bh = t_res + wf.dh_dp(p_m, t_res) * (p_res - p_wf) / wf.cp(p_m, t_res)
+        thermal = TubingThermal(
+            formation_conductance_w_per_mk(D, d_wb, u_wb, k_e, alpha, days * _S_PER_DAY),
+            g_geo * dz / L, t_res)
+
+    def section(fl, p0, t0, m, length, rise, n, therm, keep):
+        gradient = _gradient_function(fl, m, D, length, rise, rough, tubing_corr)
+        if therm is None:
+            return integrate_tubing(p0, t0, m, D, length, rise, n, gradient, keep_profile=keep)
+        return integrate_tubing(
+            p0, t0, m, D, length, rise, n, gradient, therm, fl.dh_dp, fl.cp,
+            fl.enthalpy if exact else None, fl.temperature_from_h if exact else None,
+            sync_every=5 if exact else 0, keep_profile=keep)
+
+    if lift is None:
+        return section(wf, p_wf, t_bh, m_dot, L, dz, n_seg, thermal, keep_profile)
+
+    from .well_fluid import GasLiftMixture
+
+    gas, m_gl, depth = lift
+    s_inj = L - depth                                    # injection point, from the bottom
+    n1 = int(round(n_seg * s_inj / L))
+    profile: list = []
+    q_form = 0.0
+    if n1 >= 1:
+        low = section(wf, p_wf, t_bh, m_dot, s_inj, dz * s_inj / L, n1, thermal, keep_profile)
+        if low is None:
+            return None
+        p1, t1, q_form = low.wellhead_pressure_pa, low.wellhead_temperature_c, low.formation_heat_w
+        profile = list(low.profile)
+    else:
+        p1, t1, s_inj = p_wf, t_bh, 0.0
+    # the lift gas arrives at the formation temperature of the injection depth
+    t_gas = thermal.formation_temperature(s_inj) if thermal is not None else t1
+    m_tot = m_dot + m_gl
+    mix = GasLiftMixture(wf, gas, m_gl / m_tot)
+    h_mix = ((m_dot * wf.enthalpy(p1, t1) if m_dot > 0.0 else 0.0) + m_gl * gas.enthalpy(p1, t_gas)) / m_tot
+    t2 = mix.temperature_from_h(h_mix, p1, t1 if m_dot > 0.0 else t_gas)
+    therm2 = None if thermal is None else TubingThermal(
+        thermal.conductance_w_per_mk, thermal.formation_gradient_k_per_m, thermal.formation_temperature(s_inj))
+    up = section(mix, p1, t2, m_tot, L - s_inj, dz * (L - s_inj) / L, max(n_seg - n1, 1), therm2, keep_profile)
+    if up is None:
+        return None
+    if keep_profile:
+        profile += [(s_inj + s_, P_, T_, Te_) for (s_, P_, T_, Te_) in up.profile[(1 if profile else 0):]]
+    return TubingResult(up.wellhead_pressure_pa, up.wellhead_temperature_c, t_bh, q_form + up.formation_heat_w,
+                        up.wellhead_enthalpy_j_per_kg, tuple(profile), m_gl, p1, t_gas, mix)
 
 
 def _bubble_point_for(wf, ipr: IPR, p_res: float, T: float) -> float:
@@ -352,7 +399,7 @@ def _bubble_point_for(wf, ipr: IPR, p_res: float, T: float) -> float:
 
 @lru_cache(maxsize=256)
 def _curve_cached(wf, p_res, T, ipr, D, L, dz, rough, n_seg, tubing_corr="beggs_brill",
-                  thermal_key=("isothermal",)) -> WellCurve:
+                  thermal_key=("isothermal",), lift=None) -> WellCurve:
     p_b = _bubble_point_for(wf, ipr, p_res, T)
     m_per = wf.mass_per_base_unit_for(ipr)
     q_aof = ipr_open_flow(ipr, p_res, p_b) * wf.mass_per_rate(ipr) / m_per   # base units, m³/d
@@ -360,7 +407,7 @@ def _curve_cached(wf, p_res, T, ipr, D, L, dz, rough, n_seg, tubing_corr="beggs_
     for i in range(_N_RATES):
         q = q_aof * (i / (_N_RATES - 1)) ** 1.5   # denser near q = 0, where the peak lies
         res = _march(wf, p_res, T, q, ipr, p_b, m_per, D, L, dz, rough, n_seg,
-                     tubing_corr, thermal_key, exact=False)
+                     tubing_corr, thermal_key, exact=False, lift=lift)
         if res is None:
             break
         rates.append(q)
@@ -383,7 +430,25 @@ def _well_args(comp, fluid, p_res: float, T: float, link_state=None) -> tuple:
         float(comp.diameter_m), float(comp.tubing_length_m), float(comp.tubing_height_change_m),
         float(comp.tubing_roughness_m), int(comp.tubing_segments),
         str(getattr(comp, "tubing_correlation", "beggs_brill")), _thermal_key(comp),
+        _lift_args(comp, wf),
     )
+
+
+def _lift_args(comp, wf) -> tuple | None:
+    """(lift-gas adapter, lift mass rate kg/s, injection depth m) or None."""
+    if not getattr(comp, "has_gas_lift", False):
+        return None
+    from .well_fluid import lift_gas_fluid, lift_gas_mass_per_sc_m3
+
+    gas = lift_gas_fluid(wf, comp)
+    m_gl = float(comp.gas_lift_rate_sm3_per_day) * lift_gas_mass_per_sc_m3(gas) / _S_PER_DAY
+    return (gas, round(m_gl, 12), float(comp.gas_lift_depth_m))
+
+
+def gas_lift_mass_flow(comp, fluid, p_res: float, T: float, link_state=None) -> float:
+    """Lift-gas mass rate (kg/s) of a ``Well``; 0 without gas lift."""
+    lift = _well_args(comp, fluid, p_res, T, link_state)[-1]
+    return 0.0 if lift is None else lift[1]
 
 
 def well_curve(comp, fluid, p_res: float, T: float, link_state=None) -> WellCurve:
@@ -396,12 +461,12 @@ def well_curve(comp, fluid, p_res: float, T: float, link_state=None) -> WellCurv
 
 @lru_cache(maxsize=1024)
 def _tubing_state_cached(m_dot, keep_profile, wf, p_res, T, ipr, D, L, dz, rough, n_seg,
-                         tubing_corr, thermal_key) -> TubingResult | None:
+                         tubing_corr, thermal_key, lift=None) -> TubingResult | None:
     p_b = _bubble_point_for(wf, ipr, p_res, T)
     m_per = wf.mass_per_base_unit_for(ipr)
     return _march(wf, p_res, T, m_dot * _S_PER_DAY / m_per, ipr, p_b, m_per,
                   D, L, dz, rough, n_seg, tubing_corr, thermal_key, exact=True,
-                  keep_profile=keep_profile)
+                  keep_profile=keep_profile, lift=lift)
 
 
 def well_tubing_state(comp, fluid, p_res: float, T: float, m_dot: float,

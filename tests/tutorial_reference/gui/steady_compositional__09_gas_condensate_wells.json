@@ -1,6 +1,6 @@
 {
  "converged": true,
- "energy_error_pct": 5.520713968540195e-05,
+ "energy_error_pct": 5.52071397045483e-05,
  "mass_error_pct": 0.00025277369424973856,
  "mass_flows_kg_per_s": {
   "Pipe:link_2_pipe_2_seg0": 6.399703113779019,

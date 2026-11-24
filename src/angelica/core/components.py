@@ -292,6 +292,21 @@ class Well(Fitting):
         annulus, casing, cement) referred to the tubing inner diameter;
         default inf = no wellbore resistance (formation conduction only)
 
+    Gas lift (off with the default rate 0):
+
+    gas_lift_rate_sm3_per_day : injected gas, standard m³/d
+    gas_lift_depth_m : measured depth of the injection point below the
+        wellhead, along the tubing (≤ tubing_length_m)
+    gas_lift_gas_gravity : black-oil lift gas gravity (default: the
+        produced gas's)
+    gas_lift_zs : compositional lift gas mole fractions (default: the gas of
+        the produced stream flashed to standard conditions)
+
+    The lift gas joins the produced fluid at the injection point at the
+    formation temperature there, without mass transfer (it stays gas), and
+    leaves the well at the wellhead node, where the network receives it as
+    an internal source.  The link's mass flow is the reservoir's production.
+
     Requires ``SteadyBlackOilSolver`` or ``SteadyCompositionalSolver``
     (gas and gas-condensate wells; the fluid is flashed once on a PVT table
     for the tubing, see ``angelica.closures.well_fluid``).  The solution's
@@ -313,6 +328,10 @@ class Well(Fitting):
     production_time_days: float = 365.0
     wellbore_diameter_m: float = float("nan")
     tubing_u_w_per_m2k: float = float("inf")
+    gas_lift_rate_sm3_per_day: float = 0.0
+    gas_lift_depth_m: float = float("nan")
+    gas_lift_gas_gravity: float = float("nan")
+    gas_lift_zs: tuple[float, ...] = ()
     loss_coefficient: float = 1.0   # unused; keeps the Fitting interface
     is_well_model = True            # class attribute read by the flow models
 
@@ -344,6 +363,22 @@ class Well(Fitting):
             raise ValueError("Well formation_diffusivity_m2_per_s and production_time_days must be positive.")
         if math.isnan(self.tubing_u_w_per_m2k) or self.tubing_u_w_per_m2k < 0.0:
             raise ValueError("Well tubing_u_w_per_m2k must be non-negative (inf = no wellbore resistance).")
+        if math.isnan(self.gas_lift_rate_sm3_per_day) or self.gas_lift_rate_sm3_per_day < 0.0:
+            raise ValueError("Well gas_lift_rate_sm3_per_day must be non-negative.")
+        object.__setattr__(self, "gas_lift_zs", tuple(float(z) for z in self.gas_lift_zs))
+        if self.gas_lift_rate_sm3_per_day > 0.0:
+            if (math.isnan(self.gas_lift_depth_m) or self.gas_lift_depth_m <= 0.0
+                    or self.gas_lift_depth_m > self.tubing_length_m):
+                raise ValueError("Well with gas lift needs gas_lift_depth_m in (0, tubing_length_m].")
+            if not math.isnan(self.gas_lift_gas_gravity) and self.gas_lift_gas_gravity <= 0.0:
+                raise ValueError("Well gas_lift_gas_gravity must be positive.")
+            if self.gas_lift_zs and (any(z < 0.0 for z in self.gas_lift_zs)
+                                     or abs(sum(self.gas_lift_zs) - 1.0) > 1e-6):
+                raise ValueError("Well gas_lift_zs must be non-negative and sum to 1.")
+
+    @property
+    def has_gas_lift(self) -> bool:
+        return self.gas_lift_rate_sm3_per_day > 0.0
 
 
 @dataclass(frozen=True)

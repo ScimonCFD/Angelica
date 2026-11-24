@@ -35,8 +35,8 @@ gathering-network models.  Tutorial 12 adds the production tubing with the
 
 | | Well 1 | Well 2 | Well 3 | Manifold |
 |---|---|---|---|---|
-| A — no check valves | 7.33 kg/s | 6.38 kg/s | −0.15 kg/s (injected) | 3.29 MPa |
-| B — check valves | 7.31 kg/s | 6.35 kg/s | shut in | 3.31 MPa |
+| A — no check valves | 7.31 kg/s | 6.36 kg/s | −0.18 kg/s (injected) | 3.31 MPa |
+| B — check valves | 7.29 kg/s | 6.32 kg/s | shut in | 3.34 MPa |
 
 With a linear IPR the same network produces about 8 % more oil than with
 Vogel, which accounts for the gas liberated near the wellbore.
@@ -49,7 +49,7 @@ The GUI file reproduces case B.
 gives q_o = C·(P_r² − P_wf²)ⁿ with pressures in bar.  With n = 1 and
 C = J/(2·P_r) its productivity at small drawdown equals J; it then bends like
 Vogel (open flow J·P_r/2 against Vogel's J·P_r/1.8).  The network produces
-1040 m³/d, 1.4 % less than with Vogel.  In practice C and n come from a
+1036 m³/d, 1.4 % less than with Vogel.  In practice C and n come from a
 multirate (flow-after-flow or isochronal) test; n < 1 flattens the curve at
 high drawdown.  For gas wells use `ipr_model="backpressure"`: the same law
 gives the gas rate, converted to oil with the GOR.

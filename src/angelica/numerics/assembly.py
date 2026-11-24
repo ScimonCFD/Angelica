@@ -31,11 +31,13 @@ def assemble_pressure_system(network_state, couplings: list[float]):
             A.data[idx] = []
             A[idx, idx] = 1.0
             b[idx] = 0.0
-        elif node.prescribed_mass_flow_kg_per_s is not None:
+        else:
             idx = node_index[node_id]
-            if node.is_inlet:
-                b[idx] += node.prescribed_mass_flow_kg_per_s
-            else:
-                b[idx] -= node.prescribed_mass_flow_kg_per_s
+            if node.prescribed_mass_flow_kg_per_s is not None:
+                if node.is_inlet:
+                    b[idx] += node.prescribed_mass_flow_kg_per_s
+                else:
+                    b[idx] -= node.prescribed_mass_flow_kg_per_s
+            b[idx] += node.source_mass_flow_kg_per_s      # internal source (lift gas)
 
     return A.tocsr(), b

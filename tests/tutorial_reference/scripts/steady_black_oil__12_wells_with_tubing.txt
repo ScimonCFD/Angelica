@@ -17,44 +17,44 @@ Part A — Well 1 deliverability (3.0 in tubing, P_r = 25 MPa, P_b = 20.9 MPa)
 Part B — gathering network, 3.0 in tubing
   Well       P_wh    P_wf       ṁ   q_oil   T_wh  State
             (MPa)   (MPa)  (kg/s)  (m³/d)   (°C)
-  Well 1    4.039   15.17   6.696   548.2   70.4  producing
-  Well 2    2.678   18.00   2.228   159.9   52.7  producing
-  Well 3    2.607       —   0.000     0.0      —  dead: column heavier than P_r
-  Manifold 2.607 MPa  ·  oil 708.1 m³/d  ·  converged True
+  Well 1    4.046   15.17   6.693   547.9   70.4  producing
+  Well 2    2.688   18.02   2.219   159.2   52.7  producing
+  Well 3    2.618       —   0.000     0.0      —  dead: column heavier than P_r
+  Manifold 2.618 MPa  ·  oil 707.2 m³/d  ·  converged True
 
 Part C — tubing size (all wells)
    Tubing ID  oil (m³/d)
-     50.3 mm       497.7   converged True
-     62.0 mm       620.3   converged True
-     76.2 mm       708.1   converged True
+     50.3 mm       497.3   converged True
+     62.0 mm       619.6   converged True
+     76.2 mm       707.2   converged True
 
 Part D — tubing correlation (3.0 in tubing)
   Correlation       Well 1 max P_wh  oil (m³/d)
-  beggs_brill             11.04 MPa       708.1
-  hagedorn_brown          11.30 MPa       768.5
-  gray                    11.96 MPa       759.1
+  beggs_brill             11.04 MPa       707.2
+  hagedorn_brown          11.30 MPa       767.4
+  gray                    11.96 MPa       758.1
 
 Part E — tubing temperature of Well 1 at its operating rate
    Height above  Pressure   Fluid  Formation
      bottom (m)     (MPa)    (°C)       (°C)
               0     15.17    89.3       85.0
-            400     12.61    87.5       73.0
+            400     12.62    87.5       73.0
             800     10.31    84.6       61.0
-           1200      8.13    80.8       49.0
+           1200      8.14    80.8       49.0
            1600      6.06    76.0       37.0
-           2000      4.06    70.4       25.0
+           2000      4.07    70.4       25.0
   Heat given to the formation: 195 kW
   Wellhead temperature against rate (same well):
      1.00 kg/s →  42.1 °C
      2.00 kg/s →  53.5 °C
      4.00 kg/s →  64.4 °C
-     6.70 kg/s →  70.4 °C
-  Network energy balance: wells and pipes lose 966 kW, lifting takes 175 kW, residual -0.002 kW
+     6.69 kg/s →  70.4 °C
+  Network energy balance: wells and pipes lose 967 kW, lifting takes 175 kW, residual -0.005 kW
 
 Part F — separator pressure (back-pressure on the wells)
    Separator  Manifold   Well 1   Well 2   (oil, m³/d)
-     1.5 MPa  2.61 MPa    548.2    159.9   converged True
-     4.0 MPa  4.38 MPa    492.9     40.3   converged True
+     1.5 MPa  2.62 MPa    547.9    159.2   converged True
+     4.0 MPa  4.38 MPa    492.8     40.3   converged True
      6.0 MPa  6.18 MPa    415.1      0.0   converged True
   At 6 MPa:
   Well       P_wh    P_wf       ṁ   q_oil   T_wh  State

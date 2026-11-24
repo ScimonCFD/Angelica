@@ -16,6 +16,11 @@ class NodeState:
     temperature_c: float | None = None
     is_thermal_inlet: bool = False
     thermal_gradient_dc_per_m: float | None = None
+    # Internal mass source (kg/s), e.g. lift gas leaving a gas-lifted well at
+    # its wellhead node; ``source_streams`` describes it for composition
+    # propagation (solver-specific descriptors).
+    source_mass_flow_kg_per_s: float = 0.0
+    source_streams: tuple = ()
 
 
 @dataclass

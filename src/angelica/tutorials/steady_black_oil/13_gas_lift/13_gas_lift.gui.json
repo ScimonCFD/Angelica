@@ -1,0 +1,115 @@
+{
+  "case_name": "13 — Gas lift: 60 000 Sm3/d at 1 800 m",
+  "physics_mode": "black_oil",
+  "material": {
+    "name": "Black-oil (PVT)",
+    "definition_mode": "black_oil",
+    "api_gravity": "25.0",
+    "gas_gravity": "0.60"
+  },
+  "pressure_drop_model": {
+    "library_key": "beggs_brill",
+    "name": "Beggs-Brill (two-phase, black-oil)"
+  },
+  "solver_settings": {},
+  "initial_node_pressures_pa": {},
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 100,
+      "y": 250,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "17000000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "75.0",
+        "thermal_gradient_dc_per_m": "0.0",
+        "gor_sc_m3_per_m3": "15.0",
+        "wor_sc_m3_per_m3": "0.8",
+        "api_gravity": "25.0",
+        "gas_gravity": "0.60"
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "junction",
+      "x": 380,
+      "y": 250,
+      "properties": {
+        "label": "Wellhead"
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "sink",
+      "x": 680,
+      "y": 250,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "1500000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "well",
+          "properties": {
+            "productivity_index_m3_per_day_per_bar": "3.0",
+            "ipr_model": "vogel",
+            "ipr_coefficient": "",
+            "ipr_exponent": "1.0",
+            "diameter_m": "0.0762",
+            "tubing_length_m": "2100.0",
+            "tubing_height_change_m": "2000.0",
+            "tubing_roughness_m": "0.000046",
+            "tubing_segments": "25",
+            "tubing_correlation": "beggs_brill",
+            "geothermal_gradient_k_per_m": "0.03",
+            "formation_conductivity_w_per_mk": "2.4",
+            "formation_diffusivity_m2_per_s": "0.000001",
+            "production_time_days": "365",
+            "wellbore_diameter_m": "",
+            "tubing_u_w_per_m2k": "",
+            "gas_lift_rate_sm3_per_day": "60000",
+            "gas_lift_depth_m": "1800",
+            "gas_lift_gas_gravity": "",
+            "gas_lift_zs": ""
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 2,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": 2,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "2000.0",
+            "diameter_m": "0.1016",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
+    }
+  ]
+}

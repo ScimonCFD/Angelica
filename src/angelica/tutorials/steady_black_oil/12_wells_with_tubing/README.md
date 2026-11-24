@@ -37,22 +37,22 @@ maximum the well is dead and produces nothing.
 
 | Well | P_wh (MPa) | P_wf (MPa) | Oil (m³/d) | T_wh (°C) | |
 |---|---|---|---|---|---|
-| 1 | 4.04 | 15.17 | 548 | 70.4 | producing |
-| 2 | 2.68 | 18.00 | 160 | 52.7 | producing |
-| 3 | 2.61 | — | 0 | — | dead: column heavier than P_r |
+| 1 | 4.05 | 15.17 | 548 | 70.4 | producing |
+| 2 | 2.69 | 18.02 | 159 | 52.7 | producing |
+| 3 | 2.62 | — | 0 | — | dead: column heavier than P_r |
 
 Well 1's deliverability curve rises from 10.97 MPa (static) to 11.04 MPa at
 76 m³/d before falling — gas lightens the column at low rates.  Larger
-tubing raises total production: 498 m³/d (50.3 mm), 620 m³/d (62.0 mm),
-708 m³/d (76.2 mm).
+tubing raises total production: 497 m³/d (50.3 mm), 620 m³/d (62.0 mm),
+707 m³/d (76.2 mm).
 
 ### Tubing correlation (Part D)
 
 | Correlation | Well 1 max P_wh | Total oil |
 |---|---|---|
-| Beggs-Brill | 11.04 MPa | 708 m³/d |
-| Hagedorn-Brown (modified) | 11.30 MPa | 769 m³/d |
-| Gray | 11.96 MPa | 759 m³/d |
+| Beggs-Brill | 11.04 MPa | 707 m³/d |
+| Hagedorn-Brown (modified) | 11.30 MPa | 767 m³/d |
+| Gray | 11.96 MPa | 758 m³/d |
 
 Select it with `Well(..., tubing_correlation="hagedorn_brown")` or in the
 GUI well dialog. Hagedorn-Brown is meant for oil wells, Gray for gas and
@@ -76,7 +76,7 @@ at 6.7 kg/s:
 It gives 195 kW to the formation.  The same well would arrive at 42 °C at
 1 kg/s and 64 °C at 4 kg/s: a slow well has time to cool.  The 4 K rise at
 the bottom hole is the liquid expanding at constant enthalpy through the
-drawdown.  The network's energy balance closes to 0.002 kW with the wells'
+drawdown.  The network's energy balance closes to 0.005 kW with the wells'
 formation heat and lifting work as explicit terms.
 
 Thermal inputs of a `Well` (all optional): `geothermal_gradient_k_per_m`,
@@ -99,7 +99,7 @@ Raising the separator pressure lifts the manifold:
 
 | Separator | Manifold | Well 1 oil | Well 2 oil |
 |---|---|---|---|
-| 1.5 MPa | 2.61 MPa | 548 m³/d | 160 m³/d |
+| 1.5 MPa | 2.62 MPa | 548 m³/d | 159 m³/d |
 | 4.0 MPa | 4.38 MPa | 493 m³/d | 40 m³/d |
 | 6.0 MPa | 6.18 MPa | 415 m³/d | 0 |
 

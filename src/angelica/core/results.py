@@ -162,7 +162,8 @@ class WellOperatingState:
     max_wellhead_pressure_pa: float      # maximum of the deliverability curve
     static_wellhead_pressure_pa: float   # curve at zero rate
     minimum_stable_rate_kg_per_s: float  # rate at the maximum
-    mass_flow_kg_per_s: float
+    mass_flow_kg_per_s: float            # reservoir production
+    gas_lift_kg_per_s: float = 0.0       # lift gas injected (leaves at the wellhead)
 
     @property
     def message(self) -> str:

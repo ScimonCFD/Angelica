@@ -126,7 +126,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   delivers its wellhead temperature to the network.
 - 4.2 **Done in v1.23.0 (Jones not included — no accessible source).** IPR: Fetkovich, Jones, gas back-pressure.
 - 4.3 **Done in v1.24.0.** `Well` with compositional fluids (gas-condensate wells).
-- 4.4 Gas lift: injection depth and rate in `Well`; deliverability vs
+- 4.4 **Done in v1.25.0.** Gas lift: injection depth and rate in `Well`; deliverability vs
   injection rate tutorial.
 - Known limitations of the `Well` model (recorded in v1.23.1; fix when one
   gets in the way):
@@ -586,3 +586,34 @@ Summary:
   against the black-oil formula (0.1 %); first law; IPR-only link
   reproduces the back-pressure law.
 - Not validated: against a published gas-well example (none accessible).
+
+### 2026-11-24 — Item 4.4: gas lift (v1.25.0)
+
+- The lift gas enters the network at the wellhead node as an internal
+  source.  Rejected alternatives: (a) the well link carrying production +
+  lift gas — the reservoir node would report the lift gas as production
+  and the inlet enthalpy would count it at reservoir conditions; (b) a
+  third terminal for a lift-gas supply node — not expressible with
+  two-node links.
+- Tubing: two sections, lift gas mixed without mass transfer, arriving at
+  the formation temperature of the valve depth (no annulus model).  For
+  compositional fluids this avoids a PVT table per rate (the mixture
+  composition changes along the deliverability curve); the lift gas has its
+  own table.
+- Found on the way: black-oil junction mixing averaged API, gas gravity,
+  GOR and WOR by mass — not conserving standard volumes, and the mixed
+  fluid's enthalpy 2–4 K·cp off; a gas-only stream could not be added.
+  Fixed (standard-volume mixing); five black-oil tutorials changed (largest:
+  tutorial 05 mixing temperature +3 K, now between the two inlet
+  temperatures).
+- Checked: the performance curve rises, peaks and falls; deeper valve =
+  more oil and higher valve pressure (tutorial 13, numbers checked before
+  writing the text).
+
+Summary:
+- Validated against data read in a source: none.
+- Validated by consistency: continuity, first law of the march, network
+  mass/energy balances, standard-volume mixing (exact) and its enthalpy
+  consistency, compositional molar mixing.
+- Not validated: gas-lift performance against published data; lift-gas
+  temperature at the valve (assumed equal to the formation's).

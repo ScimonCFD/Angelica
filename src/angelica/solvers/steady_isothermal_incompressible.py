@@ -373,6 +373,11 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             imbalance_by_node[link_state.end_node.node_id] += mass_flow
             throughput_by_node[link_state.start_node.node_id] += abs_flow
             throughput_by_node[link_state.end_node.node_id] += abs_flow
+        for node_id, node_state in network_state.nodes.items():
+            src = getattr(node_state, "source_mass_flow_kg_per_s", 0.0)
+            if src:
+                imbalance_by_node[node_id] += src
+                throughput_by_node[node_id] += abs(src)
 
         # Nodes with (almost) no flow — e.g. behind a closed check valve or on a
         # dead-end branch — carry round-off-level flows; dividing by their own

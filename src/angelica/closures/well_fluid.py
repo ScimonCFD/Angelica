@@ -202,6 +202,23 @@ class CompositionalWellFluid:
                 v_oil += v
         return mass, v_gas, v_oil
 
+    @cached_property
+    def standard_gas_composition(self) -> tuple[float, ...]:
+        """Mole fractions (all components, water 0) of the gas of the stream
+        flashed to standard conditions — the default lift gas."""
+        from angelica.properties.compositional_fluid import _tp_flash
+        from angelica.properties.free_water import find_water_index
+
+        names, hc_zs, _s, _w = self._split
+        res = _tp_flash(names, P_SC_PA, T_SC_C, hc_zs, self.eos_name)
+        gas = min(res.phases, key=lambda ph: ph.rho_mass())
+        ys = list(gas.zs)
+        w = find_water_index(self.component_names)
+        if w is not None:
+            ys.insert(w, 0.0)
+        s = sum(ys)
+        return tuple(y / s for y in ys)
+
     @property
     def stock_tank_oil_density_kg_per_m3(self) -> float:
         """Density of the standard-conditions liquid (Peneloux-translated)."""
@@ -377,3 +394,100 @@ def well_fluid_for(fluid, link_state=None, component=None, p_res: float | None =
         t_min_c=round(t_top - _T_BELOW_TOP_K, 0),
         t_max_c=round(t_res + _T_ABOVE_RES_K, 0),
     )
+
+
+# ── gas lift ──────────────────────────────────────────────────────────────────
+
+class GasLiftMixture:
+    """Produced fluid plus lift gas above the injection point, mixed without
+    mass transfer: the lift gas stays gas.  ``w`` is the lift-gas mass
+    fraction.  Phase volumes add (liquid with liquid, gas with gas);
+    enthalpy, cp and (∂h/∂P)_T are mass-weighted."""
+
+    exact_enthalpy = True
+
+    def __init__(self, base, gas, w: float) -> None:
+        self.base, self.gas, self.w = base, gas, min(max(w, 0.0), 1.0)
+        self.key = ("lift_mix", base.key, gas.key, round(self.w, 12))
+
+    def __hash__(self) -> int:
+        return hash(self.key)
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, GasLiftMixture) and other.key == self.key
+
+    def phase_properties(self, P: float, T: float) -> tuple[float, float, float, float, float, float]:
+        w = self.w
+        parts = []
+        if w < 1.0:
+            parts.append((1.0 - w, self.base.phase_properties(P, T)))
+        if w > 0.0:
+            parts.append((w, self.gas.phase_properties(P, T)))
+        v_l = v_g = m_l = m_g = mu_l = mu_g = 0.0
+        sigma = parts[0][1][5]
+        for mass, (C_L, rho_l, rho_g, m_ul, m_ug, _s) in parts:
+            v = mass / (C_L * rho_l + (1.0 - C_L) * rho_g)
+            vl, vg = C_L * v, (1.0 - C_L) * v
+            v_l += vl
+            v_g += vg
+            m_l += vl * rho_l
+            m_g += vg * rho_g
+            mu_l += vl * m_ul
+            mu_g += vg * m_ug
+        base_props = parts[0][1]
+        rho_l = m_l / v_l if v_l > 0.0 else base_props[1]
+        rho_g = m_g / v_g if v_g > 0.0 else base_props[2]
+        return (v_l / (v_l + v_g), rho_l, rho_g,
+                mu_l / v_l if v_l > 0.0 else base_props[3],
+                mu_g / v_g if v_g > 0.0 else base_props[4], sigma)
+
+    def _mix(self, f, P: float, T: float) -> float:
+        a = f(self.base, P, T) if self.w < 1.0 else 0.0
+        b = f(self.gas, P, T) if self.w > 0.0 else 0.0
+        return (1.0 - self.w) * a + self.w * b
+
+    def enthalpy(self, P: float, T: float) -> float:
+        return self._mix(lambda fl, p, t: fl.enthalpy(p, t), P, T)
+
+    def cp(self, P: float, T: float) -> float:
+        return self._mix(lambda fl, p, t: fl.cp(p, t), P, T)
+
+    def dh_dp(self, P: float, T: float) -> float:
+        return self._mix(lambda fl, p, t: fl.dh_dp(p, t), P, T)
+
+    def temperature_from_h(self, h: float, P: float, T0: float) -> float:
+        T = T0
+        for _ in range(6):
+            f = self.enthalpy(P, T) - h
+            if abs(f) < 0.01:
+                break
+            T -= f / self.cp(P, T)
+        return T
+
+
+def lift_gas_fluid(wf, component, fluid=None, link_state=None):
+    """Adapter of a ``Well``'s lift gas, built like the produced fluid's."""
+    if isinstance(wf, BlackOilWellFluid):
+        from angelica.properties.black_oil import _GAS_ONLY_GOR, BlackOilFluid
+
+        _, api, gg, _gor, _wor, corr, gas_cp, gas_k = wf.key
+        gg_lift = float(component.gas_lift_gas_gravity)
+        if math.isnan(gg_lift):
+            gg_lift = gg
+        return BlackOilWellFluid(BlackOilFluid(
+            api_gravity=api, gas_gravity=gg_lift, gor_sc_m3_per_m3=_GAS_ONLY_GOR, wor_sc_m3_per_m3=0.0,
+            correlation=corr, gas_specific_heat_j_per_kg_k=gas_cp, gas_thermal_conductivity_w_per_mk=gas_k))
+    zs = tuple(component.gas_lift_zs) or wf.standard_gas_composition
+    if len(zs) != len(wf.component_names):
+        raise ValueError(f"Well gas_lift_zs has {len(zs)} mole fractions; the fluid has "
+                         f"{len(wf.component_names)} components.")
+    return CompositionalWellFluid(wf.component_names, tuple(round(z, 6) for z in zs), wf.eos_name,
+                                  wf.p_max_pa, wf.t_min_c, wf.t_max_c)
+
+
+def lift_gas_mass_per_sc_m3(gas) -> float:
+    """kg per standard m³ of lift gas."""
+    if isinstance(gas, BlackOilWellFluid):
+        from angelica.properties.black_oil import _AIR_DENSITY_SC_KG_M3
+        return gas.key[2] * _AIR_DENSITY_SC_KG_M3
+    return gas.mass_per_rate(IPR("backpressure", coefficient=1.0))

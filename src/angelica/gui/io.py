@@ -539,6 +539,12 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         production_time_days=_optional_float(component, "production_time_days", default=365.0),
                         wellbore_diameter_m=_optional_float(component, "wellbore_diameter_m", default=math.nan),
                         tubing_u_w_per_m2k=_optional_float(component, "tubing_u_w_per_m2k", default=math.inf),
+                        gas_lift_rate_sm3_per_day=_optional_float(component, "gas_lift_rate_sm3_per_day", default=0.0),
+                        gas_lift_depth_m=_optional_float(component, "gas_lift_depth_m", default=math.nan),
+                        gas_lift_gas_gravity=_optional_float(component, "gas_lift_gas_gravity", default=math.nan),
+                        gas_lift_zs=tuple(float(z) for z in
+                                          component.properties.get("gas_lift_zs", "").replace(";", ",").split(",")
+                                          if z.strip()),
                         component_id=f"link_{link.link_id}_well_{component.component_id}",
                     )
                 )

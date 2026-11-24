@@ -1,5 +1,56 @@
 # Changelog
 
+## [1.25.0] — 2026-11-24
+
+### New: gas lift (roadmap 4.4)
+  - `Well(gas_lift_rate_sm3_per_day=…, gas_lift_depth_m=…)`, black-oil and
+    compositional.  Optional lift gas gravity (black-oil) or mole fractions
+    (compositional); by default the produced gas.
+  - Tubing in two sections: reservoir fluid below the valve, reservoir fluid
+    + lift gas above it.  The lift gas reaches the valve at the formation
+    temperature of that depth and stays gas (no mass transfer).  The
+    injection pressure at the valve is reported.
+  - Network: the lift gas leaves the well at the wellhead node as an
+    internal source (new `NodeState.source_mass_flow_kg_per_s`), in the
+    mass balance, the composition propagation (both solvers) and the energy
+    balance (entering at the valve, with its potential energy to the
+    wellhead).  The link's flow is the reservoir's production;
+    `well_states[...].gas_lift_kg_per_s` gives the lift gas.  A dead well
+    still passes its lift gas.
+  - GUI: four gas-lift fields in the Well dialog.
+
+### Fixed
+  - **Black-oil streams mixed at junctions conserve standard volumes.**  The
+    four parameters (API, gas gravity, GOR, WOR) were averaged by mass; now
+    oil, gas and water standard volumes add, GOR and WOR are per mixed oil
+    volume, the gas gravity gas-volume weighted and the oil gravity
+    oil-volume weighted (`mix_black_oil_streams`).  The old rule did not
+    conserve the gas and water volumes, and the enthalpy of the mixed fluid
+    was 2–4 K·cp off the mass average of the streams'; the new one is within
+    0.01 K·cp.  It is also what allows a gas-only stream (lift gas).
+
+### Changed tutorial results (physical reason: the mixing fix above)
+  - Black-oil 05 (two-reservoir blending): mixing-point temperature
+    60.8 → 63.9 °C (between the 70 and 60 °C inlets; the old value sat near
+    the colder one because the mixed fluid's enthalpy was wrong), total oil
+    408.6 → 404.3 m³/h.
+  - Black-oil 06, 09, 11, 12: manifold temperatures +0.3–0.5 K, rates
+    −0.1 to −0.4 % (e.g. tutorial 12: 708.1 → 707.2 m³/d; tutorial 11,
+    check valves: 1054.2 → 1050.5 m³/d).  READMEs updated.
+
+### Tutorials
+  - New black-oil 13 (gas lift): performance curve (oil rate against lift
+    rate peaks at 157 m³/d near 70 000 Sm³/d), injection depth, tubing
+    profile with the injection point.
+
+### Validation
+  - Consistency only: continuity as the lift rate vanishes (0.003 % in P_wh
+    at 1 Sm³/d), first law of the two-section march (0.01 W of 500 kW),
+    mass and energy balances of networks with lift, molar mix of the
+    compositional flowline.  Not validated against published gas-lift
+    performance data (not accessible).  The annulus is not modelled (no
+    surface injection pressure).
+
 ## [1.24.1] — 2026-11-23
 
 ### Tutorials

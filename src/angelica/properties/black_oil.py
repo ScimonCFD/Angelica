@@ -505,6 +505,57 @@ class BlackOilComposition:
         )
 
 
+@dataclass(frozen=True)
+class GasStream:
+    """A stream of gas only (no stock-tank oil or water), e.g. lift gas, for
+    :func:`mix_black_oil_streams`."""
+    gas_gravity: float
+
+
+_GAS_ONLY_GOR = 1.0e6   # GOR given to a node that receives gas but no oil
+
+
+def mix_black_oil_streams(contributions, default: BlackOilComposition) -> BlackOilComposition:
+    """Black-oil composition of the mixture of ``(mass_flow, composition)``
+    streams, conserving standard volumes: the oil, gas and water standard
+    volumes add; GOR and WOR are per mixed oil volume, the gas gravity is
+    gas-volume weighted and the oil specific gravity oil-volume weighted.
+    ``composition`` is a :class:`BlackOilComposition` or a :class:`GasStream`.
+
+    (Before v1.25.0 the four parameters were averaged by mass, which does not
+    conserve the standard volumes and cannot add a gas-only stream.)
+    A node receiving gas but no oil gets a GOR of 1e6 and ``default``'s API.
+    """
+    from .dead_oil import dead_oil_density_kg_per_m3
+
+    q_o = q_g = q_w = g_sum = sg_sum = 0.0
+    for m, c in contributions:
+        if m <= 0.0:
+            continue
+        if isinstance(c, GasStream):
+            v_g = m / (c.gas_gravity * _AIR_DENSITY_SC_KG_M3)
+            q_g += v_g
+            g_sum += v_g * c.gas_gravity
+            continue
+        rho_o = dead_oil_density_kg_per_m3(c.api_gravity)
+        m_per_oil = rho_o + c.gor_sc_m3_per_m3 * c.gas_gravity * _AIR_DENSITY_SC_KG_M3 + c.wor_sc_m3_per_m3 * 1_025.0
+        v_o = m / m_per_oil
+        q_o += v_o
+        q_g += v_o * c.gor_sc_m3_per_m3
+        q_w += v_o * c.wor_sc_m3_per_m3
+        g_sum += v_o * c.gor_sc_m3_per_m3 * c.gas_gravity
+        sg_sum += v_o * rho_o / 999.064          # as in dead_oil_density_kg_per_m3
+    if q_o <= 0.0 and q_g <= 0.0:
+        return default
+    gg = g_sum / q_g if q_g > 0.0 else default.gas_gravity
+    if q_o <= 0.0:
+        return BlackOilComposition(api_gravity=default.api_gravity, gas_gravity=gg,
+                                   gor_sc_m3_per_m3=_GAS_ONLY_GOR, wor_sc_m3_per_m3=0.0)
+    sg = sg_sum / q_o
+    return BlackOilComposition(api_gravity=141.5 / sg - 131.5, gas_gravity=gg,
+                               gor_sc_m3_per_m3=q_g / q_o, wor_sc_m3_per_m3=q_w / q_o)
+
+
 # ── Standalone PVT function ───────────────────────────────────────────────────
 
 @functools.lru_cache(maxsize=512)

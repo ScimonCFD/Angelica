@@ -172,6 +172,12 @@ class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
                     mw = sum(z * m for z, m in zip(z_up, component_mws))
                     mdot = mdot / mw if mw > 0.0 else mdot     # molar flow (kmol/s)
                 incoming[down_id].append((mdot, z_up))
+            for nid_s, node_s in network_state.nodes.items():
+                for m_s, z_s in node_s.source_streams:        # lift gas (mole fractions)
+                    if component_mws:
+                        mw_s = sum(z * m for z, m in zip(z_s, component_mws))
+                        m_s = m_s / mw_s if mw_s > 0.0 else m_s
+                    incoming[nid_s].append((m_s, tuple(z_s)))
 
             for nid, contributions in incoming.items():
                 if nid in inlet_ids:
@@ -321,6 +327,9 @@ class SteadyCompositionalSolver(WellNetworkMixin, BaseSolver):
 
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
         for _outer in range(settings.max_outer_iterations):
+
+            # Lift gas of gas-lifted wells: internal sources at their wellheads.
+            self._set_gas_lift_sources(network_state, fluid)
 
             # Propagate compositions from inlets → PipeState.zs
             if case.inlet_composition_bcs:

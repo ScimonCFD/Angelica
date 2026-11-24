@@ -4871,7 +4871,11 @@ class NetSimGui:
                         ("formation_diffusivity_m2_per_s", "Formation diffusivity (m²/s) — blank: 1e-6"),
                         ("production_time_days", "Time on production (d) — blank: 365"),
                         ("wellbore_diameter_m", "Wellbore diameter (m) — blank: 8½ in"),
-                        ("tubing_u_w_per_m2k", "Wellbore U (W/m²·K, tubing ID) — blank: none")],
+                        ("tubing_u_w_per_m2k", "Wellbore U (W/m²·K, tubing ID) — blank: none"),
+                        ("gas_lift_rate_sm3_per_day", "Gas lift (Sm³/d) — 0: none"),
+                        ("gas_lift_depth_m", "Injection depth below wellhead (m, along tubing)"),
+                        ("gas_lift_gas_gravity", "Lift gas gravity — blank: produced gas"),
+                        ("gas_lift_zs", "Lift gas mole fractions — blank: stream's gas")],
                 choices={"ipr_model": ("IPR model", ("vogel", "linear", "fetkovich", "backpressure")),
                          "tubing_correlation": ("Tubing correlation",
                                                 ("beggs_brill", "hagedorn_brown", "gray"))},
@@ -4882,7 +4886,9 @@ class NetSimGui:
                       "the wellhead node shows the flowing wellhead temperature.\n"
                       "The well is dead if the wellhead pressure exceeds the maximum of its\n"
                       "deliverability curve; it never takes injection.\n"
-                      "Black-oil or compositional mode (gas wells: back-pressure IPR + Gray)."),
+                      "Black-oil or compositional mode (gas wells: back-pressure IPR + Gray).\n"
+                      "Gas lift: the lift gas joins at the injection depth and leaves at the\n"
+                      "wellhead node.  Gravity: black-oil; mole fractions: compositional."),
             )
             return
         if component.component_type == "well_inflow":

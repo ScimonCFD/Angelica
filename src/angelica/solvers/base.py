@@ -60,6 +60,9 @@ class BaseSolver(ABC):
         mass_in = 0.0
         mass_out = 0.0
         for nid, node in network_state.nodes.items():
+            src = getattr(node, "source_mass_flow_kg_per_s", 0.0)
+            mass_in += src                     # internal sources (lift gas) enter the network
+            node_net_in[nid] += src
             if not node.is_boundary:
                 continue
             net = node_net_in[nid]
@@ -179,6 +182,10 @@ class BaseSolver(ABC):
             if dt.kind == "well":
                 q_well_w += dt.heat_loss_w
                 e_pot_well_w += dt.potential_w
+                if dt.lift_mdot > 0.0:          # lift gas: enters at the valve, leaves at the wellhead
+                    h_in_w += dt.lift_mdot * dt.lift_h_supply_rel
+                    if dt.down_node.is_boundary:
+                        h_out_w += dt.lift_mdot * dt.lift_h_out_rel
             if dt.kind == "pump":
                 if real_basis:
                     link = next(lk for lk in network_state.components if id(lk) == link_id)

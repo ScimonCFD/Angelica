@@ -454,6 +454,7 @@ def _solve_energy_once(
     #   Compressible:   h_out = h(T_in,P_in) + ΔP/ρ, then invert for T_out.
     # In all cases where T_out ≠ T_in the downstream contribution is injected
     # as an explicit RHS term so the mixing equation remains valid.
+    source_arriving: dict[int, float] = dict.fromkeys(range(N_nodes), 0.0)   # lift-gas offsets
     for dev in network_state.components:
         dt = device_thermal_state(dev, fluid_model, T_ref)
         if dt is None:
@@ -482,6 +483,14 @@ def _solve_energy_once(
                 explicit_rhs[up_idx] += m_abs * _offset(dev, dt.up_node.pressure_pa, dt.T_up, dt.cp_up)
                 explicit_rhs[down_idx] -= m_abs * _offset(dev, dt.down_node.pressure_pa, dt.T_out, dt.cp_out)
                 arriving[down_idx].append((dev, m_abs, dt.cp_out))
+        if dt.lift_mdot > 0.0:
+            # lift gas joins the wellhead node with the well's outlet temperature
+            explicit_inflow_total[down_idx] += dt.lift_mdot * dt.lift_cp
+            if use_offsets:
+                explicit_rhs[down_idx] -= dt.lift_mdot * dt.lift_h_out
+                source_arriving[down_idx] += dt.lift_mdot * (dt.lift_h_out - dt.lift_cp * dt.T_out)
+            else:
+                explicit_rhs[down_idx] -= dt.lift_mdot * dt.lift_cp * dt.T_out
 
     def _sink_offset(nid: int, row: int) -> float:
         """Offset of the fluid leaving the network at a node with no outflow."""
@@ -489,7 +498,8 @@ def _solve_energy_once(
             return 0.0
         node = network_state.nodes[nid]
         T_star = node.temperature_c if node.temperature_c is not None else T_ref
-        return sum(m * _offset(link, node.pressure_pa, T_star, cp_w) for link, m, cp_w in arriving[row])
+        return (sum(m * _offset(link, node.pressure_pa, T_star, cp_w) for link, m, cp_w in arriving[row])
+                + source_arriving[row])
 
     thermal_inlet_map = {}
     for node in network_state.nodes.values():
@@ -617,6 +627,12 @@ class DeviceThermalState:
     kind: str
     heat_loss_w: float = 0.0
     potential_w: float = 0.0
+    # gas lift: lift gas leaving at the wellhead node (internal source)
+    lift_mdot: float = 0.0
+    lift_cp: float = 0.0
+    lift_h_out: float = 0.0          # J/kg at (P_down, T_out), the fluid model's basis
+    lift_h_out_rel: float = 0.0      # same, above the global-balance reference
+    lift_h_supply_rel: float = 0.0   # at the injection point, above the reference
 
 
 def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState | None:
@@ -628,7 +644,7 @@ def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState |
     if not isinstance(dev, (FittingState, PumpState)):
         return None
     mdot = float(dev.mass_flow_kg_per_s)
-    if abs(mdot) < 1e-30:
+    if abs(mdot) < 1e-30 and not getattr(dev.component, "has_gas_lift", False):
         return None
     # An IPR link (WellInflow) is an ordinary isenthalpic device.  A Well
     # (IPR + tubing) gets its wellhead state from the tubing model.
@@ -669,42 +685,85 @@ def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState |
 
 
 def _well_thermal_state(dev, fluid_model, mdot, up_node, down_node, T_up, cp, P_up, P_down):
-    """Wellhead thermal state of a producing ``Well`` link, or None when the
-    tubing model does not apply (back-flow, unsupported fluid, rate not
-    deliverable): the caller then passes the temperature through."""
+    """Wellhead thermal state of a producing (or gas-lifted) ``Well`` link, or
+    None when the tubing model does not apply (back-flow, unsupported fluid,
+    rate not deliverable): the caller then passes the temperature through."""
+    from types import SimpleNamespace
+
     from angelica.closures.choke import resolve_link_fluid
-    from angelica.closures.well_fluid import well_fluid_for
-    from angelica.closures.well_model import _GRAVITY, well_tubing_state
+    from angelica.closures.well_fluid import BlackOilWellFluid, well_fluid_for
+    from angelica.closures.well_model import _GRAVITY, _lift_args, well_tubing_state
 
     link_fluid = resolve_link_fluid(fluid_model, dev)
-    if mdot <= 0.0 or well_fluid_for(link_fluid, dev) is None:
-        return None
     comp = dev.component
+    lifted = getattr(comp, "has_gas_lift", False)
+    if mdot < 0.0 or (mdot == 0.0 and not lifted) or well_fluid_for(link_fluid, dev) is None:
+        return None
     res = well_tubing_state(comp, link_fluid, float(P_up), float(T_up), float(mdot), link_state=dev)
     if res is None or res.wellhead_enthalpy_j_per_kg is None:
         return None
-    potential_w = -mdot * _GRAVITY * float(comp.tubing_height_change_m)
+    dz = float(comp.tubing_height_change_m)
     wf = well_fluid_for(link_fluid, dev, comp, round(float(P_up), 0), round(float(T_up), 3))
+    m_gl = res.lift_mass_flow_kg_per_s
+    lift = _lift_args(comp, wf) if lifted else None
+    dz_gl = dz * float(comp.gas_lift_depth_m) / float(comp.tubing_length_m) if lifted else 0.0
+    potential_w = -_GRAVITY * (mdot * dz + m_gl * dz_gl)
+
+    if lift is not None:
+        gas = lift[0]
+        if isinstance(gas, BlackOilWellFluid):
+            def h_gl(P, T):
+                return gas.fluid.enthalpy_for_link(None, P, T)
+            ref_gl = 0.0
+
+            def cp_gl(P, T):
+                return gas.fluid.specific_heat_at(None, P, T)
+        else:
+            ns = SimpleNamespace(zs=gas.zs)
+
+            def h_gl(P, T):
+                return fluid_model.enthalpy_for_link(ns, P, T)
+            ref_gl = fluid_model.reference_enthalpy_for_link(ns)
+
+            def cp_gl(P, T):
+                return fluid_model.specific_heat_at(ns, P, T)
+
     if wf.exact_enthalpy:
         # Same enthalpy at the network's wellhead pressure (the march ends at
         # its own, slightly different, wellhead pressure).
-        T_out = _temperature_from_enthalpy(fluid_model, dev, res.wellhead_enthalpy_j_per_kg, P_down,
-                                           res.wellhead_temperature_c)
+        if res.outlet_fluid is not None:
+            T_out = res.outlet_fluid.temperature_from_h(res.wellhead_enthalpy_j_per_kg, float(P_down),
+                                                        res.wellhead_temperature_c)
+        else:
+            T_out = _temperature_from_enthalpy(fluid_model, dev, res.wellhead_enthalpy_j_per_kg, P_down,
+                                               res.wellhead_temperature_c)
         heat_loss_w = res.formation_heat_w
     else:
         # PVT-table fluid: the wellhead temperature from the table at the
         # network's wellhead pressure; the heat given to the formation from
         # the fluid's own enthalpy at both ends, so the network balance
-        # closes exactly: Q = ṁ·(h_in − h_out) − ṁ·g·Δz.
-        T_out = wf.temperature_from_h(res.wellhead_enthalpy_j_per_kg, float(P_down), res.wellhead_temperature_c)
-        h_in = fluid_enthalpy(fluid_model, dev, float(P_up), float(T_up))
-        h_out = fluid_enthalpy(fluid_model, dev, float(P_down), T_out)
-        if h_in is None or h_out is None:
-            return None
-        heat_loss_w = mdot * (h_in - h_out) + potential_w
+        # closes exactly: Q = Σ ṁ·(h_in − h_out) − g·Σ ṁ·Δz.
+        outlet = res.outlet_fluid if res.outlet_fluid is not None else wf
+        T_out = outlet.temperature_from_h(res.wellhead_enthalpy_j_per_kg, float(P_down), res.wellhead_temperature_c)
+        heat_loss_w = potential_w
+        if mdot > 0.0:
+            h_in = fluid_enthalpy(fluid_model, dev, float(P_up), float(T_up))
+            h_out = fluid_enthalpy(fluid_model, dev, float(P_down), T_out)
+            if h_in is None or h_out is None:
+                return None
+            heat_loss_w += mdot * (h_in - h_out)
+        if lift is not None:
+            heat_loss_w += m_gl * (h_gl(res.injection_pressure_pa, res.injection_temperature_c)
+                                   - h_gl(float(P_down), T_out))
     cp_out = _specific_heat_at(fluid_model, dev, P_down, T_out)
+    extra = {}
+    if lift is not None:
+        h_out_gl = h_gl(float(P_down), T_out)
+        extra = {"lift_mdot": m_gl, "lift_cp": cp_gl(float(P_down), T_out), "lift_h_out": h_out_gl,
+                 "lift_h_out_rel": h_out_gl - ref_gl,
+                 "lift_h_supply_rel": h_gl(res.injection_pressure_pa, res.injection_temperature_c) - ref_gl}
     return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_out, cp_out, "well",
-                              heat_loss_w=heat_loss_w, potential_w=potential_w)
+                              heat_loss_w=heat_loss_w, potential_w=potential_w, **extra)
 
 
 def _temperature_from_enthalpy(fluid_model, link, h: float, P: float, T_guess: float) -> float:

@@ -12,7 +12,7 @@ from angelica.core.results import ComponentFlowResult, SolveResult
 from angelica.core.settings import SolverSettings
 from angelica.core.state import HeatSourceState, NetworkState, PipeState
 from angelica.properties.base import FluidModel
-from angelica.properties.black_oil import BlackOilComposition
+from angelica.properties.black_oil import BlackOilComposition, mix_black_oil_streams
 
 from .base import BaseSolver
 from .steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
@@ -124,7 +124,8 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
 
         Compositions are seeded at inlet nodes and propagated downstream
         following the current flow field.  At each junction the incoming
-        streams are mixed by mass-weighted average.  Pipes in which flow
+        streams are mixed conserving standard volumes
+        (:func:`~angelica.properties.black_oil.mix_black_oil_streams`).  Pipes in which flow
         is ambiguous or zero inherit the default composition.
 
         Returns
@@ -170,6 +171,9 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
 
                 comp = node_comp.get(up_id, default_comp)
                 incoming[down_id].append((ṁ, comp))
+            for nid_s, node_s in network_state.nodes.items():
+                for m_s, stream in node_s.source_streams:     # lift gas (GasStream)
+                    incoming[nid_s].append((m_s, stream))
 
             # Mix at each non-inlet junction
             for nid, contributions in incoming.items():
@@ -180,11 +184,7 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
                 total_m = sum(m for m, _ in contributions)
                 if total_m <= 1e-12:
                     continue
-                mixed = contributions[0][1]
-                w_acc = contributions[0][0]
-                for m_i, c_i in contributions[1:]:
-                    mixed = mixed.mix(c_i, w_acc, m_i)
-                    w_acc += m_i
+                mixed = mix_black_oil_streams(contributions, default_comp)
                 # Apply inter-iteration relaxation toward the previous outer result
                 if node_comp_prev is not None and relaxation < 1.0 and nid in node_comp_prev:
                     old = node_comp_prev[nid]
@@ -436,6 +436,9 @@ class SteadyBlackOilSolver(WellNetworkMixin, BaseSolver):
 
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
         for _outer in range(settings.max_outer_iterations):
+
+            # Lift gas of gas-lifted wells: internal sources at their wellheads.
+            self._set_gas_lift_sources(network_state, effective_fluid)
 
             # ── build effective fluid model for this iteration ────────────────
             if use_per_inlet:

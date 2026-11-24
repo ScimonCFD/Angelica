@@ -81,6 +81,37 @@ class WellNetworkMixin:
         return lam_hist, lam_metrics, turb_hist, turb_metrics, converged
 
     @staticmethod
+    def _set_gas_lift_sources(network_state, fluid) -> None:
+        """Lift gas of every gas-lifted ``Well`` enters the network at its
+        wellhead node as an internal source (mass and composition)."""
+        from angelica.closures.choke import resolve_link_fluid
+        from angelica.closures.well_fluid import BlackOilWellFluid, lift_gas_fluid, well_fluid_for
+        from angelica.closures.well_model import gas_lift_mass_flow
+        from angelica.properties.black_oil import GasStream
+
+        for node in network_state.nodes.values():
+            node.source_mass_flow_kg_per_s = 0.0
+            node.source_streams = ()
+        for link in network_state.components:
+            comp = link.component
+            if not getattr(comp, "has_gas_lift", False):
+                continue
+            link_fluid = resolve_link_fluid(fluid, link)
+            p_res = float(link.start_node.pressure_pa)
+            T = link.start_node.temperature_c
+            if T is None:
+                T = getattr(link_fluid, "reference_temperature_c", 60.0)
+            wf = well_fluid_for(link_fluid, link, comp, round(p_res, 0), round(float(T), 3))
+            if wf is None:
+                continue
+            m_gl = gas_lift_mass_flow(comp, link_fluid, p_res, T, link)
+            gas = lift_gas_fluid(wf, comp)
+            stream = GasStream(gas.key[2]) if isinstance(gas, BlackOilWellFluid) else gas.zs
+            node = link.end_node
+            node.source_mass_flow_kg_per_s += m_gl
+            node.source_streams = (*node.source_streams, (m_gl, stream))
+
+    @staticmethod
     def _start_wells(network_state, fluid) -> bool:
         """Between outer iterations: a dead well whose wellhead pressure has
         fallen below its static (shut-in) wellhead pressure starts producing.
@@ -136,5 +167,7 @@ class WellNetworkMixin:
             states.append(WellOperatingState(
                 component_id=link.component.component_id, state=state, wellhead_pressure_pa=p_wh,
                 max_wellhead_pressure_pa=p_max, static_wellhead_pressure_pa=p_static,
-                minimum_stable_rate_kg_per_s=curve.minimum_stable_rate_kg_per_s, mass_flow_kg_per_s=m))
+                minimum_stable_rate_kg_per_s=curve.minimum_stable_rate_kg_per_s, mass_flow_kg_per_s=m,
+                gas_lift_kg_per_s=sum(ms for ms, _s in link.end_node.source_streams)
+                if getattr(link.component, "has_gas_lift", False) else 0.0))
         return tuple(states)

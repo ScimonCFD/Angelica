@@ -332,6 +332,10 @@ class CanvasScene:
                 "production_time_days": "365",
                 "wellbore_diameter_m": "",
                 "tubing_u_w_per_m2k": "",
+                "gas_lift_rate_sm3_per_day": "0",
+                "gas_lift_depth_m": "",
+                "gas_lift_gas_gravity": "",
+                "gas_lift_zs": "",
             }
         if component_type == "well_inflow":
             return {
