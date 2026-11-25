@@ -25,6 +25,8 @@ def export_solve_result_csv(result, output_path: str) -> None:
         writer = csv.writer(f)
         writer.writerow(["case", result.case_name])
         writer.writerow(["converged", result.converged])
+        for row in _notes_rows(result):
+            writer.writerow(row)
         writer.writerow([])
         if has_temperatures:
             writer.writerow(["Node", "Pressure (Pa)", "Pressure (kPa)", "Temperature (°C)"])
@@ -82,6 +84,16 @@ def export_solve_result_csv(result, output_path: str) -> None:
         _write_multiphase_csv(writer, result)
 
 
+def _notes_rows(result) -> list[list]:
+    """Diagnosis of a solve that did not converge, and warnings."""
+    rows: list[list] = []
+    diagnosis = getattr(result, "diagnosis", None)
+    if diagnosis is not None:
+        rows += [["diagnosis", part] for part in diagnosis.message.split("; ")]
+    rows += [["warning", w] for w in getattr(result, "warnings", ())]
+    return rows
+
+
 def export_solve_result_workbook(result, output_path: str) -> None:
     try:
         from openpyxl import Workbook
@@ -103,6 +115,12 @@ def export_solve_result_workbook(result, output_path: str) -> None:
 
     pressures_sheet = workbook.active
     pressures_sheet.title = "Pressures"
+    notes = _notes_rows(result)
+    if notes:
+        notes_sheet = workbook.create_sheet("Notes")
+        notes_sheet.append(["Converged", result.converged])
+        for row in notes:
+            notes_sheet.append(row)
     if has_temperatures:
         pressures_sheet.append(["Node", "Pressure (Pa)", "Pressure (kPa)", "Temperature (°C)"])
         for node_id in sorted(result.node_pressures_pa):
@@ -340,6 +358,8 @@ def print_solve_result(result, detailed: bool = False) -> None:
     if diagnosis is not None:
         for part in diagnosis.message.split("; "):
             print(f"  {part}")
+    for w in getattr(result, "warnings", ()):
+        print(f"Warning: {w}")
     print("")
     _print_iteration_summary(result)
     print("")

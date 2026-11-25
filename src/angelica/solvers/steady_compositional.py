@@ -560,4 +560,5 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
             separators=separator_results,
             regulators=self._regulator_results(network_state),
             diagnosis=self._diagnose(failed, network_state, pattern_history),
+            warnings=self._regulator_warnings(network_state),
         )

@@ -279,8 +279,11 @@ class RegulatorResult:
 
 @dataclass(frozen=True)
 class PatternSwitch:
-    """A pipe whose Beggs-Brill flow pattern kept changing in the last outer
-    iterations of a solve that did not converge."""
+    """A pipe whose flow pattern kept changing in the last outer iterations
+    of a solve that did not converge: Beggs-Brill's patterns, or "laminar" /
+    "turbulent" for a pipe on either side of the laminar-turbulent transition
+    (the friction factor jumps there: 64/Re = 0.028 below Re = 2300,
+    Colebrook ≈ 0.05 above)."""
 
     component_id: str
     patterns: tuple[str, ...]
@@ -296,8 +299,9 @@ class ConvergenceDiagnosis:
     imbalance |in − out|/(in + out) at the end, the hydraulic convergence
     measure.  ``pattern_switches``: pipes whose flow pattern changed over the
     last outer iterations — a flow-pattern boundary the solution cannot settle
-    on (Beggs-Brill's pattern boundaries are discontinuous, so a pipe can have
-    no solution at an imposed flow, or two at one pressure drop).
+    on (Beggs-Brill's pattern boundaries and the laminar-turbulent transition
+    are discontinuous, so a pipe can have no solution at an imposed flow, or
+    two at one pressure drop).
     """
 
     failed: tuple[str, ...]
@@ -312,7 +316,7 @@ class ConvergenceDiagnosis:
             parts.append(f"largest mass imbalance at node {self.worst_node_id} "
                          f"({100.0 * self.worst_node_imbalance_rel:.2g} % of its throughput)")
         for sw in self.pattern_switches:
-            parts.append(f"flow pattern of {sw.component_id} alternates between " + " and ".join(sw.patterns))
+            parts.append(f"flow regime of {sw.component_id} alternates between " + " and ".join(sw.patterns))
         return "; ".join(parts)
 
 
@@ -348,6 +352,8 @@ class SolveResult:
     regulators: tuple[RegulatorResult, ...] = ()
     # None when converged (see ConvergenceDiagnosis)
     diagnosis: ConvergenceDiagnosis | None = None
+    # Converged or not: correlations used outside their data range, etc.
+    warnings: tuple[str, ...] = ()
 
     @property
     def link_mass_flows_kg_per_s(self) -> list[float]:

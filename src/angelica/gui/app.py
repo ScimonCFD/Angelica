@@ -2739,15 +2739,19 @@ class NetSimGui:
             self.outer_iteration_boundaries = list(result.outer_iteration_boundaries)
             self._redraw_scene()
             self._redraw_convergence_plot()
+            warnings = tuple(getattr(result, "warnings", ()))
+            note = (f" {len(warnings)} warning(s): correlations outside their data range "
+                    f"(see the exported report)." if warnings else "")
             if result.converged:
-                self.status_var.set(f"Simulation converged for case '{case.name}'.")
+                self.status_var.set(f"Simulation converged for case '{case.name}'.{note}")
             else:
-                self.status_var.set(f"Simulation did not converge for case '{case.name}'.")
+                self.status_var.set(f"Simulation did not converge for case '{case.name}'.{note}")
                 diagnosis = getattr(result, "diagnosis", None)
                 if diagnosis is not None:
                     messagebox.showwarning(
                         "Simulation did not converge",
-                        diagnosis.message.replace("; ", ";\n"),
+                        diagnosis.message.replace("; ", ";\n")
+                        + "".join(f"\n\nWarning: {w}" for w in warnings),
                     )
 
         threading.Thread(target=_worker, daemon=True).start()

@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import math
 
+# Data range of the Beggs-Robinson dead-oil viscosity correlation (see
+# dead_oil_viscosity_pa_s: read in secondary sources, not in the original).
+BEGGS_ROBINSON_T_RANGE_C = (21.1, 146.1)      # 70–295 °F
+BEGGS_ROBINSON_API_RANGE = (16.0, 58.0)
+
 
 def dead_oil_specific_heat_j_per_kg_k(api_gravity: float, temperature_c: float) -> float:
     """Dead oil specific heat capacity via Watson-Nelson (API Technical Data Book).
@@ -81,7 +86,14 @@ def dead_oil_viscosity_pa_s(api_gravity: float, temperature_c: float) -> float:
     Correlation: log10(log10(mu_od + 1)) = (3.0324 - 0.02023*API) - 1.163*log10(T_F)
     where T_F is temperature in Fahrenheit and mu_od is in centipoise.
 
-    Correlation stated range: 16 <= API <= 58, -6.7 °C <= T <= 146 °C.
+    Data range (BEGGS_ROBINSON_T_RANGE_C, BEGGS_ROBINSON_API_RANGE):
+    16–58 °API, 70–295 °F (21.1–146.1 °C), 460 dead-oil observations — read
+    in secondary sources (pengtools wiki; IHS Harmony reference, which adds
+    that it "tends to overstate the viscosity ... below 100°F to 150°F"); the
+    original (Beggs & Robinson 1975, JPT 27(9) 1140, SPE-5434-PA) not read.
+    Until v1.27.1 this docstring gave −6.7 °C as the lower limit, without a
+    source.  The black-oil solver warns when it uses the correlation outside
+    the data range.
     Hard lower bound: T > 0 °F (> -17.78 °C) — log10(0) is undefined below this point.
     Returns viscosity in Pa·s.
     """

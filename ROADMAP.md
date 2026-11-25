@@ -7,7 +7,7 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.27.0, checked against the code)
+## 1. Where Angelica stands (v1.27.1, checked against the code)
 
 | Area | Present today |
 |---|---|
@@ -19,7 +19,7 @@ This file is the working source of truth. Each item is released on its own
 | Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve (also used as a "compressor"), fixed-duty heater/cooler, separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
 | GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI and US units (ft, psi, lb/s), Excel export |
-| Quality | 766 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns |
+| Quality | 788 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
 
 **Validation debt (2026-11-25).**  Most models since v1.19 are validated
 by internal consistency only: of the last ten log summaries, eight say
@@ -197,6 +197,34 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
     there, and regulators skip their first check, but the initialisation
     itself is unchanged.  Not fixed: a fix would change the iteration path
     of every per-inlet case.
+  - **Laminar-turbulent jump (recorded 2026-11-25, v1.27.1).**  The
+    homogeneous model takes f = 64/Re below Re = 2300 and Colebrook above:
+    at ε/D = 3e-4, 0.0278 against 0.0475 (×1.71).  A viscous line whose Re
+    sits near 2300 can have no solution; the temperature then moves it
+    across and the solve cycles (20 km black-oil line, ambient 6, 5 and
+    2 °C).  The diagnosis names the pipe and both regimes.  **Maintainer's
+    choice** (not decided here):
+    (a) leave it — the published laminar and turbulent laws, a stated gap;
+    (b) interpolate f linearly between Re 2300 and 4000 — continuous, no
+    published basis for the values in between;
+    (c) Churchill (1977), one equation for all Re — 0.0309 at Re 2300,
+    within 1.7 % of Colebrook at Re 4000 and 0.6 % at 10⁴ (formula and
+    figures from memory, to be read in the source before use).  (b) and (c)
+    change results of every pipe between Re 2300 and 4000.
+  - **Black-oil below the dead-oil viscosity's data range (recorded
+    2026-11-25, v1.27.1).**  Beggs-Robinson's data cover 21.1–146.1 °C and
+    16–58 °API (secondary sources; the original not read).  Below 21.1 °C
+    the formula is extrapolated (API 35: 31 cP at 21 °C, 68 at 15 °C,
+    5 600 at 0 °C, 3·10⁶ at −6.7 °C), and one source says it overstates
+    the viscosity there.  The solver now warns.  8 of 15 black-oil tutorials
+    are partly below 21.1 °C; frozen at 21.1 °C their results change by
+    ≤ 1.4 %, except tutorial 07 (cold oil at 10 °C: 80 against 14 mPa·s;
+    "31.8 % more flow hot" becomes 11.2 %).  **Maintainer's choice** (not
+    decided here): (a) extrapolate and warn (now); (b) freeze at 21.1 °C
+    (no source either; tutorial 07 changes as above); (c) another
+    correlation with low-temperature data (to be read in a source first);
+    (d) refuse a solve below the range.  The numerical floor −6.7 °C (no
+    overflow) stays whatever the choice.
 
 ### Stage 6 — heat transfer (item 17)
 - 6.1 Cylindrical layers, buried pipe, computed inner film coefficient.
@@ -786,7 +814,9 @@ Summary:
     move by at most 1e-4 K.
   - Black-oil properties raised or overflowed outside −6.7…500 °C during
     unsettled iterations: they are now evaluated within it, and a solution
-    outside it is reported as not converged.
+    outside it is reported as not converged.  (Corrected in v1.27.1: −6.7 °C
+    is a numerical floor, not the correlation's limit, and out of range is
+    now a warning.)
 - Review items of v1.26.1: the tutorial 14 explanation was corrected (a
   no-solution band in flow, with two solutions in pressure); the
   non-convergence diagnosis was added; the initialisation root cause was
@@ -812,3 +842,38 @@ Summary:
 - Not validated: against a published regulator or station case.  The
   wide-open K (5) is an assumption; there is no droop, lock-up or valve
   curve.
+
+### 2026-11-25 — Review fixes of v1.27.0 (v1.27.1)
+
+- Regulators in series: a BPR ahead of a reducer left the line between
+  them with no pressure of its own (singular, 10¹⁰ bar, exception in the
+  compositional solver).  The giving side of such a line now opens.
+  Sweeping set points found three more failures (two reducers switching
+  back to control together; a reducer closing on a transient zero flow; a
+  network at rest at −337 °C), all fixed.  Off-suite sweep: 5 layouts ×
+  (black-oil 81 + compositional 64) = 725 solves, all converged and
+  consistent.
+- Black-oil enthalpy below −6.7 °C: (∂h/∂P)_T jumped (h fell 35 kJ/kg in
+  1 K): +16.6 K let-down heating and a node at −22.7 °C.  Frozen with the
+  properties; h continuous and increasing.
+- Beggs-Robinson range: 21.1–146.1 °C, 16–58 °API (secondary sources);
+  −6.7 °C was unsourced.  Out of range is now `SolveResult.warnings`, not
+  converged=False.  Effect of the extrapolation on the tutorials measured
+  (see limitations).
+- A non-converging 20 km black-oil line at 5 °C ambient: the
+  laminar-turbulent jump, not the regulator.  Diagnosed now; options in
+  the limitations.
+- Found on the way: tutorial black-oil 10 prints 1.289 MPa where its
+  reference has 1.290 — the same at v1.27.0 run directly, so the
+  environment the reference was generated in; within the golden test's
+  last-digit tolerance.
+
+Summary:
+- Validated against data read in a source: the data range of the dead-oil
+  viscosity (secondary sources, two agreeing); nothing else.
+- Validated by consistency: regulator pair states against their pressures
+  (725 solves); BPR + reducer flow = the downstream pipe solved alone
+  (1.3e-7); h continuous and increasing below the floor, let-down there
+  equal to the one at the floor (0.02 K).
+- Not validated: the regulator against a published case; the
+  low-temperature viscosity (no data below 21.1 °C).

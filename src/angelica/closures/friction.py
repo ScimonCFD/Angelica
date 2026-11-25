@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
+from collections import deque
 
 from angelica.numerics import NonlinearProblem, build_nonlinear_solver
 
 from .gravity import GRAVITY_M_PER_S2, elevation_pressure_term
 from .pressure_drop import PressureDropCorrelation
+
+PATTERN_TRACE_LENGTH = 8     # regimes kept per pipe (see ColebrookPipeCorrelation.calculate_velocity)
 
 
 class ColebrookFrictionFactorStrategy(ABC):
@@ -183,6 +186,16 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
             friction_factor_max_iterations,
             laminar_turbulent_transition_re,
         )
+        # Regime of the last velocity evaluations of each pipe, for the
+        # diagnosis of a solve that does not converge (as Beggs-Brill's
+        # pattern_trace): the friction factor jumps at the transition, so a
+        # pipe can have no solution at a flow imposed on it.
+        cid = getattr(getattr(pipe_state, "component", None), "component_id", None)
+        if cid is not None:
+            regime = "laminar" if float(getattr(pipe_state, "reynolds", 0.0) or 0.0) < \
+                laminar_turbulent_transition_re else "turbulent"
+            trace = self.__dict__.setdefault("pattern_trace", {})
+            trace.setdefault(cid, deque(maxlen=PATTERN_TRACE_LENGTH)).append(regime)
         return pipe_state.velocity_m_per_s
 
     def _fixed_point_mapping(

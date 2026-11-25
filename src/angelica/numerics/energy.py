@@ -106,11 +106,14 @@ def solve_energy_system(
     the hydraulic solver's round-off (1e-12 relative, e.g. a liquid branch
     whose separator outlet carries nothing), not flow: they are treated as
     zero here.  Left in, a node fed only by such a flow divided its enthalpy
-    offsets by ~1e-11 W/K (−10⁸ °C, v1.26.1).
+    offsets by ~1e-11 W/K (−10⁸ °C, v1.26.1).  Flows below
+    ``STAGNANT_FLOW_ABS`` are zero too: in a network at rest (every
+    regulator closed) the largest flow is itself round-off (2e-12 kg/s) and
+    the relative floor kept them all (−337 °C and a flash failure, v1.27.1).
     """
     saved = {nid: node.temperature_c for nid, node in network_state.nodes.items()}
     flows = [ps.mass_flow_kg_per_s for ps in network_state.components]
-    floor = STAGNANT_FLOW_REL * max((abs(float(m)) for m in flows), default=0.0)
+    floor = max(STAGNANT_FLOW_REL * max((abs(float(m)) for m in flows), default=0.0), STAGNANT_FLOW_ABS)
     for ps, m in zip(network_state.components, flows):
         if abs(float(m)) <= floor:
             ps.mass_flow_kg_per_s = 0.0
@@ -148,6 +151,7 @@ def solve_energy_system(
 
 
 STAGNANT_FLOW_REL = 1e-9
+STAGNANT_FLOW_ABS = 1e-9      # kg/s (0.09 g/day)
 _SOURCE_RELAXATION = 0.5
 
 

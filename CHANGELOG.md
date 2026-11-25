@@ -1,5 +1,89 @@
 # Changelog
 
+## [1.27.1] — 2026-11-25
+
+Review of v1.27.0: regulators beyond the tutorials (pairs in series, swept
+set points), a black-oil line at low ambient temperatures, and the
+temperature range of the black-oil correlations.
+
+### Fixed
+  - **Two regulators in series (since v1.27.0).**  A back-pressure
+    regulator followed by a reducing regulator raised an exception in the
+    compositional solver (gas, 70 → 5 bar, BPR 50 bar, reducer 20 bar).
+    While both controlled, the line between them had no pressure of its
+    own: one imposed the flow into it (the supply at its set point), the
+    other the flow out (the demand at its set point), and the pressure
+    correction for it was singular — 1.7·10¹⁰ bar, then 4·10⁶ °C at the
+    isenthalpic outlet.  Black-oil did not raise only because its
+    properties clamp T.  Both cannot control: if more is imposed in than
+    out the line's pressure rises until the regulators feeding it open; if
+    less, it falls until those drawing from it open.  The solver now
+    detects such a line after every state check and opens the giving side
+    (at the start, with no flows yet, it opens all of them).  The result is
+    now the black-oil one: BPR wide open, reducer controlling, and the flow
+    of the reducer alone in the same line (15.8951 kg/s against 15.8952).
+  - **Pairs found by sweeping set points (since v1.27.0).**  A reducer to
+    10 bar ahead of one to 20 bar went back to control together with it
+    (each judged feasible with the other wide open), was held where it
+    cannot be and drove the line to 0 Pa; a reducer and a BPR with the same
+    set point (no flow) gave −337 °C.  Now one open regulator returns to
+    control per check (the most upstream), "can control" lapses when
+    another regulator changes state, flow-based transitions wait one check
+    when a regulator opens for lack of capacity in an unsettled pass, a
+    closed regulator does not reopen on the pressure of a line with no
+    pressure of its own, and the energy solve treats flows below 1e-9 kg/s
+    as zero (in a network at rest the largest flow is itself round-off).
+    Swept off-suite: five layouts (BPR + reducer with and without a pipe
+    between, reducer + BPR, reducer + reducer, BPR + BPR), black-oil 9 × 9
+    and compositional 8 × 8 set points, 725 solves: all converge, every
+    state consistent with its pressures.  Contradictory set points give no
+    flow, and `SolveResult.warnings` says the pressure of the line cut off
+    between the closed regulators is arbitrary.
+  - **Black-oil enthalpy below −6.7 °C (since v1.27.0).**  Properties are
+    frozen below that floor, so (∂h/∂P)_T = v − T·∂v/∂T jumped to v (the
+    thermal expansion of the frozen properties is zero): h(8 MPa) fell by
+    35 kJ/kg between −7.2 and −6.2 °C.  A let-down below the floor heated
+    the fluid by 16.6 K (6 MPa across a regulator at −8 °C ambient) and the
+    inversion of h found a node at −22.7 °C between a 60 °C inlet and a
+    −6 °C ambient.  (∂h/∂P)_T is now frozen with the properties; h is
+    continuous and increasing, the let-down gives +0.12 K there (+0.14 K at
+    −5 °C).  No result above −6.2 °C changes.
+  - **Range of the Beggs-Robinson dead-oil viscosity.**  v1.27.0 called
+    −6.7 °C the correlation's stated lower limit; it came from an unsourced
+    docstring.  The data range is 16–58 °API and 70–295 °F (21.1–146.1 °C),
+    460 dead-oil observations — read in two secondary sources that agree
+    (the original, SPE-5434-PA, was not accessible); one adds that the
+    correlation overstates the viscosity below 100–150 °F.  −6.7 °C stays as
+    a numerical floor only.
+  - **Out of range is a warning, not a failed solve.**  A black-oil
+    solution below −6.7 °C was reported as not converged although it had
+    converged.  New `SolveResult.warnings`: the dead-oil viscosity used
+    outside its data range (nodes and pipe mean temperatures — a nearly
+    stagnant pipe cools to the ambient between hot nodes), properties frozen
+    at the numerical floor, an oil gravity outside 16–58 °API.  Printed by
+    `print_solve_result`, written to the CSV and Excel exports, counted in
+    the GUI status bar.  8 of the 15 black-oil tutorials go below 21.1 °C
+    somewhere (07, 09–15).  Frozen at 21.1 °C instead of extrapolated, the
+    viscosity changes their printed results by nothing (10, 12, 14, 15), up
+    to 0.1 % (09, 11) or 1.4 % (13), except tutorial 07, whose point is the
+    cold oil at 10 °C: 80 mPa·s extrapolated against 14 frozen, and "hot
+    oil delivers 31.8 % more" becomes 11.2 %.  Which is right is not known
+    (below the data); nothing is changed until the maintainer decides.
+    Tutorial 14's no-solution band does not depend on it (its oil line stays
+    above 32.5 °C; same results with the viscosity frozen).
+  - **Laminar-turbulent transition in the diagnosis.**  A black-oil line
+    (20 km, reducer to 2 MPa, 20 km, ambient 5 °C) did not converge.  Not
+    the regulator: the downstream pipe alone fails too.  Its Reynolds
+    number sits near 2300, where the friction factor jumps from 64/Re =
+    0.028 to Colebrook 0.048 (ε/D = 3e-4), and the temperature moves it
+    across: Re cycled 2184 → 2306 → 3219 → 2334 → 2566.  The solve ended
+    converged=False naming only "temperature, density".  The diagnosis now
+    records each homogeneous pipe's regime (laminar / turbulent) like
+    Beggs-Brill's patterns: "flow regime of p3 alternates between turbulent
+    and laminar".  Swept 20 → −5 °C: converged except at 6, 5 and 2 °C,
+    each with that diagnosis.  The jump itself is not changed (options for
+    the maintainer in the ROADMAP).
+
 ## [1.27.0] — 2026-11-25
 
 ### New: pressure regulator (roadmap 5.4)
@@ -47,8 +131,9 @@
     iteration below −17.8 °C raised (dead-oil viscosity: log of T in °F),
     and a few °F above it the Beggs-Robinson 10^(10^z) overflowed for heavy
     oils; an unsettled iteration at thousands of °C overflowed the water
-    viscosity.  Properties are now evaluated between −6.7 °C (the
-    correlation's stated lower limit) and 500 °C, and a solution with a node
+    viscosity.  Properties are now evaluated between −6.7 °C (a numerical
+    floor — this entry first called it the correlation's stated lower
+    limit, which it is not; see 1.27.1) and 500 °C, and a solution with a node
     outside that range is reported as not converged, with the node.  No
     existing result changes.
   - **Tutorial 14, 0.5 MPa export: the explanation.**  v1.26.1 said the oil

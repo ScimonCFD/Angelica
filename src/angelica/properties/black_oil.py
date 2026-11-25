@@ -589,11 +589,10 @@ def compute_pvt(
     P = max(pressure_pa, 1.0)
     # Below T_MIN_C the dead-oil viscosity correlation has no value (log of
     # T in °F ≤ 0): properties are taken at T_MIN_C, so enthalpy continues
-    # linearly with that cp.  The black-oil solver reports a solution with a
-    # temperature below T_MIN_C as not converged (outside the correlations).
-    # Above T_MAX_C nothing is physical (it is reached only by the energy
-    # solve of an unsettled hydraulic pass); the water viscosity's
-    # exp(… + 1.16e-4·T²) would overflow near 2 500 °C.
+    # linearly with that cp (and its pressure term is frozen, see _dh_dp).
+    # Above T_MAX_C the water viscosity's exp(… + 1.16e-4·T²) would overflow
+    # near 2 500 °C.  The black-oil solver warns when a solution lies outside
+    # the dead-oil correlation's data range (well inside these limits).
     T = min(max(temperature_c, T_MIN_C), T_MAX_C)
 
     Pb = corr["pb"](gor_sc_m3_per_m3, gas_gravity, api_gravity, T)
@@ -696,11 +695,20 @@ _P0_PA = 101_325.0
 
 
 def _dh_dp(params: tuple, P: float, T_c: float) -> float:
-    """(∂h/∂P)_T of the black-oil mixture, m³/kg (= J/(kg·Pa))."""
+    """(∂h/∂P)_T of the black-oil mixture, m³/kg (= J/(kg·Pa)).
+
+    Outside [T_MIN_C, T_MAX_C] the properties are frozen (``compute_pvt``),
+    and so is this derivative: it is taken at the nearest limit.  Taking it
+    with the frozen properties instead (dv/dT = 0, so ∂h/∂P = v) made h(T)
+    fall by 35 kJ/kg between −7.2 and −6.2 °C at 8 MPa (until v1.27.1): an
+    isenthalpic let-down below the limit heated the fluid by 17 K and the
+    inversion of h found spurious temperatures."""
     dT = 0.5
+    T_c = min(max(T_c, T_MIN_C), T_MAX_C)
+    lo, hi = max(T_c - dT, T_MIN_C), min(T_c + dT, T_MAX_C)
     s0 = compute_pvt(P, T_c, *params)
-    s_lo = compute_pvt(P, T_c - dT, *params)
-    s_hi = compute_pvt(P, T_c + dT, *params)
+    s_lo = compute_pvt(P, lo, *params)
+    s_hi = compute_pvt(P, hi, *params)
     T_k = T_c + 273.15
     total = 0.0
     for a, rho in (("oil", "density_oil_kg_per_m3"), ("gas", "density_gas_kg_per_m3"),
@@ -710,7 +718,7 @@ def _dh_dp(params: tuple, P: float, T_c: float) -> float:
         if alpha <= 0.0 or r0 <= 0.0 or rl <= 0.0 or rh <= 0.0:
             continue
         w = alpha * r0 / s0.mixture_density_kg_per_m3
-        dv_dT = (1.0 / rh - 1.0 / rl) / (2.0 * dT)
+        dv_dT = (1.0 / rh - 1.0 / rl) / (hi - lo)
         total += w * (1.0 / r0 - T_k * dv_dT)
     return total
 
@@ -730,11 +738,14 @@ def black_oil_enthalpy(params: tuple, pressure_pa: float, temperature_c: float) 
     return h_T + h_P
 
 
-# Lowest temperature the black-oil correlations take: the stated lower limit
-# of the Beggs-Robinson dead-oil viscosity correlation (−6.7 °C, 20 °F, as
-# given in ``angelica.properties.dead_oil``).  Its formula 10^(10^z) − 1
-# overflows a few °F above 0 °F for heavy oils, so properties are not
-# evaluated below this limit.
+# Numerical limits of the black-oil properties, not validity limits:
+# outside them the properties are frozen (``compute_pvt``) so that nothing
+# raises or overflows.  Below 0 °F the Beggs-Robinson dead-oil viscosity has
+# no value (log of T in °F) and its 10^(10^z) − 1 overflows a few °F above
+# it for heavy oils; −6.7 °C (20 °F) keeps clear of both.  The correlation's
+# data range is 21.1–146.1 °C (``dead_oil.BEGGS_ROBINSON_T_RANGE_C``): the
+# black-oil solver warns outside it.  (v1.27.0 called −6.7 °C the
+# correlation's stated lower limit; that came from an unsourced docstring.)
 T_MIN_C = -6.7
 T_MAX_C = 500.0
 

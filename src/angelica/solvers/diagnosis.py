@@ -8,7 +8,10 @@ mass imbalance, and the pipes whose flow pattern changed over the last
 outer iterations.  Beggs-Brill's pattern boundaries are discontinuous: a
 pipe can have no solution at a flow imposed on it, which shows up as a
 pattern alternating between iterations (black-oil tutorial 14 at 0.4–0.5
-MPa export).
+MPa export).  So is the friction factor of the homogeneous model at the
+laminar-turbulent transition (64/Re below Re = 2300, Colebrook above): a
+viscous oil line whose Reynolds number sits near 2300 can cycle between the
+two with the temperature (its "pattern" is then laminar / turbulent).
 """
 from __future__ import annotations
 
@@ -40,8 +43,18 @@ class DiagnosisMixin:
             if not isinstance(link, PipeState):
                 continue
             report = self._multiphase_report(link, fluid)   # type: ignore[attr-defined]
-            if report is not None:
-                history.setdefault(link.component.component_id, []).append(report.flow_pattern)
+            if report is None:
+                continue
+            pattern = report.flow_pattern
+            if pattern == "no-slip":
+                # Homogeneous model: the regime that sets the friction factor.
+                re = float(getattr(link, "reynolds", 0.0) or 0.0)
+                pattern = "laminar" if re < self._transition_re() else "turbulent"
+            history.setdefault(link.component.component_id, []).append(pattern)
+
+    def _transition_re(self) -> float:
+        settings = getattr(self._hydraulic_solver, "settings", None)   # type: ignore[attr-defined]
+        return float(getattr(settings, "laminar_turbulent_transition_re", 2300.0))
 
     def _diagnose(self, failed: list[str], network_state, history: dict) -> ConvergenceDiagnosis | None:
         if not failed:

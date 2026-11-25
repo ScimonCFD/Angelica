@@ -639,14 +639,8 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
                                        separator_results)
         if regulators_changed:
             failed.append("regulator states")
-        from angelica.properties.black_oil import T_MAX_C, T_MIN_C
-        cold = [nid for nid, T in node_temperatures.items() if T < T_MIN_C]
-        if cold:
-            failed.append(f"temperature below the black-oil correlations' range ({T_MIN_C} °C) at node(s) "
-                          + ", ".join(str(n) for n in sorted(cold)))
-        hot = [nid for nid, T in node_temperatures.items() if T > T_MAX_C]
-        if hot:
-            failed.append(f"temperature above {T_MAX_C:.0f} °C at node(s) " + ", ".join(str(n) for n in sorted(hot)))
+        warnings = self._range_warnings(case, node_temperatures, network_state) \
+            + self._regulator_warnings(network_state)
         failed += [f"regulator {cid} keeps switching state" for cid in self._regulators_stuck(network_state)]
         return SolveResult(
             case_name=case.name,
@@ -672,4 +666,50 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
             separators=separator_results,
             regulators=self._regulator_results(network_state),
             diagnosis=self._diagnose(failed, network_state, pattern_history),
+            warnings=warnings,
         )
+
+    @staticmethod
+    def _range_warnings(case: NetworkCase, node_temperatures: dict, network_state=None) -> tuple[str, ...]:
+        """Black-oil correlations used outside their data range, at the nodes
+        and at the pipes' mean temperatures (a nearly stagnant pipe cools to
+        the ambient between two hot nodes).  A warning, not a convergence
+        failure: the solution is the model's, but the model is extrapolated
+        there."""
+        from angelica.core.state import PipeState
+        from angelica.properties.black_oil import T_MAX_C, T_MIN_C
+        from angelica.properties.dead_oil import BEGGS_ROBINSON_API_RANGE, BEGGS_ROBINSON_T_RANGE_C
+
+        temps = {f"node {n}": T for n, T in node_temperatures.items()}
+        if network_state is not None:
+            temps.update({f"pipe {lk.component.component_id}": lk.temperature_c
+                          for lk in network_state.components
+                          if isinstance(lk, PipeState) and lk.temperature_c is not None})
+        out = []
+        t_lo, t_hi = BEGGS_ROBINSON_T_RANGE_C
+
+        def where(names):
+            names = sorted(names)
+            return ", ".join(names[:6]) + (f" and {len(names) - 6} more" if len(names) > 6 else "")
+
+        cold = {k: T for k, T in temps.items() if T < t_lo}
+        hot = {k: T for k, T in temps.items() if T > t_hi}
+        if cold:
+            out.append(f"dead-oil viscosity (Beggs-Robinson) extrapolated below its data range "
+                       f"({t_lo} °C) at {where(cold)}, down to {min(cold.values()):.1f} °C; "
+                       f"it is reported to overstate the viscosity there")
+        if hot:
+            out.append(f"dead-oil viscosity (Beggs-Robinson) extrapolated above its data range "
+                       f"({t_hi} °C) at {where(hot)}, up to {max(hot.values()):.1f} °C")
+        frozen = [k for k, T in temps.items() if T < T_MIN_C or T > T_MAX_C]
+        if frozen:
+            out.append(f"black-oil properties frozen at their numerical limits ({T_MIN_C} / {T_MAX_C:.0f} °C) "
+                       f"at {where(frozen)}")
+        a_lo, a_hi = BEGGS_ROBINSON_API_RANGE
+        apis = {getattr(case.fluid_model, "api_gravity", None)}
+        apis |= {bc.api_gravity for bc in case.inlet_fluid_bcs}
+        bad = sorted(a for a in apis if a is not None and not a_lo <= a <= a_hi)
+        if bad:
+            out.append(f"oil gravity outside the dead-oil viscosity correlation's data range "
+                       f"({a_lo:.0f}–{a_hi:.0f} °API): " + ", ".join(f"{a:g}" for a in bad))
+        return tuple(out)

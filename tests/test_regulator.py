@@ -342,12 +342,123 @@ def test_check_valve_case_that_cycled_now_converges():
 
 
 def test_black_oil_properties_below_their_range_do_not_raise():
-    """Below −6.7 °C (the Beggs-Robinson dead-oil viscosity's stated lower
-    limit) properties are taken at −6.7 °C instead of raising (at −17.8 °C
-    the correlation's log of T in °F fails; a few °F above it 10^(10^z)
-    overflows for heavy oils)."""
+    """Below −6.7 °C (a numerical floor, not the correlation's limit: see
+    test_black_oil_range.py) properties are taken at −6.7 °C instead of
+    raising (at −17.8 °C the Beggs-Robinson log of T in °F fails; a few °F
+    above it 10^(10^z) overflows for heavy oils)."""
     args = (5e6, 35.0, 0.7, 120.0, 0.3)
     low = compute_pvt(args[0], -30.0, *args[1:])
     at_limit = compute_pvt(args[0], -6.7, *args[1:])
     assert low.viscosity_oil_pa_s == at_limit.viscosity_oil_pa_s
     compute_pvt(args[0], 3000.0, *args[1:])      # an unsettled energy iteration: no overflow
+
+
+# ── two regulators in series (v1.27.1) ────────────────────────────────────────
+#
+# Each case is checked for consistency of every regulator's state with its
+# pressures (controlling: the held node at the set point; open: the set
+# point out of reach; closed: no flow and the set point already met) and for
+# one flow through the series.  Tolerance: NODAL of the set point and of the
+# flow.  Where two regulators have contradictory set points the solution is
+# no flow; the line between them then has no pressure of its own and the
+# result says so (a warning).  Off-suite, the full grids (black-oil 9 × 9
+# set points, compositional 8 × 8, five layouts: 725 solves) all converged
+# and were consistent.
+
+_PAIR_MODES = {"bpr+reducer": ("upstream", "downstream"), "reducer+bpr": ("downstream", "upstream"),
+               "reducer+reducer": ("downstream", "downstream")}
+
+
+def _pair_case(layout, p1, p2, compositional=False, direct=False):
+    m1, m2 = _PAIR_MODES[layout]
+    D = 0.2032 if compositional else 0.1524
+
+    def reg(cid, a, b, p, mode):
+        return PressureRegulator(component_id=cid, start_node=a, end_node=b, diameter_m=D,
+                                 set_pressure_pa=p, mode=mode)
+    comps = [_pipe("up", 1, 2, 5000.0, D=D, U=3.0, T_amb=10.0 if compositional else 15.0), reg("r1", 2, 3, p1, m1)]
+    comps += [reg("r2", 3, 5, p2, m2)] if direct else [
+        _pipe("mid", 3, 4, 1000.0 if compositional else 500.0, D=D, U=3.0), reg("r2", 4, 5, p2, m2)]
+    comps += [_pipe("down", 5, 9, 2000.0, D=D, U=3.0)]
+    if compositional:
+        return NetworkCase(name=layout, fluid_model=CompositionalFluid(GAS, GAS_ZS),
+                           pressure_inlets=(PressureBoundary(1, 70e5),), pressure_outlets=(PressureBoundary(9, 5e5),),
+                           thermal_inlets=(ThermalBoundary(1, 20.0),),
+                           inlet_composition_bcs=(InletCompositionBC(1, GAS_ZS),), components=tuple(comps))
+    return NetworkCase(name=layout, fluid_model=BlackOilFluid(**CRUDE),
+                       pressure_inlets=(PressureBoundary(1, 8e6),), pressure_outlets=(PressureBoundary(9, 0.5e6),),
+                       thermal_inlets=(ThermalBoundary(1, 60.0),), inlet_fluid_bcs=(InletFluidBC(1, **CRUDE),),
+                       components=tuple(comps))
+
+
+def _assert_consistent(res):
+    assert res.converged, res.diagnosis.message
+    flows = [c.mass_flow_kg_per_s for c in res.component_flows]
+    top = max(max(flows), 1e-3)
+    assert max(flows) - min(flows) <= NODAL * top + 1e-3          # one flow through the series
+    if top <= 1e-3:
+        # no flow: the line between two closed regulators is cut off
+        assert all(g.state == "closed" or abs(g.mass_flow_kg_per_s) <= 1e-3 for g in res.regulators)
+        return
+    for g in res.regulators:
+        tol = NODAL * g.set_pressure_pa
+        held = g.outlet_pressure_pa if g.mode == "downstream" else g.inlet_pressure_pa
+        if g.state == "controlling":
+            assert held == pytest.approx(g.set_pressure_pa, abs=tol)
+        elif g.state == "open":
+            assert (g.outlet_pressure_pa <= g.set_pressure_pa + tol if g.mode == "downstream"
+                    else g.inlet_pressure_pa >= g.set_pressure_pa - tol)
+        else:
+            assert abs(g.mass_flow_kg_per_s) <= 1e-3
+
+
+@pytest.mark.parametrize("layout", list(_PAIR_MODES))
+def test_black_oil_regulator_pairs_set_point_sweep(layout):
+    for p1 in (1e6, 3e6, 5e6, 7e6, 7.8e6):
+        for p2 in (1e6, 3e6, 5e6, 7e6, 7.8e6):
+            _assert_consistent(SteadyBlackOilSolver().solve(_pair_case(layout, p1, p2)))
+
+
+@pytest.mark.parametrize("layout, p1, p2, direct", [
+    ("bpr+reducer", 50e5, 20e5, False),      # raised in v1.27.0 (line between them at 10¹⁰ bar)
+    ("bpr+reducer", 30e5, 20e5, False),
+    ("bpr+reducer", 50e5, 20e5, True),       # no pipe between them
+    ("bpr+reducer", 60e5, 30e5, False),
+    ("reducer+bpr", 40e5, 30e5, False),
+    ("reducer+bpr", 20e5, 20e5, False),      # raised in v1.27.0 (−337 °C in a network at rest)
+    ("reducer+bpr", 10e5, 60e5, False),      # contradictory: no flow
+    ("reducer+reducer", 40e5, 20e5, False),
+    ("reducer+reducer", 10e5, 20e5, False),  # raised in v1.27.0 (pressure 0 Pa)
+    ("reducer+reducer", 20e5, 65e5, False),  # raised in v1.27.0
+])
+def test_compositional_regulator_pairs(layout, p1, p2, direct):
+    _assert_consistent(SteadyCompositionalSolver().solve(_pair_case(layout, p1, p2, True, direct)))
+
+
+def test_back_pressure_then_reducing_regulator_solution():
+    """Black-oil, BPR at 5 MPa then reducer at 2 MPa, 8 → 0.5 MPa: more
+    reaches the BPR at its set point than the reducer passes at its own, so
+    the BPR is wide open and the reducer controls.  The flow equals the
+    downstream pipe solved alone from 2 MPa at the reducer's outlet
+    temperature (an independent solve; obtained 1.3e-7, tolerance the
+    solver's nodal tolerance)."""
+    res = SteadyBlackOilSolver().solve(_pair_case("bpr+reducer", 5e6, 2e6))
+    _assert_consistent(res)
+    bpr, red = res.regulators
+    assert (bpr.state, red.state) == ("open", "controlling")
+    assert bpr.inlet_pressure_pa > 5e6
+    alone = SteadyBlackOilSolver().solve(NetworkCase(
+        name="down", fluid_model=BlackOilFluid(**CRUDE), pressure_inlets=(PressureBoundary(5, 2e6),),
+        pressure_outlets=(PressureBoundary(9, 0.5e6),),
+        thermal_inlets=(ThermalBoundary(5, res.node_temperatures_c[5]),),
+        inlet_fluid_bcs=(InletFluidBC(5, **CRUDE),), components=(_pipe("down", 5, 9, 2000.0, U=3.0),)))
+    assert red.mass_flow_kg_per_s == pytest.approx(alone.component_flows[0].mass_flow_kg_per_s, rel=NODAL)
+
+
+def test_contradictory_pair_reports_the_cut_off_line():
+    """Reducer at 7.5 MPa then BPR at 7.8 MPa: nothing can pass.  Both
+    closed, and the warning says the pressure between them is arbitrary."""
+    res = SteadyBlackOilSolver().solve(_pair_case("reducer+bpr", 7.5e6, 7.8e6))
+    assert res.converged
+    assert [g.state for g in res.regulators] == ["closed", "closed"]
+    assert any("cut off by closed regulators" in w and "3, 4" in w for w in res.warnings)
