@@ -18,7 +18,7 @@ Part A — gas-lift performance curve (valve at 1 800 m)
 
 Part B — injection depth (60 000 Sm³/d)
    Valve depth  Oil (m³/d)  Valve P (MPa)
-         600 m        37.0           2.83
+         600 m        37.0           2.84
         1200 m       107.6           5.68
         1800 m       155.3           9.24
         2100 m       173.9          11.20
@@ -31,7 +31,7 @@ Part C — tubing profile at 60 000 Sm³/d, valve at 1 800 m
          600     4.33    62.3       32.1
            0     2.26    53.3       15.0
   Reservoir 3.117 kg/s + lift gas 0.510 kg/s = flowline 3.628 kg/s
-  Energy balance residual +0.002 kW
+  Energy balance residual +0.000 kW
 
   • Without lift the well is dead; a little gas brings it to life.
   • Past the optimum the extra gas adds more friction than it removes

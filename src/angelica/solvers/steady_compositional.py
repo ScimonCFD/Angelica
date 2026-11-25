@@ -499,10 +499,13 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSol
 
         well_states = self._well_states(network_state, fluid)
         wells_settled = not any(ws.state == "unstable" for ws in well_states)
+        separator_results = self._separator_results(
+            network_state, frozenset(bc.node_id for bc in case.inlet_composition_bcs))
         return SolveResult(
             case_name=case.name,
             converged=(hydraulic_converged and density_converged and temperature_converged
-                       and wells_settled and separator_change < SEPARATOR_FRACTION_TOLERANCE),
+                       and wells_settled and separator_change < SEPARATOR_FRACTION_TOLERANCE
+                       and self._separators_settled(separator_results)),
             node_pressures_pa=node_pressures,
             node_temperatures_c=node_temperatures,
             component_flows=component_flows,
@@ -522,5 +525,5 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSol
             component_mws=fluid.component_mws,
             node_compositions=node_compositions,
             well_states=well_states,
-            separators=self._separator_results(network_state),
+            separators=separator_results,
         )

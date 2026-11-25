@@ -400,3 +400,126 @@ def test_two_stage_train_with_interior_separators():
     gb = res.global_balance
     assert abs(gb.mass_inlet_kg_per_s - gb.mass_outlet_kg_per_s) < NODAL * hp.feed_mass_flow_kg_per_s
     assert abs(res.global_energy_balance.energy_error_kw) < hp.feed_mass_flow_kg_per_s * 2500.0 * 0.01 / 1e3
+
+
+# ── outside the tutorials' range (v1.26.1) ────────────────────────────────────
+#
+# Found by sweeping the tutorials' export and flare pressures: black-oil
+# tutorial 14 raised an exception at 7–8 MPa export and did not converge at
+# 9–10 MPa (water from the case's default fluid entering through the
+# reversed gas line); compositional tutorial 10 raised an exception with the
+# export above the manifold.  Each case below failed before the fix.
+
+def _tutorial(path: str):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("tut", SRC_ROOT / "angelica" / "tutorials" / path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize("p_export", [7.0e6, 9.0e6])
+def test_black_oil_tutorial_14_at_high_export_pressure(p_export):
+    """Well 2 is dead by back-pressure: the feed is Well 1's fluid alone, so
+    the water fraction of the separator is Well 1's split at the separator
+    state.  Before v1.26.1: 7 MPa raised (heat capacity of the default fluid
+    in the energy equation, −19 °C below the dead-oil correlation's range);
+    9 MPa ended with converged=False and 1.89 kg/s of water from the default
+    fluid flowing back through the gas line."""
+    from angelica.closures import BeggsBrillCorrelation
+    t14 = _tutorial("steady_black_oil/14_separator/run.py")
+    res = SteadyBlackOilSolver(turbulent_pipe_correlation=BeggsBrillCorrelation()).solve(
+        t14.build_case(p_export=p_export))
+    assert res.converged
+    assert [w.state for w in res.well_states] == ["producing", "dead_back_pressure"]
+    sep = res.separators[0]
+    assert sep.message == "ok" and sep.backflow_links == ()
+    flows = {c.label.split(":")[1]: c.mass_flow_kg_per_s for c in res.component_flows}
+    assert flows["gas_line"] > 0.0
+    name, P_r, T, api, gg, gor, wor, *_ = t14.WELLS[0]
+    split = black_oil_split(BlackOilComposition(api_gravity=api, gas_gravity=gg, gor_sc_m3_per_m3=gor,
+                                                wor_sc_m3_per_m3=wor), sep.pressure_pa, sep.temperature_c)
+    # identity up to the composition relaxation (obtained < 1e-9)
+    assert sep.water_mass_flow_kg_per_s / sep.feed_mass_flow_kg_per_s == pytest.approx(
+        split.fractions["water"], rel=1e-6)
+
+
+def test_black_oil_cp_of_a_link_seen_through_the_energy_wrapper():
+    """Fixed in v1.26.1: the energy assembly wraps a link with its temperature
+    (``_LinkAtTemperature``) and the per-link black-oil fluid was looked up by
+    the wrapper's id, so every link took the default fluid's heat capacity
+    (water outlet of a separator: 2470 instead of 4180 J/(kg·K))."""
+    from angelica.core.network import build_network_state
+    from angelica.numerics.energy import _LinkAtTemperature
+    from angelica.solvers.steady_black_oil import SteadyBlackOilSolver as S
+    ns = build_network_state(_black_oil_case())
+    default = BlackOilComposition(**CRUDE)
+    water = BlackOilComposition(api_gravity=35.0, gas_gravity=0.7, gor_sc_m3_per_m3=0.0, wor_sc_m3_per_m3=1e6)
+    eff = S()._build_mixed_fluid(ns, {3: water}, default, 40.0, base_fluid=BlackOilFluid(**CRUDE))
+    link = ns.components[3]
+    wrapped = eff.specific_heat_for_link(_LinkAtTemperature(link, 40.0))
+    assert wrapped == pytest.approx(eff.fluid_for_link(link).specific_heat_for_link(_LinkAtTemperature(link, 40.0)),
+                                    rel=1e-12)
+    assert wrapped > 4000.0
+
+
+def test_gas_flowing_back_through_a_separator():
+    """Export above the inlet pressure: gas flows from the export back
+    through the separator to the inlet.  It is taken as the separator's own
+    gas (the export holds no declared fluid); the result names the link.
+    The liquid outlet carries only the gas-only stream's 0.1 % phantom oil."""
+    case = _black_oil_case(p_gas=7.0e6)
+    res = SteadyBlackOilSolver().solve(case)
+    assert res.converged
+    flows = {c.label.split(":")[1]: c.mass_flow_kg_per_s for c in res.component_flows}
+    assert flows["feed"] < 0.0 and flows["gas"] < 0.0
+    sep = res.separators[0]
+    assert sep.backflow_links == ("gas",) and "flows back" in sep.message
+    assert sep.gas_mass_flow_kg_per_s / sep.feed_mass_flow_kg_per_s > 0.998
+    gb = res.global_balance
+    assert abs(gb.mass_inlet_kg_per_s - gb.mass_outlet_kg_per_s) < NODAL * sep.feed_mass_flow_kg_per_s
+
+
+def test_back_flow_into_a_vessel_without_gas_has_no_steady_state():
+    """LP separator fed through the HP oil LCV, flare above the HP pressure:
+    the flare line flows back into a vessel with no gas phase.  The inflow
+    can only leave dissolved in the liquid and any back-flow up to the
+    oil's uptake satisfies the balance (2.2 and 0.14 kg/s were obtained at
+    2.5 and 4 MPa), so the solution is not determined: converged=False with
+    the reason in the separator's message."""
+    def pipe(cid, a, b, D, L):
+        return Pipe(component_id=cid, start_node=a, end_node=b, diameter_m=D, length_m=L,
+                    absolute_roughness_m=4.6e-5)
+    case = NetworkCase(
+        name="train", fluid_model=BlackOilFluid(**CRUDE),
+        pressure_inlets=(PressureBoundary(1, 6.0e6),),
+        pressure_outlets=(PressureBoundary(4, 2.0e6), PressureBoundary(8, 2.5e6), PressureBoundary(10, 0.12e6)),
+        thermal_inlets=(ThermalBoundary(1, 60.0),), inlet_fluid_bcs=(InletFluidBC(1, **CRUDE),),
+        components=(pipe("feed", 1, 2, 0.1524, 3000.0), pipe("gas", 2, 4, 0.1524, 2000.0),
+                    SeparatorOutlet(component_id="hp_oil", start_node=2, end_node=5, diameter_m=0.0762),
+                    pipe("oil", 5, 6, 0.1524, 500.0), pipe("flare", 6, 8, 0.2032, 100.0),
+                    SeparatorOutlet(component_id="lp_liquid", start_node=6, end_node=9, diameter_m=0.0762),
+                    pipe("tank", 9, 10, 0.1524, 100.0)))
+    res = SteadyBlackOilSolver().solve(case)
+    assert not res.converged
+    lp = {s.node_id: s for s in res.separators}[6]
+    assert lp.backflow_without_gas and "no steady state" in lp.message
+
+
+def test_compositional_export_above_the_inlet():
+    """Gas flows back from the export through the separator to the inlet;
+    the liquid outlet carries nothing.  Before v1.26.1 the liquid branch was
+    left with round-off flows (~1e-11 kg/s) that the energy equation took as
+    flow: −10⁸ °C and an exception (compositional tutorial 10, export
+    125 bar)."""
+    case = _compositional_case()
+    case = NetworkCase(**{**case.__dict__, "pressure_outlets": (PressureBoundary(4, 70e5), PressureBoundary(20, 10e5))})
+    res = SteadyCompositionalSolver().solve(case)
+    assert res.converged
+    sep = res.separators[0]
+    assert sep.backflow_links == ("gas",)
+    # no liquid: round-off only (obtained 0 with thermo 0.5, 2e-19 of the feed with 0.6)
+    assert sep.oil_mass_flow_kg_per_s + sep.water_mass_flow_kg_per_s < 1e-12 * sep.feed_mass_flow_kg_per_s
+    # the stagnant liquid branch sits at the reference temperature, not at round-off garbage
+    for nid in (10, 20):
+        assert -50.0 < res.node_temperatures_c[nid] < 100.0

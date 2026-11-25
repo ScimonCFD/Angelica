@@ -16,7 +16,7 @@ IPR of Well 1 (J = 25 m³/d/bar, P_r = 8 MPa):
 Part A — no check valves (Vogel IPR)
   Well       P_r    P_wh        ṁ     q_oil  State
            (MPa)   (MPa)   (kg/s)    (m³/d)
-  Well 1    8.00   5.156    7.314     598.7  producing
+  Well 1    8.00   5.155    7.314     598.8  producing
   Well 2    6.50   3.673    6.356     456.1  producing
   Well 3    3.20   3.293   -0.180      -9.0  INJECTED (back-flow)
   Manifold 3.311 MPa  ·  oil to separator 1054.9 m³/d  ·  converged True
@@ -24,7 +24,7 @@ Part A — no check valves (Vogel IPR)
 Part B — check valve at every wellhead (Vogel IPR)
   Well       P_r    P_wh        ṁ     q_oil  State
            (MPa)   (MPa)   (kg/s)    (m³/d)
-  Well 1    8.00   5.166    7.292     596.9  producing
+  Well 1    8.00   5.166    7.292     597.0  producing
   Well 2    6.50   3.693    6.321     453.6  producing
   Well 3    3.20   3.200    0.000       0.0  shut in by check valve
   Manifold 3.335 MPa  ·  oil to separator 1050.5 m³/d  ·  converged True
@@ -43,7 +43,7 @@ Part D — same network with a Fetkovich IPR (n = 1, C = J/(2·P_r))
   Well 1    8.00   5.115    7.223     591.3  producing
   Well 2    6.50   3.650    6.202     445.1  producing
   Well 3    3.20   3.200    0.000       0.0  shut in by check valve
-  Manifold 3.301 MPa  ·  oil to separator 1036.3 m³/d  ·  converged True
+  Manifold 3.302 MPa  ·  oil to separator 1036.3 m³/d  ·  converged True
 
   • Without check valves the manifold pressure exceeds Well 3's reservoir
     pressure and oil flows back into the reservoir.  The check valve shuts

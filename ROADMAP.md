@@ -7,18 +7,38 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.13.2, checked against the code)
+## 1. Where Angelica stands (v1.26.1, checked against the code)
 
 | Area | Present today |
 |---|---|
-| Fluids | Single-phase liquid, thermal liquid, compressible gas (ideal / PR), black-oil (Standing, Hall-Yarborough, Beggs-Robinson, Lee-Gonzalez-Eakin), compositional (PR/SRK through `thermo`, free water, phase envelope and quality lines) |
-| Pressure drop | Colebrook, Hazen-Williams, Weymouth, Panhandle A/B; Beggs-Brill (black-oil only). Compositional two-phase flow is homogeneous no-slip |
-| Heat transfer | Fixed U or series layers (film + wall + insulation + film, flat-wall form); Joule-Thomson; shaft work; closed global energy balance |
-| Wells | `WellInflow` (linear, composite Vogel); `Well` = IPR + isothermal Beggs-Brill tubing, black-oil only |
-| Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve (also used as a "compressor"), fixed-duty heater/cooler |
+| Fluids | Single-phase liquid, thermal liquid, compressible gas (ideal / PR), black-oil (Standing, Hall-Yarborough, Beggs-Robinson, Lee-Gonzalez-Eakin; enthalpy model), compositional (PR/SRK through `thermo`, free water, phase envelope and quality lines) |
+| Pressure drop | Colebrook, Hazen-Williams, Weymouth, Panhandle A/B; Beggs-Brill for black-oil and (opt-in) compositional fluids, with a per-pipe flow-pattern, holdup and erosional-velocity report |
+| Heat transfer | Fixed U or series layers (flat-wall form); Joule-Thomson, friction heating, latent heat and potential energy along pipes; isenthalpic valves; closed global energy balance |
+| Flow assurance | Hydrate curve (vdW-Platteeuw, compositional) and gas-gravity chart (black-oil); hydrate margin per pipe |
+| Wells | `WellInflow` and `Well`: IPR linear, Vogel, Fetkovich, gas back-pressure; tubing Beggs-Brill, Hagedorn-Brown or Gray; Ramey temperature profile; black-oil and compositional fluids; gas lift; dead / bistable well states |
+| Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve (also used as a "compressor"), fixed-duty heater/cooler, separator (two-phase, three-phase, free-water knockout) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
-| GUI | Canvas editor, all five physics modes, profiles, phase envelope, SI and US units (ft, psi, lb/s), Excel export |
-| Quality | 511 tests, 43 tutorials under golden-output regression, energy balance < 0.01 % |
+| GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI and US units (ft, psi, lb/s), Excel export |
+| Quality | 733 tests, 49 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 % |
+
+**Validation debt (2026-11-25).**  Most models since v1.19 are validated
+by internal consistency only: of the last ten log summaries, eight say
+"validated against data read in a source: none".  Data read in a source
+cover only the black-oil enthalpy (∂h/∂P)_T of gas and water and the
+methane solubility in water.  Without a source:
+- Hagedorn-Brown, Gray, Ramey, Fetkovich and gas back-pressure;
+- gas lift and compositional wells;
+- the separator.
+
+Beggs-Brill's coefficients and Ramey's closed form were read in secondary
+sources, and the code was verified against them by hand calculation and
+the analytic solution.  Neither is compared with a worked example or with
+measurements.  The worked examples that
+would close this (Brill & Mukherjee, Economides et al., GPSA) are not in
+the repository's reference folder (`refs/` does not exist).  Recalling
+them from memory does not count.  When the books are available, a
+validation pass of these correlations against the worked examples comes
+before further stage-7 work, together with item 3.4.
 
 ## 2. Gap table against PIPEPHASE
 
@@ -218,6 +238,10 @@ wells — so the remaining stages are worked in this order:
   tolerance is never relaxed to make a test pass.
 - At the end of each stage the log summarises: validated against data read
   in a source / validated only by internal consistency / not validated.
+- (Review 2026-11-25) Every new component is also run outside its
+  tutorial's range before tagging: zero flow, reversed flow, dead wells,
+  set-points that cannot be met.  Each case must end converged or with
+  converged=False and a stated reason, never with an exception.
 
 ## 5. Progress log
 
@@ -658,3 +682,54 @@ Summary:
 - Not validated: against a published separator test or plant data.
   Black-oil: one gas gravity for free and dissolved gas; gas outlets carry
   ~0.1 % phantom oil (GOR 10⁶ convention).
+
+### 2026-11-25 — Fix: separator outside the tutorials' range (v1.26.1)
+
+An external review swept black-oil tutorial 14's export pressure beyond
+the tutorial's 0.5–5 MPa: an exception at 7–8 MPa, converged=False at
+9–10 MPa.  Compositional tutorial 10 was swept too (export 30–150 bar,
+flare 5–40 bar): an exception with the export above the manifold.  Each
+cause was found before changing anything:
+
+- 7–8 MPa: the per-link black-oil fluid was looked up by object identity,
+  and the energy assembly passes links wrapped with a temperature, so every
+  link had the default fluid's cp.  This is pre-existing and affects every
+  black-oil network with per-inlet fluids.  The enthalpy offsets kept
+  results right at convergence to within 0.09 K and 190 Pa (the tutorial
+  reference changes), but the water outlet line, cooled with the mixture's
+  cp, fell below the dead-oil viscosity correlation's range.
+- 9–10 MPa: the first outer iteration splits the default fluid (flows are
+  still zero), the gas line reverses, and the export boundary then
+  injected the default fluid — water and low-GOR oil — which kept the gas
+  fraction near zero.  The state was spurious and self-sustaining.  Rule
+  adopted: back-flow from an outlet boundary with no declared fluid is the
+  separator's own gas.  With a gas phase present, the back-flow cannot be
+  steady (feed + B = f·(feed + B) needs f = 1), so the iteration leaves
+  that state.  Without a gas phase it is undetermined: converged=False with
+  a stated reason (shown in black-oil and compositional).
+- Export above the manifold (compositional): the hydraulics converged
+  (gas flows back through the HP separator to the inlet), but the stagnant
+  liquid branch kept ~1e-11 kg/s round-off flows, which the energy
+  equation divided by: −10⁸ °C.  Flows below 1e-9 of the largest are now
+  zero for the energy solve.
+- Found on the way: tutorial 14's 0.5 MPa row (v1.26.0) was printed as a
+  solution but had not converged.  The oil LCV imposes 7.12 kg/s, and
+  Beggs-Brill's intermittent/distributed boundary makes the oil line's
+  flow jump from 6.06 to 7.57 kg/s between 0.72 and 0.73 MPa inlet
+  pressure: no solution exists in the model.  Measured by solving the
+  line alone at 0.70–0.94 MPa.  Not a solver defect; the row now says
+  so.
+- After the fixes: tutorial 14 is converged from 0.6 to 24 MPa (wells dying
+  at ~5 and ~12 MPa); tutorial 10 is converged at export 30–150 bar and at
+  flare 5–25 bar.  Flare at 32–40 bar (above the HP separator) ends with
+  converged=False and the no-steady-state reason.
+
+Summary:
+- Validated against data read in a source: none (numerical fixes).
+- Validated by consistency: the separator's water fraction at 7 and 9 MPa
+  equals Well 1's split (only Well 1 is alive); balances close.
+  Tutorial changes stay within 0.09 K and 190 Pa, and the energy residuals
+  fell.
+- Not validated: the separator against plant data or a published test
+  (unchanged); the back-flow composition rule is a modelling choice, not
+  a measured behaviour.

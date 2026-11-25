@@ -101,8 +101,19 @@ def solve_energy_system(
     keeps the outer (hydraulics ↔ temperature) loop from crawling.  Node
     temperatures on the network state are restored afterwards; the caller
     applies (and relaxes) the returned ones.
+
+    Flows below ``STAGNANT_FLOW_REL`` of the largest flow in the network are
+    the hydraulic solver's round-off (1e-12 relative, e.g. a liquid branch
+    whose separator outlet carries nothing), not flow: they are treated as
+    zero here.  Left in, a node fed only by such a flow divided its enthalpy
+    offsets by ~1e-11 W/K (−10⁸ °C, v1.26.1).
     """
     saved = {nid: node.temperature_c for nid, node in network_state.nodes.items()}
+    flows = [ps.mass_flow_kg_per_s for ps in network_state.components]
+    floor = STAGNANT_FLOW_REL * max((abs(float(m)) for m in flows), default=0.0)
+    for ps, m in zip(network_state.components, flows):
+        if abs(float(m)) <= floor:
+            ps.mass_flow_kg_per_s = 0.0
     try:
         result = _solve_energy_once(network_state, fluid_model, convection_scheme, T_ref, pipe_enthalpy_terms)
         has_sources = pipe_enthalpy_terms and any(
@@ -132,8 +143,11 @@ def solve_energy_system(
     finally:
         for nid, T in saved.items():
             network_state.nodes[nid].temperature_c = T
+        for ps, m in zip(network_state.components, flows):
+            ps.mass_flow_kg_per_s = m
 
 
+STAGNANT_FLOW_REL = 1e-9
 _SOURCE_RELAXATION = 0.5
 
 

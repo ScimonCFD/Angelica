@@ -156,9 +156,12 @@ def run():
     print("\nPart B — export pressure")
     print(f"  {'Export':>7} {'P_sep':>7} {'T_sep':>6} {'Oil':>7} {'Free gas':>9} {'GOR':>5} {'Rs':>5} {'Free':>5} {'Well 1':>7} {'Well 2':>7}")
     print(f"  {'(MPa)':>7} {'(MPa)':>7} {'(°C)':>6} {'(m³/d)':>7} {'(kSm³/d)':>9} {'feed':>5} {'sep.':>5} {'gas':>5} {'(m³/d)':>7} {'(m³/d)':>7}")
-    for p_exp in (0.5e6, 1.0e6, 1.5e6, 3.0e6, 5.0e6):
+    for p_exp in (0.5e6, 1.0e6, 1.5e6, 3.0e6, 5.0e6, 8.0e6, 10.0e6):
         r = solver.solve(build_case(p_exp))
         s = r.separators[0]
+        if not r.converged:
+            print(f"  {p_exp / 1e6:7.1f}  not converged (see the README: the oil line has no solution)")
+            continue
         q_o = s.oil_rate_sm3_per_day
         gor = feed_gor(r)
         free = s.gas_rate_sm3_per_day / q_o          # free gas per m³ of oil
@@ -166,7 +169,7 @@ def run():
               f"{s.gas_rate_sm3_per_day / 1e3:9.1f} {gor:5.0f} {gor - free:5.1f} {free:5.0f} "
               + " ".join(f"{q:7.1f}" for q in well_oil_rates(r)))
     print("  (GOR and Rs in Sm³/m³.  At 5 MPa Well 2, the low-GOR well, is close to")
-    print("  dying and the feed's GOR rises to Well 1's.)")
+    print("  dying and the feed's GOR rises to Well 1's; above it Well 2 is dead.)")
 
     print("\nPart C — a 2-inch oil line")
     r = solver.solve(build_case(oil_line_d=0.0508))

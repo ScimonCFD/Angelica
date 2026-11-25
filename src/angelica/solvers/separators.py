@@ -75,7 +75,21 @@ class SeparatorNetworkMixin:
         def outgoing(link, up_id, node_comp, default):
             outlets = seps.get(up_id)
             if outlets is None:
-                return None
+                # Back-flow into a separator from an outlet pressure boundary
+                # with no declared fluid (e.g. the gas export): what a gas
+                # line can push back is the separator's own gas, not the
+                # case's default fluid.  (An inlet with no declared fluid
+                # delivers the case fluid, as everywhere.)
+                down_id = (link.end_node.node_id if link.start_node.node_id == up_id
+                           else link.start_node.node_id)
+                down_outlets = seps.get(down_id)
+                if (down_outlets is None or up_id in node_comp
+                        or not network_state.nodes[up_id].is_pressure_boundary
+                        or network_state.nodes[up_id].is_inlet
+                        or any(link is o for o in down_outlets)):
+                    return None
+                split = split_fn(network_state.nodes[down_id], node_comp.get(down_id, default))
+                return split.stream(frozenset({"gas"}))
             split = split_fn(network_state.nodes[up_id], node_comp.get(up_id, default))
             if any(link is o for o in outlets):
                 return split.stream(PHASE_SETS[link.component.phase])
@@ -99,7 +113,32 @@ class SeparatorNetworkMixin:
         return change
 
     @staticmethod
-    def _separator_results(network_state) -> tuple[SeparatorResult, ...]:
+    def _separator_backflow(network_state, nid: int, outlets, declared: frozenset) -> tuple[str, ...]:
+        """Links bringing fluid into separator ``nid`` from a pressure
+        boundary with no declared fluid (see ``_separator_outgoing``)."""
+        node = network_state.nodes[nid]
+        floor = 1e-9 * max((abs(float(lk.mass_flow_kg_per_s)) for lk in network_state.components),
+                           default=0.0)
+        names = []
+        for link in outlets[0].separator_feed_links:
+            q = float(link.mass_flow_kg_per_s)
+            if link.end_node is node and q > floor:
+                up = link.start_node
+            elif link.start_node is node and q < -floor:
+                up = link.end_node
+            else:
+                continue
+            if up.is_pressure_boundary and not up.is_inlet and up.node_id not in declared:
+                names.append(link.component.component_id)
+        return tuple(names)
+
+    @staticmethod
+    def _separators_settled(results) -> bool:
+        """False when a separator's back-flow has no steady state."""
+        return not any(s.backflow_without_gas for s in results)
+
+    @staticmethod
+    def _separator_results(network_state, declared: frozenset = frozenset()) -> tuple[SeparatorResult, ...]:
         out = []
         splits = getattr(network_state, "separator_splits", {})
         for nid, outlets in network_state.separators.items():
@@ -124,5 +163,6 @@ class SeparatorNetworkMixin:
                     mass_flow_kg_per_s=float(o.mass_flow_kg_per_s),
                     valve_pressure_drop_pa=float(node.pressure_pa) - float(o.end_node.pressure_pa))
                     for o in outlets),
+                backflow_links=SeparatorNetworkMixin._separator_backflow(network_state, nid, outlets, declared),
             ))
         return tuple(out)

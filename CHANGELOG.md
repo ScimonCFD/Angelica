@@ -1,5 +1,67 @@
 # Changelog
 
+## [1.26.1] — 2026-11-25
+
+Separator outside the tutorials' range: the export pressure of black-oil
+tutorial 14 and the export/flare pressures of compositional tutorial 10
+were swept beyond the values the tutorials use.  Black-oil 14 raised an
+exception at 7–8 MPa and did not converge at 9–10 MPa; compositional 10
+raised an exception with the export above the manifold.  All three are
+fixed, and the whole sweep (black-oil 0.5–24 MPa, compositional export
+30–150 bar, flare 5–40 bar) now ends either converged or with
+converged=False and a stated reason.
+
+### Fixed
+  - **Black-oil heat capacity in the energy equation (all networks with
+    per-inlet fluids).**  The energy assembly passes each link wrapped with
+    its temperature, and the per-link black-oil fluid was looked up by the
+    wrapper's identity: every link took the case default fluid's heat
+    capacity (a separator's water outlet: 2 470 instead of 4 180 J/(kg·K)).
+    The enthalpy offsets kept the junctions' enthalpy balance right at
+    convergence, so the effect on results was small.  What changed is the
+    heat-loss distribution along pipes and the iteration path.
+    - Tutorial results changed by at most 0.09 K, 190 Pa and 5e-4 in
+      flow; the energy-balance residuals fell.  Tutorials affected:
+      black-oil 05, 09, 11, 12, 13, 14 (the GUI files of 05 and 09; both
+      the scripts and the GUI files of 11–14).
+    - It caused the exception in black-oil tutorial 14 at 7–8 MPa: the
+      water line was cooled with the mixture's cp, reaching −20 °C, below
+      the dead-oil viscosity correlation's range.
+  - **Back-flow into a separator.**  A gas line flowing backwards brought
+    the case's default fluid into the separator.  In tutorial 14 that was
+    Well 2's water and oil, which kept the gas fraction near zero and the
+    line reversed: a spurious state, converged=False at 9–10 MPa.
+    - The fluid entering from an outlet pressure boundary with no declared
+      fluid is now the separator's own gas; a declared fluid at that
+      boundary is used if there is one.
+    - `SeparatorResult.backflow_links` names the links and the message
+      says so.
+    - Into a vessel with no gas phase, such a back-flow has no steady
+      state: it could only leave dissolved, and any amount up to the oil's
+      uptake balances (2.2 and 0.14 kg/s were obtained in two runs).  The
+      solve now reports converged=False with that reason instead of
+      depending on the iteration not settling.
+  - **Round-off flows in the energy equation.**  Flows below 1e-9 of the
+    largest flow in the network are treated as zero by the energy solve.
+    A liquid branch whose separator outlet carries nothing was left with
+    ~1e-11 kg/s from the hydraulic solver; a node fed only by that flow
+    reached −10⁸ °C, and compositional tutorial 10 raised an exception
+    with the export at 125 bar.
+  - **Tutorial 14, Part B, 0.5 MPa export: printed as a solution, but the
+    solve had not converged** (already so in v1.26.0).  The oil LCV
+    imposes 7.12 kg/s on the oil line, where gas comes out of the oil, and
+    Beggs-Brill's intermittent-to-distributed boundary makes the line's
+    flow jump from 6.06 to 7.57 kg/s between 0.72 and 0.73 MPa inlet
+    pressure.  No pressure gives 7.12 kg/s.  The row now reads "not
+    converged" and the README explains why; the sweep was extended to 8
+    and 10 MPa (Well 2 dead).
+
+### Tests
+  - Tutorial 14 at 7 and 9 MPa; heat capacity through the energy wrapper;
+    gas flowing back through a separator (black-oil); back-flow into a
+    vessel without gas; compositional export above the inlet.  Each failed
+    before the fix.
+
 ## [1.26.0] — 2026-11-24
 
 ### New: separator (roadmap 5.1)

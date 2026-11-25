@@ -17,7 +17,7 @@ Part A — Well 1 deliverability (3.0 in tubing, P_r = 25 MPa, P_b = 20.9 MPa)
 Part B — gathering network, 3.0 in tubing
   Well       P_wh    P_wf       ṁ   q_oil   T_wh  State
             (MPa)   (MPa)  (kg/s)  (m³/d)   (°C)
-  Well 1    4.046   15.17   6.693   547.9   70.4  producing
+  Well 1    4.045   15.17   6.693   547.9   70.4  producing
   Well 2    2.688   18.02   2.219   159.2   52.7  producing
   Well 3    2.618       —   0.000     0.0      —  dead: column heavier than P_r
   Manifold 2.618 MPa  ·  oil 707.2 m³/d  ·  converged True
@@ -25,7 +25,7 @@ Part B — gathering network, 3.0 in tubing
 Part C — tubing size (all wells)
    Tubing ID  oil (m³/d)
      50.3 mm       497.3   converged True
-     62.0 mm       619.6   converged True
+     62.0 mm       619.5   converged True
      76.2 mm       707.2   converged True
 
 Part D — tubing correlation (3.0 in tubing)
@@ -49,12 +49,12 @@ Part E — tubing temperature of Well 1 at its operating rate
      2.00 kg/s →  53.5 °C
      4.00 kg/s →  64.4 °C
      6.69 kg/s →  70.4 °C
-  Network energy balance: wells and pipes lose 967 kW, lifting takes 175 kW, residual -0.005 kW
+  Network energy balance: wells and pipes lose 966 kW, lifting takes 175 kW, residual -0.002 kW
 
 Part F — separator pressure (back-pressure on the wells)
    Separator  Manifold   Well 1   Well 2   (oil, m³/d)
      1.5 MPa  2.62 MPa    547.9    159.2   converged True
-     4.0 MPa  4.38 MPa    492.8     40.3   converged True
+     4.0 MPa  4.38 MPa    492.8     40.2   converged True
      6.0 MPa  6.18 MPa    415.1      0.0   converged True
   At 6 MPa:
   Well       P_wh    P_wf       ṁ   q_oil   T_wh  State

@@ -215,14 +215,33 @@ class SeparatorResult:
     oil_rate_sm3_per_day: float
     water_rate_m3_per_day: float
     outlets: tuple[SeparatorOutletResult, ...] = ()
+    # Links through which fluid flows back into the separator from a node
+    # with no declared fluid (e.g. a gas export above the separator
+    # pressure).  That fluid is taken as the separator's own gas.
+    backflow_links: tuple[str, ...] = ()
+
+    @property
+    def backflow_without_gas(self) -> bool:
+        """Back-flow into a vessel with no gas phase: the inflow can only
+        leave dissolved in the liquid, and how much would dissolve is not
+        defined (no fluid declared upstream), so there is no steady state."""
+        return bool(self.backflow_links) and self.gas_mass_flow_kg_per_s <= 1e-9 * max(
+            self.feed_mass_flow_kg_per_s, 1e-30)
 
     @property
     def message(self) -> str:
+        parts = []
         low = [o.component_id or o.phase for o in self.outlets if o.valve_pressure_drop_pa < 0.0]
         if low:
-            return ("outlet pressure above the separator at " + ", ".join(low)
-                    + ": the liquid needs a pump")
-        return "ok"
+            parts.append("outlet pressure above the separator at " + ", ".join(low)
+                         + ": the liquid needs a pump")
+        if self.backflow_without_gas:
+            parts.append("fluid flows back into the separator through " + ", ".join(self.backflow_links)
+                         + " but the vessel has no gas phase: no steady state")
+        elif self.backflow_links:
+            parts.append("gas flows back into the separator through " + ", ".join(self.backflow_links)
+                         + " (taken as the separator's own gas; declare a fluid at the boundary to set it)")
+        return "; ".join(parts) if parts else "ok"
 
 
 @dataclass(frozen=True)

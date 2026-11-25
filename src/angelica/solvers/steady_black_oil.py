@@ -275,7 +275,10 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
                 self._cache: dict = {}
 
             def _fluid_for(self, link_state) -> BlackOilFluid:
-                key = id(link_state)
+                # The energy assembly passes links wrapped with a temperature
+                # (``_LinkAtTemperature``): look up the real link, or every
+                # link would get the default composition's properties.
+                key = id(getattr(link_state, "_link", link_state))
                 if key not in self._cache:
                     comp = id_to_comp.get(key, default_comp)
                     self._cache[key] = BlackOilFluid(
@@ -601,10 +604,13 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
 
         well_states = self._well_states(network_state, effective_fluid)
         wells_settled = not any(ws.state == "unstable" for ws in well_states)
+        separator_results = self._separator_results(
+            network_state, frozenset(bc.node_id for bc in case.inlet_fluid_bcs))
         return SolveResult(
             case_name=case.name,
             converged=(hydraulic_converged and density_converged and temperature_converged and wells_settled
-                       and separator_change < SEPARATOR_FRACTION_TOLERANCE),
+                       and separator_change < SEPARATOR_FRACTION_TOLERANCE
+                       and self._separators_settled(separator_results)),
             node_pressures_pa=node_pressures,
             node_temperatures_c=node_temperatures,
             component_flows=component_flows,
@@ -623,5 +629,5 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
             mass_balance_history=mass_balance_history,
             energy_balance_history=energy_balance_history,
             well_states=well_states,
-            separators=self._separator_results(network_state),
+            separators=separator_results,
         )

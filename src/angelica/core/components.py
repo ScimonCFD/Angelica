@@ -416,6 +416,13 @@ class SeparatorOutlet(Fitting):
     Requires ``SteadyBlackOilSolver`` or ``SteadyCompositionalSolver``.
     ``diameter_m`` is the outlet bore, used only to report a velocity.  The
     solution's ``separators`` give each separator's split and rates.
+
+    Back-flow: fluid entering the separator from an outlet pressure boundary
+    with no declared fluid (a gas line whose boundary is above the
+    separator) is taken as the separator's own gas; the separator's
+    ``message`` names the link.  With no gas phase in the vessel such a
+    back-flow has no steady state (it could only leave dissolved, in any
+    amount up to the oil's uptake) and the solve ends with converged=False.
     """
 
     phase: str = "liquid"
