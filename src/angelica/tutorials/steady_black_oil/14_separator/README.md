@@ -83,17 +83,20 @@ SeparatorOutlet(component_id="water_LCV", start_node=SEPARATOR, end_node=..., di
   Above that Well 2 is dead by back-pressure.  Both wells are dead above
   about 12 MPa.
 - **0.5 MPa does not converge, and that is the right answer for this
-  model.**  The oil LCV imposes 7.12 kg/s on the oil line.  Gas comes out
-  of the oil along the line, and Beggs-Brill switches from intermittent
-  to distributed flow between 0.72 and 0.73 MPa at the line inlet.  The
-  line's flow jumps there from 6.06 to 7.57 kg/s, so no inlet pressure
-  gives 7.12 kg/s.  At 0.6 MPa export the flow is outside the jump and
-  the case converges.  (Version 1.26.0 printed this row as if it were a
-  solution.)
+  model** (0.4 MPa neither).  The oil LCV imposes 7.12 kg/s on the oil line,
+  where gas comes out of the oil.  Solved alone at an imposed flow, the line
+  with Beggs-Brill has:
+  - intermittent flow up to 6.86 kg/s (inlet 0.799 MPa);
+  - distributed flow from 7.56 kg/s (inlet 0.730 MPa);
+  - no solution between 6.87 and 7.55 kg/s — 7.12 is in that gap.
 
-**A 2-inch oil line.** The oil would have to leave the LCV at 10.9 MPa,
-against a separator at 1.54 MPa. The solution reports that the liquid
-needs a pump.
+  The two branches overlap in pressure: between 0.730 and 0.799 MPa at
+  the inlet the line has two flows (about 6.5 or 8.0 kg/s at 0.77
+  MPa), and which one a solve finds depends on its starting point.  At 0.6
+  MPa export the LCV flow is outside the gap and the case converges.  The
+  solution's `diagnosis` names the oil line and its two patterns.
+  (Version 1.26.0 printed this row as if it were a solution; v1.26.1
+  described the gap as a jump in pressure, which it is not.)
 
 ## Limitations
 
@@ -106,9 +109,9 @@ needs a pump.
   composition (GOR 10⁶), which holds about 0.1 % of its mass as oil.
 - **Not compared with a published separator test.** The split is the
   black-oil PVT's own.
-- **Flow-pattern jumps.** A liquid line in which gas comes out of solution
-  can have no solution at a flow imposed by its LCV (see 0.5 MPa above):
-  Beggs-Brill's flow-pattern boundaries are discontinuous.
+- **Flow-pattern gaps.** Beggs-Brill's flow-pattern boundaries are
+  discontinuous: a line can have no solution at a flow imposed on it, or two
+  at one pressure drop (see 0.5 MPa above).
 
 ## Run
 

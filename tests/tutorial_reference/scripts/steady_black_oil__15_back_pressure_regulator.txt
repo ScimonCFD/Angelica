@@ -1,0 +1,33 @@
+==============================================================================
+Tutorial 15 — A back-pressure regulator holds the separator pressure (black-oil)
+==============================================================================
+
+Part A — export 1.5 MPa, with and without the regulator (3.0 MPa)
+                     P_sep     Oil       Gas              Regulator
+                     (MPa)  (m³/d)  (kSm³/d)
+  no regulator       1.537   705.5      83.4                      —
+  regulator          3.000   622.3      72.6 controlling, ΔP 1.47 MPa
+
+Part B — export pressure (set point 3.0 MPa)
+   Export   P_sep        State     Oil       Gas
+    (MPa)   (MPa)               (m³/d)  (kSm³/d)
+      0.5   3.000  controlling   622.3      72.6
+      1.5   3.000  controlling   622.3      72.6
+      2.5   3.000  controlling   622.3      72.6
+      3.0   3.012         open   621.4      72.5
+      3.5   3.509         open   565.6      68.0
+      5.0   5.004         open   459.5      55.4
+
+Part C — set point (export 1.0 MPa)
+    P_set   P_sep     Oil       Gas       Well 2
+    (MPa)   (MPa)  (m³/d)  (kSm³/d)
+      1.5   1.500   707.2      83.7    producing
+      2.0   2.000   682.5      80.3    producing
+      3.0   3.000   622.3      72.6    producing
+      4.0   4.000   533.1      63.9    producing
+      5.0   5.000   459.9      55.4    producing
+
+  • The regulator decouples the separator from the export pressure: the
+    wells see the same back-pressure whatever happens downstream of it.
+  • A higher separator pressure costs oil from these wells; in black-oil it
+    gains nothing at the stock tank (see tutorial 14).

@@ -28,6 +28,7 @@ from angelica.core.components import (
     Fitting,
     HeatSource,
     Pipe,
+    PressureRegulator,
     Pump,
     SeparatorOutlet,
     Well,
@@ -562,6 +563,26 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         diameter_m=_optional_float(component, "diameter_m", default=0.0762),
                         phase=component.properties.get("phase", "liquid").strip() or "liquid",
                         component_id=f"link_{link.link_id}_separator_outlet_{component.component_id}",
+                    )
+                )
+            elif component.component_type == "pressure_regulator":
+                if not (is_black_oil or is_compositional):
+                    raise ValueError(
+                        f"Connection #{link.link_id} has a pressure regulator, which needs black-oil or "
+                        "compositional mode."
+                    )
+                set_p = _optional_float(component, "set_pressure_pa", default=math.nan)
+                if not set_p > 0.0:
+                    raise ValueError(f"Connection #{link.link_id}: the pressure regulator needs a set pressure.")
+                components.append(
+                    PressureRegulator(
+                        start_node=current_start,
+                        end_node=current_end,
+                        diameter_m=_optional_float(component, "diameter_m", default=0.1524),
+                        set_pressure_pa=set_p,
+                        mode=component.properties.get("mode", "downstream").strip() or "downstream",
+                        loss_coefficient=_optional_float(component, "loss_coefficient", default=5.0),
+                        component_id=f"link_{link.link_id}_pressure_regulator_{component.component_id}",
                     )
                 )
             elif component.component_type == "well_inflow":

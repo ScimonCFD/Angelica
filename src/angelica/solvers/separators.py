@@ -133,11 +133,6 @@ class SeparatorNetworkMixin:
         return tuple(names)
 
     @staticmethod
-    def _separators_settled(results) -> bool:
-        """False when a separator's back-flow has no steady state."""
-        return not any(s.backflow_without_gas for s in results)
-
-    @staticmethod
     def _separator_results(network_state, declared: frozenset = frozenset()) -> tuple[SeparatorResult, ...]:
         out = []
         splits = getattr(network_state, "separator_splits", {})

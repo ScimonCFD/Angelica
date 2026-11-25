@@ -239,6 +239,27 @@ class ChokeFlowModel(MinorLossModel):
         return link_fluid
 
     def calculate_velocity(self, link_state, delta_p, density, viscosity, tolerance=None) -> float:
+        if getattr(link_state.component, "is_pressure_regulator", False):
+            # Controlling: the flow that holds the controlled node at the set
+            # point; closed: none; open: a K-factor fitting, forward only.
+            from .minor_losses import k_fitting_velocity
+            from .regulator import regulator_mass_flow
+            state = link_state.regulator_state
+            if state == "controlling":
+                # The flow that holds the set point, but no more than the
+                # wide-open valve passes at the present pressures and never
+                # backwards: imposing the full demand on a supply that cannot
+                # deliver it drove the upstream pressure to zero within the
+                # hydraulic pass, before the state could switch to open.
+                v_open = k_fitting_velocity(link_state, float(link_state.start_node.pressure_pa)
+                                            - float(link_state.end_node.pressure_pa), density)
+                v = regulator_mass_flow(link_state) / (density * link_state.area_m2)
+                link_state.regulator_capped = v > v_open
+                link_state.regulator_cap_hits += int(link_state.regulator_capped)
+                return max(min(v, v_open), 0.0)
+            if state == "closed":
+                return 0.0
+            return k_fitting_velocity(link_state, delta_p, density)
         if getattr(link_state.component, "is_separator_outlet", False):
             # Level-control valve: passes the separated phases whatever ΔP.
             from .separator import separator_outlet_mass_flow
@@ -270,6 +291,12 @@ class ChokeFlowModel(MinorLossModel):
         return v if delta_p > 0.0 else -v
 
     def calculate_coupling(self, link_state, density, viscosity) -> float:
+        if getattr(link_state.component, "is_pressure_regulator", False):
+            if link_state.regulator_state == "open" or (link_state.regulator_state == "controlling"
+                                                        and link_state.regulator_capped):
+                from .minor_losses import k_fitting_coupling
+                return k_fitting_coupling(link_state)
+            return -1e-12        # flow set by the controlled node, not by ΔP
         if getattr(link_state.component, "is_separator_outlet", False):
             return -1e-12        # flow set by the separator split, not by ΔP
         well_model_fluid = self._well_fluid(link_state, "is_well_model")

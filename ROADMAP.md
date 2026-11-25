@@ -7,7 +7,7 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.26.1, checked against the code)
+## 1. Where Angelica stands (v1.27.0, checked against the code)
 
 | Area | Present today |
 |---|---|
@@ -16,10 +16,10 @@ This file is the working source of truth. Each item is released on its own
 | Heat transfer | Fixed U or series layers (flat-wall form); Joule-Thomson, friction heating, latent heat and potential energy along pipes; isenthalpic valves; closed global energy balance |
 | Flow assurance | Hydrate curve (vdW-Platteeuw, compositional) and gas-gravity chart (black-oil); hydrate margin per pipe |
 | Wells | `WellInflow` and `Well`: IPR linear, Vogel, Fetkovich, gas back-pressure; tubing Beggs-Brill, Hagedorn-Brown or Gray; Ramey temperature profile; black-oil and compositional fluids; gas lift; dead / bistable well states |
-| Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve (also used as a "compressor"), fixed-duty heater/cooler, separator (two-phase, three-phase, free-water knockout) |
+| Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve (also used as a "compressor"), fixed-duty heater/cooler, separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
 | GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI and US units (ft, psi, lb/s), Excel export |
-| Quality | 733 tests, 49 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 % |
+| Quality | 766 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns |
 
 **Validation debt (2026-11-25).**  Most models since v1.19 are validated
 by internal consistency only: of the last ten log summaries, eight say
@@ -62,7 +62,7 @@ or more (human-equivalent).
 | 12 | ESP (stage curves, viscosity and gas derating) | None | C | M | Takacs, *Electrical Submersible Pumps Manual* examples; affinity laws |
 | 13 | Separator (phase split node, gas / oil / water outlets) | Done in v1.26.0 (`SeparatorOutlet`) | A | M | Mass and component balance; outlet streams equal an independent `thermo` flash |
 | 14 | Compressor (polytropic / isentropic, efficiency, power, discharge T; curves) | Pump head curve only | A | M | GPSA *Engineering Data Book* §13 examples; isentropic limit against EOS entropy |
-| 15 | Pressure regulator / back-pressure controller | None | B | M | Analytical: set-point held when feasible, open or closed otherwise |
+| 15 | Pressure regulator / back-pressure controller | Done in v1.27.0 (`PressureRegulator`) | B | M | Analytical: set-point held when feasible, open or closed otherwise |
 | 16 | Heater/cooler with outlet-temperature spec | Fixed duty only | B | S | Energy balance |
 | 17 | Buried pipe, cylindrical layers, computed inner film coefficient, water/air surroundings | Flat-wall layers, user film coefficients | B | M | Conduction shape factor (Incropera); GPSA / Gnielinski; cylindrical-wall analytic solution |
 | 18 | Sensitivity / case-study runner (nodal analysis plots) | Scripts only | A | M | Reproduces tutorial 12 part C and tutorial sweeps from the GUI |
@@ -178,7 +178,25 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - 5.2 Compressor: polytropic or isentropic with efficiency; power and
   discharge temperature; specified ΔP, pressure ratio or power.
 - 5.3 Heater/cooler with outlet-temperature spec.
-- 5.4 Pressure regulator.
+- 5.4 **Done in v1.27.0.** Pressure regulator (reducing and back-pressure).
+
+- Known limitations (recorded 2026-11-25, from the v1.26.1 review):
+  - **Beggs-Brill flow-pattern gaps.**  The pattern boundaries are
+    discontinuous, so a pipe can have no solution at a flow imposed on it
+    and two solutions at one pressure drop (black-oil tutorial 14's oil line:
+    no solution between 6.87 and 7.55 kg/s; two flows for inlet pressures
+    between 0.730 and 0.799 MPa).  Which of two solutions a solve finds
+    depends on its starting point.  The diagnosis names such a pipe; no
+    smoothing of the boundaries is planned (it would no longer be the
+    published correlation).
+  - **First outer iteration on the default fluid.**  Compositions are
+    propagated before the first hydraulic pass, when every flow is zero, so
+    the first separator split and regulator check see the case's default
+    fluid.  This was the root cause of tutorial 14's spurious state at 9–10
+    MPa export (v1.26.1).  The back-flow rule keeps the solver from staying
+    there, and regulators skip their first check, but the initialisation
+    itself is unchanged.  Not fixed: a fix would change the iteration path
+    of every per-inlet case.
 
 ### Stage 6 — heat transfer (item 17)
 - 6.1 Cylindrical layers, buried pipe, computed inner film coefficient.
@@ -733,3 +751,64 @@ Summary:
 - Not validated: the separator against plant data or a published test
   (unchanged); the back-flow composition rule is a modelling choice, not
   a measured behaviour.
+
+### 2026-11-25 — Item 5.4: pressure regulator (v1.27.0)
+
+- `PressureRegulator`, reducing (holds its end node) or back-pressure
+  (holds its start node), in black-oil and compositional.  Three states
+  (controlling / open / closed) chosen between outer iterations.  While
+  controlling, the held node is a fixed-pressure row and the regulator's
+  flow enters the pressure correction implicitly, as for separator outlets.
+  Rejected alternative: a lagged flow, which is the separator mistake of
+  v1.26.0.
+- Problems met while sweeping beyond the tutorials, each fixed at its
+  cause:
+  - Next to a separator node the regulator's flow is (1 − F) of a change in
+    the feed: without that factor in the Jacobian the hydraulics diverged.
+  - State checks after an unconverged pass saw transients (−2 000 kg/s
+    through a regulator carrying 0.7) and closed it: states are checked only
+    after a converged pass, or after two unconverged ones in a row (the
+    state itself may be what cannot converge).
+  - Imposing a demand the supply cannot meet drove the upstream pressure to
+    zero within a pass (compositional flash raised): the imposed flow is
+    capped at the wide-open valve's flow.  A capped regulator in an
+    unconverged pass opens, unless it reached controlling from open (then
+    control is feasible by continuity).
+  - Energy solves on unconverged flow fields gave absurd temperatures that
+    set the next pass's densities: in networks with regulators the
+    temperatures are held after an unconverged pass.  Networks without
+    regulators are unchanged.
+  - Zero flow with the held node exactly at the set point: closed (flows
+    below 1e-5 kg/s are zero).
+- Found on the way:
+  - The black-oil enthalpy inversion returned the bracket midpoint (2.5 K
+    off, alternating): a check-valve case cycled.  Fixed; tutorial results
+    move by at most 1e-4 K.
+  - Black-oil properties raised or overflowed outside −6.7…500 °C during
+    unsettled iterations: they are now evaluated within it, and a solution
+    outside it is reported as not converged.
+- Review items of v1.26.1: the tutorial 14 explanation was corrected (a
+  no-solution band in flow, with two solutions in pressure); the
+  non-convergence diagnosis was added; the initialisation root cause was
+  recorded under stage 5.
+- Checked with numbers before writing:
+  - Separator held at exactly 3 MPa below 3 MPa export; open above, equal
+    to tutorial 14 (459.5 m³/d at 5 MPa in both).
+  - City gate: 0.62 K/bar let-down cooling, about 260 kW of preheat for
+    0 °C at the outlet, control from about 36 bar of supply.
+  - The flow still rises slightly with supply pressure while controlling,
+    through the outlet temperature.  A first draft of the tutorial said it
+    did not; corrected before release.
+
+Summary:
+- Validated against data read in a source: none.
+- Validated by consistency:
+  - controlling flow = the downstream network solved alone at the set
+    point (1.2e-7);
+  - open = a check valve of the same K (1e-7);
+  - isenthalpic outlet against the fluid's h(P, T) (cp·0.01 K);
+  - fine sweeps converge and are monotonic in both modes and both fluid
+    models.
+- Not validated: against a published regulator or station case.  The
+  wide-open K (5) is an assumption; there is no droop, lock-up or valve
+  curve.

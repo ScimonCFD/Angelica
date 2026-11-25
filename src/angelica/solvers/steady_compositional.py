@@ -14,6 +14,8 @@ from angelica.core.state import HeatSourceState, NetworkState, PipeState
 from angelica.properties.compositional_fluid import CompositionalFluid
 
 from .base import BaseSolver
+from .diagnosis import DiagnosisMixin
+from .regulators import RegulatorNetworkMixin
 from .separators import SEPARATOR_FRACTION_TOLERANCE, SeparatorNetworkMixin
 from .steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
 from .wells import WellNetworkMixin
@@ -53,7 +55,7 @@ class CompositionalSolverSettings:
     pipe_enthalpy_terms: bool = True
 
 
-class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
+class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNetworkMixin, DiagnosisMixin, BaseSolver):
     """Steady-state compositional pipe network solver.
 
     Models fluid mixtures of arbitrary components using the ``thermo`` library
@@ -288,6 +290,7 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSol
         network_state = build_network_state(case)
         self._disable_well_latch(network_state, latch_disabled)
         self._setup_separators(network_state)
+        self._setup_regulators(network_state)
         settings = self.compositional_settings
 
         # Fluid-aware correlations (Beggs-Brill, wells) read phase properties from the fluid.
@@ -344,6 +347,10 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSol
         outgoing = self._separator_outgoing(network_state, split_fn)
         separator_change = 0.0
 
+        pattern_history: dict[str, list[str]] = {}
+        regulators_changed = False
+        unsettled_passes = 0
+        self._reset_flow_pattern_trace()
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
         for _outer in range(settings.max_outer_iterations):
 
@@ -368,6 +375,19 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSol
             lam_hist, lam_metrics, turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_pass(
                 network_state, fluid, progress_callback)
             wells_started = self._start_wells(network_state, fluid)
+            self._record_flow_patterns(network_state, fluid, pattern_history)
+            unsettled_passes = 0 if hydraulic_converged else unsettled_passes + 1
+            if network_state.regulators and _outer > 0 and (hydraulic_converged or unsettled_passes >= 2):
+                # Not after the first pass (its compositions are the default
+                # fluid's: flows were zero when they were propagated), nor
+                # after one hydraulic pass that did not converge: its flows
+                # may be transients (a separator's lagged outlets gave
+                # −2 000 kg/s through a regulator that carries 0.7).  Two in
+                # a row: the state itself may be what cannot converge.
+                regulators_changed = self._update_regulator_states(network_state, fluid,
+                                                                   hydraulic_converged)
+            elif network_state.regulators:
+                regulators_changed = True     # states not yet checked
             if network_state.separators:
                 # Compositions consistent with the new flow field for the
                 # energy solve: links downstream of a separator outlet that
@@ -384,10 +404,17 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSol
             if turb_metrics:
                 outer_turb_final.append(turb_metrics[-1])
 
-            new_node_temps, pipe_mean_temps = solve_energy_system(
-                network_state, fluid, self.convection_scheme, T_ref=T_init,
-                pipe_enthalpy_terms=settings.pipe_enthalpy_terms,
-            )
+            if network_state.regulators and not hydraulic_converged:
+                # No energy solve on a flow field that does not conserve mass
+                # (a regulator between states): its temperatures set the next
+                # pass's densities and kept the state flipping.
+                new_node_temps, pipe_mean_temps = self._held_temperatures(network_state, T_init)
+                regulators_changed = True
+            else:
+                new_node_temps, pipe_mean_temps = solve_energy_system(
+                    network_state, fluid, self.convection_scheme, T_ref=T_init,
+                    pipe_enthalpy_terms=settings.pipe_enthalpy_terms,
+                )
 
             max_delta_t = 0.0
             alpha = settings.temperature_relaxation
@@ -416,7 +443,8 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSol
             temperature_converged = max_delta_t  < settings.temperature_tolerance_k
             density_converged     = max_rel_delta < settings.density_rel_tolerance
             separators_settled = separator_change < SEPARATOR_FRACTION_TOLERANCE
-            if temperature_converged and density_converged and separators_settled and not wells_started:
+            if temperature_converged and density_converged and separators_settled and not wells_started \
+                    and not regulators_changed:
                 break
 
         # Final synchronous pass — always runs so that the reported flow field
@@ -501,11 +529,15 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSol
         wells_settled = not any(ws.state == "unstable" for ws in well_states)
         separator_results = self._separator_results(
             network_state, frozenset(bc.node_id for bc in case.inlet_composition_bcs))
+        failed = self._failed_criteria(hydraulic_converged, temperature_converged, density_converged,
+                                       separator_change < SEPARATOR_FRACTION_TOLERANCE, wells_settled,
+                                       separator_results)
+        if regulators_changed:
+            failed.append("regulator states")
+        failed += [f"regulator {cid} keeps switching state" for cid in self._regulators_stuck(network_state)]
         return SolveResult(
             case_name=case.name,
-            converged=(hydraulic_converged and density_converged and temperature_converged
-                       and wells_settled and separator_change < SEPARATOR_FRACTION_TOLERANCE
-                       and self._separators_settled(separator_results)),
+            converged=not failed,
             node_pressures_pa=node_pressures,
             node_temperatures_c=node_temperatures,
             component_flows=component_flows,
@@ -526,4 +558,6 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSol
             node_compositions=node_compositions,
             well_states=well_states,
             separators=separator_results,
+            regulators=self._regulator_results(network_state),
+            diagnosis=self._diagnose(failed, network_state, pattern_history),
         )

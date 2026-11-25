@@ -587,7 +587,14 @@ def compute_pvt(
     corr = _CORRELATIONS.get(correlation, _CORRELATIONS["STANDING"])
 
     P = max(pressure_pa, 1.0)
-    T = temperature_c
+    # Below T_MIN_C the dead-oil viscosity correlation has no value (log of
+    # T in °F ≤ 0): properties are taken at T_MIN_C, so enthalpy continues
+    # linearly with that cp.  The black-oil solver reports a solution with a
+    # temperature below T_MIN_C as not converged (outside the correlations).
+    # Above T_MAX_C nothing is physical (it is reached only by the energy
+    # solve of an unsettled hydraulic pass); the water viscosity's
+    # exp(… + 1.16e-4·T²) would overflow near 2 500 °C.
+    T = min(max(temperature_c, T_MIN_C), T_MAX_C)
 
     Pb = corr["pb"](gor_sc_m3_per_m3, gas_gravity, api_gravity, T)
     Rs = corr["rs"](P, T, gas_gravity, api_gravity, gor_sc_m3_per_m3)
@@ -723,6 +730,15 @@ def black_oil_enthalpy(params: tuple, pressure_pa: float, temperature_c: float) 
     return h_T + h_P
 
 
+# Lowest temperature the black-oil correlations take: the stated lower limit
+# of the Beggs-Robinson dead-oil viscosity correlation (−6.7 °C, 20 °F, as
+# given in ``angelica.properties.dead_oil``).  Its formula 10^(10^z) − 1
+# overflows a few °F above 0 °F for heavy oils, so properties are not
+# evaluated below this limit.
+T_MIN_C = -6.7
+T_MAX_C = 500.0
+
+
 def temperature_from_enthalpy(h_func, target: float, T_guess: float) -> float:
     """Invert a monotonic h(T) (secant steps safeguarded by bisection)."""
     lo, hi = T_guess - 5.0, T_guess + 5.0
@@ -738,18 +754,32 @@ def temperature_from_enthalpy(h_func, target: float, T_guess: float) -> float:
             f_hi = h_func(hi) - target
     else:
         return T_guess
-    for _ in range(60):
+    # Regula falsi with the Illinois modification: plain regula falsi keeps
+    # one end of the bracket fixed and creeps, and h is evaluated at T
+    # rounded to 1e-4 K (steps of ~0.3 J/kg), so |f| < 1e-3 J/kg may never
+    # be met.  Until v1.27.0 the loop then returned the bracket's midpoint —
+    # up to 2.5 K from the root, alternating between iterations.
+    T = T_prev = 0.5 * (lo + hi)
+    side = 0
+    for _ in range(80):
         T = hi - f_hi * (hi - lo) / (f_hi - f_lo) if f_hi != f_lo else 0.5 * (lo + hi)
         if not (lo < T < hi):
             T = 0.5 * (lo + hi)
         f = h_func(T) - target
-        if abs(f) < 1e-3 or hi - lo < 1e-5:
+        if abs(f) < 1e-3 or hi - lo < 1e-5 or abs(T - T_prev) < 1e-6:
             return T
+        T_prev = T
         if f_lo * f <= 0.0:
             hi, f_hi = T, f
+            if side == -1:
+                f_lo *= 0.5
+            side = -1
         else:
             lo, f_lo = T, f
-    return 0.5 * (lo + hi)
+            if side == 1:
+                f_hi *= 0.5
+            side = 1
+    return T
 
 
 # ── PVT state dataclass ───────────────────────────────────────────────────────

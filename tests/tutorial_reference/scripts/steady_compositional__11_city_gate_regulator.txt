@@ -1,0 +1,32 @@
+==============================================================================
+Tutorial 11 — A pressure-reducing station (compositional, Peng-Robinson)
+==============================================================================
+
+Part A — the let-down, no preheating
+  Converged: True
+  Regulator controlling: 63.79 → 20.00 bar, 7.589 kg/s
+  Temperature 11.44 → -15.79 °C (-0.622 K/bar)
+  Consumers receive the gas at -23.58 °C after 2 km of distribution line
+  Energy balance residual +0.003 kW
+
+Part B — preheating before the regulator
+  Heater (kW)  T in (°C)  T out (°C)  Flow (kg/s)
+            0      11.44      -15.79        7.589
+          200      21.59       -3.68        7.386
+          400      32.50        9.14        7.191
+          600      44.18       22.65        7.004
+
+Part C — supply pressure
+  Supply (bar)        State  P in (bar)  P out (bar)  Flow (kg/s)
+            25         open       14.53        14.48        4.995
+            30         open       17.24        17.18        6.077
+            35         open       19.98        19.90        7.169
+            40  controlling       27.69        20.00        7.263
+            50  controlling       40.85        20.00        7.371
+            70  controlling       63.79        20.00        7.589
+
+  • While the regulator controls, the consumers see 20 bar.  The flow still
+    rises a little with the supply pressure: a larger let-down cools the gas
+    more, and the colder, denser gas passes the distribution line faster.
+  • Below about 36 bar the supply line limits the flow: the regulator is
+    wide open and the consumers get less than 20 bar.

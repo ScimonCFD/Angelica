@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import math
 import warnings
+from collections import deque
 from dataclasses import dataclass
 
 from .gravity import GRAVITY_M_PER_S2
@@ -453,6 +454,9 @@ def multiphase_flow_report(link_state, fluid, correlation=None):
 
 # ── PressureDropCorrelation implementation ────────────────────────────────────
 
+PATTERN_TRACE_LENGTH = 8
+
+
 class BeggsBrillCorrelation(PressureDropCorrelation):
     """Beggs-Brill (1973) two-phase pipe-flow correlation.
 
@@ -491,6 +495,11 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
         self._fluid = None
         self._warned_fallback = False
         self.payne_correction = bool(payne_correction)
+        # Flow pattern of the last velocity evaluations of each pipe
+        # (component id → recent patterns), for the diagnosis of a solve that
+        # does not converge; the solvers clear it at the start of a solve.
+        self.pattern_trace: dict[str, deque] = {}
+        self._last_regime = ""
 
     def set_fluid(self, fluid) -> None:
         """Update the fluid model used to extract phase-fraction data."""
@@ -541,6 +550,7 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
                                       D, roughness, theta_rad, sigma_l, self.payne_correction)
             f_tp_last = st.f_tp
             HL_last   = st.holdup
+            self._last_regime = st.regime
             # ΔP_f = f_tp · rho_ns · v² · L / (2·D)  →  v = √(2·D·ΔP / (f_tp·rho_ns·L))
             denom = max(st.f_tp * st.rho_ns * L / D, 1e-30)
             v_m_new = math.sqrt(2.0 * net_driving / denom)
@@ -610,6 +620,8 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
 
         pipe_state.velocity_m_per_s = sign * v_m
         pipe_state.friction_factor  = f_tp
+        cid = pipe_state.component.component_id
+        self.pattern_trace.setdefault(cid, deque(maxlen=PATTERN_TRACE_LENGTH)).append(self._last_regime)
         return sign * v_m
 
     def calculate_coupling(

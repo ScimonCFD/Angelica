@@ -21,6 +21,9 @@ class NodeState:
     # propagation (solver-specific descriptors).
     source_mass_flow_kg_per_s: float = 0.0
     source_streams: tuple = ()
+    # Pressure held at a regulator's set point (an interior node whose
+    # pressure is fixed while its ``PressureRegulator`` is controlling).
+    regulated: bool = False
 
 
 @dataclass
@@ -69,6 +72,14 @@ class FittingState(PressureChangerState):
     # (their flows into the node are the feed).
     separator_fraction: float = 0.0
     separator_feed_links: tuple = ()
+    # ``PressureRegulator`` links only: "controlling", "open" or "closed";
+    # the other links at the controlled node; state changes so far.
+    regulator_state: str = "controlling"
+    regulator_capped: bool = False    # controlling, but limited by the wide-open valve this iteration
+    regulator_cap_hits: int = 0       # iterations limited so in the current hydraulic pass
+    regulator_can_control: bool = False   # wide open it overshot the set point: control is feasible
+    regulator_links: tuple = ()
+    regulator_switches: int = 0
 
 
 @dataclass
@@ -92,3 +103,4 @@ class NetworkState:
     # separator node id → its ``SeparatorOutlet`` link states (set by the solvers)
     separators: dict = field(default_factory=dict)
     separator_splits: dict = field(default_factory=dict)   # node id → SeparatorSplit
+    regulators: tuple = ()                                   # PressureRegulator link states

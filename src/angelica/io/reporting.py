@@ -336,6 +336,10 @@ def _write_balance_sheet(workbook, result) -> None:
 def print_solve_result(result, detailed: bool = False) -> None:
     print(f"Case: {result.case_name}")
     print(f"Converged: {result.converged}")
+    diagnosis = getattr(result, "diagnosis", None)
+    if diagnosis is not None:
+        for part in diagnosis.message.split("; "):
+            print(f"  {part}")
     print("")
     _print_iteration_summary(result)
     print("")

@@ -15,6 +15,8 @@ from angelica.properties.base import FluidModel
 from angelica.properties.black_oil import BlackOilComposition, mix_black_oil_streams
 
 from .base import BaseSolver
+from .diagnosis import DiagnosisMixin
+from .regulators import RegulatorNetworkMixin
 from .separators import SEPARATOR_FRACTION_TOLERANCE, SeparatorNetworkMixin
 from .steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
 from .wells import WellNetworkMixin
@@ -52,7 +54,7 @@ class BlackOilSolverSettings:
     pipe_enthalpy_terms: bool = True
 
 
-class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
+class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNetworkMixin, DiagnosisMixin, BaseSolver):
     """Steady-state black-oil three-phase pipe network solver.
 
     Models gas, oil, and water as a homogeneous (no-slip) mixture whose
@@ -379,6 +381,7 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
         network_state = build_network_state(case)
         self._disable_well_latch(network_state, latch_disabled)
         self._setup_separators(network_state)
+        self._setup_regulators(network_state)
         settings      = self.black_oil_settings
         fluid_model   = case.fluid_model
 
@@ -458,6 +461,10 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
         outgoing = self._separator_outgoing(network_state, split_fn)
         separator_change = 0.0
 
+        pattern_history: dict[str, list[str]] = {}
+        regulators_changed = False
+        unsettled_passes = 0
+        self._reset_flow_pattern_trace()
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
         for _outer in range(settings.max_outer_iterations):
 
@@ -492,6 +499,19 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
             lam_hist, lam_metrics, turb_hist, turb_metrics, hydraulic_converged = self._hydraulic_pass(
                 network_state, effective_fluid, progress_callback)
             wells_started = self._start_wells(network_state, effective_fluid)
+            self._record_flow_patterns(network_state, effective_fluid, pattern_history)
+            unsettled_passes = 0 if hydraulic_converged else unsettled_passes + 1
+            if network_state.regulators and _outer > 0 and (hydraulic_converged or unsettled_passes >= 2):
+                # Not after the first pass (its compositions are the default
+                # fluid's: flows were zero when they were propagated), nor
+                # after one hydraulic pass that did not converge: its flows
+                # may be transients (a separator's lagged outlets gave
+                # −2 000 kg/s through a regulator that carries 0.7).  Two in
+                # a row: the state itself may be what cannot converge.
+                regulators_changed = self._update_regulator_states(network_state, effective_fluid,
+                                                                   hydraulic_converged)
+            elif network_state.regulators:
+                regulators_changed = True     # states not yet checked
             if network_state.separators:
                 # Compositions consistent with the new flow field for the
                 # energy solve (see the compositional solver).
@@ -510,10 +530,17 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
             if turb_metrics:
                 outer_turb_final.append(turb_metrics[-1])
 
-            new_node_temps, pipe_mean_temps = solve_energy_system(
-                network_state, effective_fluid, self.convection_scheme, T_ref=T_init,
-                pipe_enthalpy_terms=settings.pipe_enthalpy_terms,
-            )
+            if network_state.regulators and not hydraulic_converged:
+                # No energy solve on a flow field that does not conserve mass
+                # (a regulator between states): its temperatures set the next
+                # pass's densities and kept the state flipping.
+                new_node_temps, pipe_mean_temps = self._held_temperatures(network_state, T_init)
+                regulators_changed = True
+            else:
+                new_node_temps, pipe_mean_temps = solve_energy_system(
+                    network_state, effective_fluid, self.convection_scheme, T_ref=T_init,
+                    pipe_enthalpy_terms=settings.pipe_enthalpy_terms,
+                )
 
             max_delta_t = 0.0
             alpha = settings.temperature_relaxation
@@ -545,7 +572,8 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
             temperature_converged = max_delta_t   < settings.temperature_tolerance_k
             density_converged     = max_rel_delta  < settings.density_rel_tolerance
             separators_settled = separator_change < SEPARATOR_FRACTION_TOLERANCE
-            if temperature_converged and density_converged and separators_settled and not wells_started:
+            if temperature_converged and density_converged and separators_settled and not wells_started \
+                    and not regulators_changed:
                 break
 
         # ── final synchronous pass ────────────────────────────────────────────
@@ -606,11 +634,23 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
         wells_settled = not any(ws.state == "unstable" for ws in well_states)
         separator_results = self._separator_results(
             network_state, frozenset(bc.node_id for bc in case.inlet_fluid_bcs))
+        failed = self._failed_criteria(hydraulic_converged, temperature_converged, density_converged,
+                                       separator_change < SEPARATOR_FRACTION_TOLERANCE, wells_settled,
+                                       separator_results)
+        if regulators_changed:
+            failed.append("regulator states")
+        from angelica.properties.black_oil import T_MAX_C, T_MIN_C
+        cold = [nid for nid, T in node_temperatures.items() if T < T_MIN_C]
+        if cold:
+            failed.append(f"temperature below the black-oil correlations' range ({T_MIN_C} °C) at node(s) "
+                          + ", ".join(str(n) for n in sorted(cold)))
+        hot = [nid for nid, T in node_temperatures.items() if T > T_MAX_C]
+        if hot:
+            failed.append(f"temperature above {T_MAX_C:.0f} °C at node(s) " + ", ".join(str(n) for n in sorted(hot)))
+        failed += [f"regulator {cid} keeps switching state" for cid in self._regulators_stuck(network_state)]
         return SolveResult(
             case_name=case.name,
-            converged=(hydraulic_converged and density_converged and temperature_converged and wells_settled
-                       and separator_change < SEPARATOR_FRACTION_TOLERANCE
-                       and self._separators_settled(separator_results)),
+            converged=not failed,
             node_pressures_pa=node_pressures,
             node_temperatures_c=node_temperatures,
             component_flows=component_flows,
@@ -630,4 +670,6 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, BaseSolver):
             energy_balance_history=energy_balance_history,
             well_states=well_states,
             separators=separator_results,
+            regulators=self._regulator_results(network_state),
+            diagnosis=self._diagnose(failed, network_state, pattern_history),
         )

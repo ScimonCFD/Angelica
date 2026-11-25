@@ -1,0 +1,352 @@
+{
+  "case_name": "15 \u2014 Back-pressure regulator on the separator, export 1.5 MPa",
+  "physics_mode": "black_oil",
+  "material": {
+    "name": "Black-oil (PVT)",
+    "definition_mode": "black_oil",
+    "api_gravity": "32.0",
+    "gas_gravity": "0.65"
+  },
+  "pressure_drop_model": {
+    "library_key": "beggs_brill",
+    "name": "Beggs-Brill (two-phase, black-oil)"
+  },
+  "solver_settings": {},
+  "initial_node_pressures_pa": {},
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 80,
+      "y": 150,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "25000000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "85.0",
+        "thermal_gradient_dc_per_m": "0.0",
+        "gor_sc_m3_per_m3": "150.0",
+        "wor_sc_m3_per_m3": "0.1",
+        "api_gravity": "40.0",
+        "gas_gravity": "0.7"
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "source",
+      "x": 80,
+      "y": 350,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "22000000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "80.0",
+        "thermal_gradient_dc_per_m": "0.0",
+        "gor_sc_m3_per_m3": "40.0",
+        "wor_sc_m3_per_m3": "0.3",
+        "api_gravity": "32.0",
+        "gas_gravity": "0.65"
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "junction",
+      "x": 260,
+      "y": 150,
+      "properties": {
+        "label": "WH1"
+      }
+    },
+    {
+      "node_id": 4,
+      "node_type": "junction",
+      "x": 260,
+      "y": 350,
+      "properties": {
+        "label": "WH2"
+      }
+    },
+    {
+      "node_id": 5,
+      "node_type": "junction",
+      "x": 420,
+      "y": 250,
+      "properties": {
+        "label": "Manifold"
+      }
+    },
+    {
+      "node_id": 6,
+      "node_type": "junction",
+      "x": 620,
+      "y": 250,
+      "properties": {
+        "label": "Separator"
+      }
+    },
+    {
+      "node_id": 7,
+      "node_type": "sink",
+      "x": 820,
+      "y": 120,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "1500000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    },
+    {
+      "node_id": 8,
+      "node_type": "sink",
+      "x": 820,
+      "y": 250,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "200000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    },
+    {
+      "node_id": 9,
+      "node_type": "sink",
+      "x": 820,
+      "y": 380,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "300000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "well",
+          "properties": {
+            "productivity_index_m3_per_day_per_bar": "6.0",
+            "ipr_model": "vogel",
+            "ipr_coefficient": "",
+            "ipr_exponent": "1.0",
+            "diameter_m": "0.0762",
+            "tubing_length_m": "2100.0",
+            "tubing_height_change_m": "2000.0",
+            "tubing_roughness_m": "0.000046",
+            "tubing_segments": "25",
+            "tubing_correlation": "beggs_brill",
+            "geothermal_gradient_k_per_m": "0.03",
+            "formation_conductivity_w_per_mk": "2.4",
+            "formation_diffusivity_m2_per_s": "0.000001",
+            "production_time_days": "365",
+            "wellbore_diameter_m": "",
+            "tubing_u_w_per_m2k": "",
+            "gas_lift_rate_sm3_per_day": "0",
+            "gas_lift_depth_m": "",
+            "gas_lift_gas_gravity": "",
+            "gas_lift_zs": ""
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 2,
+      "end_node_id": 4,
+      "components": [
+        {
+          "component_id": 2,
+          "component_type": "well",
+          "properties": {
+            "productivity_index_m3_per_day_per_bar": "4.0",
+            "ipr_model": "vogel",
+            "ipr_coefficient": "",
+            "ipr_exponent": "1.0",
+            "diameter_m": "0.0762",
+            "tubing_length_m": "2100.0",
+            "tubing_height_change_m": "2000.0",
+            "tubing_roughness_m": "0.000046",
+            "tubing_segments": "25",
+            "tubing_correlation": "beggs_brill",
+            "geothermal_gradient_k_per_m": "0.03",
+            "formation_conductivity_w_per_mk": "2.4",
+            "formation_diffusivity_m2_per_s": "0.000001",
+            "production_time_days": "365",
+            "wellbore_diameter_m": "",
+            "tubing_u_w_per_m2k": "",
+            "gas_lift_rate_sm3_per_day": "0",
+            "gas_lift_depth_m": "",
+            "gas_lift_gas_gravity": "",
+            "gas_lift_zs": ""
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 3,
+      "start_node_id": 3,
+      "end_node_id": 5,
+      "components": [
+        {
+          "component_id": 3,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "3000.0",
+            "diameter_m": "0.1016",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 4,
+      "start_node_id": 4,
+      "end_node_id": 5,
+      "components": [
+        {
+          "component_id": 4,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "2000.0",
+            "diameter_m": "0.1016",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "5.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 5,
+      "start_node_id": 5,
+      "end_node_id": 6,
+      "components": [
+        {
+          "component_id": 5,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "8000.0",
+            "diameter_m": "0.1524",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "3.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 6,
+      "start_node_id": 6,
+      "end_node_id": 7,
+      "components": [
+        {
+          "component_id": 11,
+          "component_type": "pressure_regulator",
+          "properties": {
+            "diameter_m": "0.1524",
+            "set_pressure_pa": "3000000.0",
+            "mode": "upstream",
+            "loss_coefficient": "5.0"
+          }
+        },
+        {
+          "component_id": 6,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "4000.0",
+            "diameter_m": "0.1524",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "3.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 7,
+      "start_node_id": 6,
+      "end_node_id": 8,
+      "components": [
+        {
+          "component_id": 7,
+          "component_type": "separator_outlet",
+          "properties": {
+            "diameter_m": "0.0762",
+            "phase": "oil"
+          }
+        },
+        {
+          "component_id": 8,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "3000.0",
+            "diameter_m": "0.1016",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "3.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 8,
+      "start_node_id": 6,
+      "end_node_id": 9,
+      "components": [
+        {
+          "component_id": 9,
+          "component_type": "separator_outlet",
+          "properties": {
+            "diameter_m": "0.0508",
+            "phase": "water"
+          }
+        },
+        {
+          "component_id": 10,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "1000.0",
+            "diameter_m": "0.0762",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "3.0",
+            "ambient_temperature_c": "15.0"
+          }
+        }
+      ]
+    }
+  ]
+}

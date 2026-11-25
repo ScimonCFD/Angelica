@@ -363,38 +363,37 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
 
     def _compute_max_nodal_mass_imbalance(self, network_state) -> float:
         """Return max relative mass imbalance across junction nodes: |in-out|/(in+out)."""
-        imbalance_by_node = dict.fromkeys(network_state.nodes, 0.0)
-        throughput_by_node = dict.fromkeys(network_state.nodes, 0.0)
+        return max(nodal_mass_imbalances(network_state).values(), default=0.0)
 
-        for link_state in network_state.components:
-            mass_flow = float(link_state.mass_flow_kg_per_s)
-            abs_flow = abs(mass_flow)
-            imbalance_by_node[link_state.start_node.node_id] -= mass_flow
-            imbalance_by_node[link_state.end_node.node_id] += mass_flow
-            throughput_by_node[link_state.start_node.node_id] += abs_flow
-            throughput_by_node[link_state.end_node.node_id] += abs_flow
-        for node_id, node_state in network_state.nodes.items():
-            src = getattr(node_state, "source_mass_flow_kg_per_s", 0.0)
-            if src:
-                imbalance_by_node[node_id] += src
-                throughput_by_node[node_id] += abs(src)
 
-        # Nodes with (almost) no flow — e.g. behind a closed check valve or on a
-        # dead-end branch — carry round-off-level flows; dividing by their own
-        # throughput would report ~100 % imbalance forever.  Measure them
-        # against the typical throughput of the network instead.
-        max_throughput = max(throughput_by_node.values(), default=0.0)
-        if max_throughput < 1e-6:
-            # The whole network is at rest (e.g. its only well is dead): the
-            # remaining flows are velocity-tolerance noise, not imbalance.
-            return 0.0
-        throughput_floor = max(1e-10, 1e-3 * max_throughput)
-        max_rel = 0.0
-        for node_id, node_state in network_state.nodes.items():
-            if node_state.is_boundary:
-                continue
-            imbalance = abs(imbalance_by_node[node_id])
-            throughput = throughput_by_node[node_id]
-            max_rel = max(max_rel, imbalance / max(throughput, throughput_floor))
+def nodal_mass_imbalances(network_state) -> dict[int, float]:
+    """Relative mass imbalance |in − out|/(in + out) of each interior node
+    (the hydraulic convergence measure; see the comments below)."""
+    imbalance_by_node = dict.fromkeys(network_state.nodes, 0.0)
+    throughput_by_node = dict.fromkeys(network_state.nodes, 0.0)
 
-        return max_rel
+    for link_state in network_state.components:
+        mass_flow = float(link_state.mass_flow_kg_per_s)
+        abs_flow = abs(mass_flow)
+        imbalance_by_node[link_state.start_node.node_id] -= mass_flow
+        imbalance_by_node[link_state.end_node.node_id] += mass_flow
+        throughput_by_node[link_state.start_node.node_id] += abs_flow
+        throughput_by_node[link_state.end_node.node_id] += abs_flow
+    for node_id, node_state in network_state.nodes.items():
+        src = getattr(node_state, "source_mass_flow_kg_per_s", 0.0)
+        if src:
+            imbalance_by_node[node_id] += src
+            throughput_by_node[node_id] += abs(src)
+
+    # Nodes with (almost) no flow — e.g. behind a closed check valve or on a
+    # dead-end branch — carry round-off-level flows; dividing by their own
+    # throughput would report ~100 % imbalance forever.  Measure them
+    # against the typical throughput of the network instead.
+    max_throughput = max(throughput_by_node.values(), default=0.0)
+    if max_throughput < 1e-6:
+        # The whole network is at rest (e.g. its only well is dead): the
+        # remaining flows are velocity-tolerance noise, not imbalance.
+        return {}
+    throughput_floor = max(1e-10, 1e-3 * max_throughput)
+    return {node_id: abs(imbalance_by_node[node_id]) / max(throughput_by_node[node_id], throughput_floor)
+            for node_id, node_state in network_state.nodes.items() if not node_state.is_boundary}

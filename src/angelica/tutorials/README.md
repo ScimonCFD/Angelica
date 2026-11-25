@@ -53,6 +53,7 @@ each folder has a README with the network, the model and the results.
 - `python src/angelica/tutorials/steady_black_oil/12_wells_with_tubing/run.py`
 - `python src/angelica/tutorials/steady_black_oil/13_gas_lift/run.py`
 - `python src/angelica/tutorials/steady_black_oil/14_separator/run.py`
+- `python src/angelica/tutorials/steady_black_oil/15_back_pressure_regulator/run.py`
 
 ## Compositional (equation of state)
 
@@ -66,3 +67,4 @@ each folder has a README with the network, the model and the results.
 - `python src/angelica/tutorials/steady_compositional/08_hydrate_risk_subsea/run.py`
 - `python src/angelica/tutorials/steady_compositional/09_gas_condensate_wells/run.py`
 - `python src/angelica/tutorials/steady_compositional/10_separator_train/run.py`
+- `python src/angelica/tutorials/steady_compositional/11_city_gate_regulator/run.py`

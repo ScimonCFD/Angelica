@@ -245,6 +245,78 @@ class SeparatorResult:
 
 
 @dataclass(frozen=True)
+class RegulatorResult:
+    """A ``PressureRegulator`` at the solution.
+
+    ``state``: "controlling" (the controlled node is at the set point),
+    "open" (wide open, set point not reached) or "closed" (no flow).
+    """
+
+    component_id: str
+    mode: str
+    set_pressure_pa: float
+    state: str
+    inlet_pressure_pa: float
+    outlet_pressure_pa: float
+    mass_flow_kg_per_s: float
+
+    @property
+    def pressure_drop_pa(self) -> float:
+        return self.inlet_pressure_pa - self.outlet_pressure_pa
+
+    @property
+    def message(self) -> str:
+        held = "outlet" if self.mode == "downstream" else "inlet"
+        if self.state == "controlling":
+            return f"holding the {held} at the set point"
+        if self.state == "open":
+            return (f"wide open: the {held} cannot reach the set point "
+                    + ("(upstream pressure too low)" if self.mode == "downstream"
+                       else "(downstream pressure too high)"))
+        return ("closed: the outlet is at or above the set point without it" if self.mode == "downstream"
+                else "closed: the inlet is below the set point")
+
+
+@dataclass(frozen=True)
+class PatternSwitch:
+    """A pipe whose Beggs-Brill flow pattern kept changing in the last outer
+    iterations of a solve that did not converge."""
+
+    component_id: str
+    patterns: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ConvergenceDiagnosis:
+    """Where a solve that did not converge is stuck (``SolveResult.diagnosis``).
+
+    ``failed``: the criteria not met ("hydraulics", "temperature",
+    "density", "separator split", "wells", or a separator's stated reason).
+    ``worst_node_id``: the interior node with the largest relative mass
+    imbalance |in − out|/(in + out) at the end, the hydraulic convergence
+    measure.  ``pattern_switches``: pipes whose flow pattern changed over the
+    last outer iterations — a flow-pattern boundary the solution cannot settle
+    on (Beggs-Brill's pattern boundaries are discontinuous, so a pipe can have
+    no solution at an imposed flow, or two at one pressure drop).
+    """
+
+    failed: tuple[str, ...]
+    worst_node_id: int | None = None
+    worst_node_imbalance_rel: float = 0.0
+    pattern_switches: tuple[PatternSwitch, ...] = ()
+
+    @property
+    def message(self) -> str:
+        parts = ["not converged: " + ", ".join(self.failed)]
+        if self.worst_node_id is not None and self.worst_node_imbalance_rel > 0.0:
+            parts.append(f"largest mass imbalance at node {self.worst_node_id} "
+                         f"({100.0 * self.worst_node_imbalance_rel:.2g} % of its throughput)")
+        for sw in self.pattern_switches:
+            parts.append(f"flow pattern of {sw.component_id} alternates between " + " and ".join(sw.patterns))
+        return "; ".join(parts)
+
+
+@dataclass(frozen=True)
 class SolveResult:
     case_name: str
     converged: bool
@@ -273,6 +345,9 @@ class SolveResult:
     node_compositions: dict[int, tuple[float, ...]] = field(default_factory=dict)
     well_states: tuple[WellOperatingState, ...] = ()
     separators: tuple[SeparatorResult, ...] = ()
+    regulators: tuple[RegulatorResult, ...] = ()
+    # None when converged (see ConvergenceDiagnosis)
+    diagnosis: ConvergenceDiagnosis | None = None
 
     @property
     def link_mass_flows_kg_per_s(self) -> list[float]:

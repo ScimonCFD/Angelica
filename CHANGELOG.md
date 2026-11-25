@@ -1,5 +1,65 @@
 # Changelog
 
+## [1.27.0] — 2026-11-25
+
+### New: pressure regulator (roadmap 5.4)
+  - `PressureRegulator` link (black-oil and compositional): holds one of
+    its nodes at `set_pressure_pa`.
+    - `mode="downstream"`: pressure-reducing regulator, holds its end node.
+    - `mode="upstream"`: back-pressure regulator, holds its start node
+      (e.g. a separator on its gas line).
+    - Flow from start to end only; isenthalpic.
+  - Three states, chosen by the solver between outer iterations:
+    controlling (the node at the set point, the flow whatever balances it),
+    open (set point out of reach: a fitting with `loss_coefficient`, K = 5
+    by default — an assumption), closed (no flow).
+  - While controlling, the held node is a fixed-pressure node and the
+    regulator's flow enters the pressure correction implicitly, scaled by
+    (1 − F) at a separator node whose liquid outlets take the fraction F.
+    The flow imposed in an iteration never exceeds what the wide-open valve
+    passes at the present pressures.
+  - `result.regulators`: state, pressures, flow, message; GUI component
+    "Regulator".
+  - Tutorials black-oil 15 (back-pressure regulator holding tutorial 14's
+    separator) and compositional 11 (city-gate let-down, Joule-Thomson
+    cooling, preheating), both with GUI files.
+  - Checked beyond the tutorials: fine sweeps of inlet and outlet pressure
+    in both modes, black-oil (496 solves) and compositional (107 solves),
+    across all state boundaries; reversed pressures; dead wells upstream.
+
+### New: diagnosis of a solve that does not converge
+  - `SolveResult.diagnosis` (None when converged): the criteria not met,
+    the interior node with the largest mass imbalance, and the pipes whose
+    flow pattern alternated over the last iterations.  Shown by
+    `print_solve_result` and in a GUI warning after the run.
+
+### Fixed
+  - **Black-oil enthalpy inversion (since v1.20.0).**  `temperature_from_
+    enthalpy` used plain regula falsi: one end of the bracket stayed put,
+    and since h is evaluated at T rounded to 1e-4 K its |Δh| < 1e-3 J/kg
+    test could not be met, so after 60 steps it returned the bracket's
+    midpoint — up to 2.5 K from the root, alternating between iterations.
+    A check valve's outlet temperature cycled by 2.5 K and the solve did not
+    converge (black-oil line, K = 5, outlet 3.05 MPa).  Now Illinois steps,
+    a T-step stop and the last estimate.  Tutorial results changed by at
+    most 1e-4 K (GUI files of black-oil 12 and 14).
+  - **Black-oil properties outside the temperature range.**  An energy
+    iteration below −17.8 °C raised (dead-oil viscosity: log of T in °F),
+    and a few °F above it the Beggs-Robinson 10^(10^z) overflowed for heavy
+    oils; an unsettled iteration at thousands of °C overflowed the water
+    viscosity.  Properties are now evaluated between −6.7 °C (the
+    correlation's stated lower limit) and 500 °C, and a solution with a node
+    outside that range is reported as not converged, with the node.  No
+    existing result changes.
+  - **Tutorial 14, 0.5 MPa export: the explanation.**  v1.26.1 said the oil
+    line's flow jumps from 6.06 to 7.57 kg/s between 0.72 and 0.73 MPa inlet
+    pressure.  Solved at an imposed flow, the line has no solution between
+    6.87 and 7.55 kg/s (intermittent up to 6.86 kg/s at 0.799 MPa,
+    distributed from 7.56 kg/s at 0.730 MPa), and between 0.730 and 0.799
+    MPa inlet it has two solutions.  The LCV's 7.12 kg/s is in the gap; 0.4
+    MPa fails too.  README corrected; the solution's diagnosis now names the
+    oil line and its two patterns.
+
 ## [1.26.1] — 2026-11-25
 
 Separator outside the tutorials' range: the export pressure of black-oil

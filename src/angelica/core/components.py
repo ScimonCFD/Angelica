@@ -436,6 +436,58 @@ class SeparatorOutlet(Fitting):
             raise ValueError("SeparatorOutlet start_node and end_node must differ.")
 
 
+REGULATOR_MODES = ("downstream", "upstream")
+
+
+@dataclass(frozen=True)
+class PressureRegulator(Fitting):
+    """Pressure regulator: holds one of its nodes at ``set_pressure_pa``.
+
+    ``mode``:
+      ``"downstream"``  pressure-reducing regulator: holds the ``end_node``
+                        (e.g. a gas supply let down to a distribution
+                        pressure)
+      ``"upstream"``    back-pressure regulator: holds the ``start_node``
+                        (e.g. a separator or a line kept above a minimum
+                        pressure)
+
+    Flow passes from ``start_node`` to ``end_node`` only.  The regulator is
+    in one of three states, chosen by the solver:
+
+    - **controlling**: the controlled node is at the set point and the flow
+      is what that node's other links need (or supply);
+    - **open**: the set point cannot be reached even wide open — the
+      upstream pressure is too low (downstream mode) or the downstream
+      pressure too high (upstream mode); it then acts as a fitting with
+      ``loss_coefficient`` (its wide-open K, referred to ``diameter_m``);
+    - **closed**: nothing to pass — the downstream side is already at or
+      above the set point (downstream mode) or the upstream side below it
+      (upstream mode).
+
+    The fluid crosses it isenthalpically.  The controlled node must be an
+    interior node (not a boundary) and can be held by only one regulator.
+    ``loss_coefficient`` defaults to 5 — an assumption, not a datum; set it
+    from the valve's capacity.  Requires ``SteadyBlackOilSolver`` or
+    ``SteadyCompositionalSolver``; the solution's ``regulators`` give each
+    one's state, pressures and flow.
+    """
+
+    set_pressure_pa: float = float("nan")
+    mode: str = "downstream"
+    loss_coefficient: float = 5.0
+    is_pressure_regulator = True     # class attribute read by the flow models
+    blocks_reverse_flow = True       # wide open, it still passes start → end only
+
+    def __post_init__(self) -> None:
+        if math.isnan(self.set_pressure_pa) or self.set_pressure_pa <= 0.0:
+            raise ValueError(f"PressureRegulator {self.component_id!r}: set_pressure_pa must be a "
+                             f"positive pressure (got {self.set_pressure_pa}).")
+        if self.mode not in REGULATOR_MODES:
+            raise ValueError(f"PressureRegulator {self.component_id!r}: mode must be one of "
+                             f"{REGULATOR_MODES} (got {self.mode!r}).")
+        super().__post_init__()
+
+
 @dataclass(frozen=True)
 class Pump(PressureChanger):
     """Centrifugal pump (or compressor) defined by a head curve.

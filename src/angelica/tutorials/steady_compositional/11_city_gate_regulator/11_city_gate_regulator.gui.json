@@ -1,0 +1,110 @@
+{
+  "case_name": "11 \u2014 Pressure-reducing station (city gate), supply 70 bar",
+  "physics_mode": "compositional",
+  "material": {
+    "definition_mode": "compositional",
+    "name": "dry natural gas",
+    "component_names": "methane, ethane, propane, n-butane, nitrogen, carbon dioxide",
+    "default_zs": "0.9, 0.05, 0.02, 0.01, 0.01, 0.01"
+  },
+  "pressure_drop_model": {
+    "library_key": "colebrook_white",
+    "name": "Colebrook-White"
+  },
+  "solver_settings": {},
+  "initial_node_pressures_pa": {},
+  "nodes": [
+    {
+      "node_id": 1,
+      "node_type": "source",
+      "x": 80,
+      "y": 250,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "7000000.0",
+        "flow": "",
+        "thermal_bc_type": "fixed_temperature",
+        "inlet_temperature_c": "20.0",
+        "thermal_gradient_dc_per_m": "0.0",
+        "zs": "0.9, 0.05, 0.02, 0.01, 0.01, 0.01"
+      }
+    },
+    {
+      "node_id": 2,
+      "node_type": "junction",
+      "x": 380,
+      "y": 250,
+      "properties": {
+        "label": "Station inlet"
+      }
+    },
+    {
+      "node_id": 3,
+      "node_type": "sink",
+      "x": 680,
+      "y": 250,
+      "properties": {
+        "condition_type": "pressure",
+        "pressure": "500000.0",
+        "flow": "",
+        "thermal_bc_type": "zero_gradient",
+        "inlet_temperature_c": "",
+        "thermal_gradient_dc_per_m": "0.0"
+      }
+    }
+  ],
+  "links": [
+    {
+      "link_id": 1,
+      "start_node_id": 1,
+      "end_node_id": 2,
+      "components": [
+        {
+          "component_id": 1,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "20000.0",
+            "diameter_m": "0.2032",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "2.0",
+            "ambient_temperature_c": "10.0"
+          }
+        }
+      ]
+    },
+    {
+      "link_id": 2,
+      "start_node_id": 2,
+      "end_node_id": 3,
+      "components": [
+        {
+          "component_id": 2,
+          "component_type": "pressure_regulator",
+          "properties": {
+            "diameter_m": "0.2032",
+            "set_pressure_pa": "2000000.0",
+            "mode": "downstream",
+            "loss_coefficient": "5.0"
+          }
+        },
+        {
+          "component_id": 3,
+          "component_type": "pipe",
+          "properties": {
+            "length_m": "2000.0",
+            "diameter_m": "0.1524",
+            "height_change_m": "0.0",
+            "roughness_m": "0.000046",
+            "hazen_williams_c": "130.0",
+            "num_segments": "1",
+            "heat_transfer_coefficient_w_per_m2k": "2.0",
+            "ambient_temperature_c": "10.0"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -49,7 +49,7 @@ Part E — tubing temperature of Well 1 at its operating rate
      2.00 kg/s →  53.5 °C
      4.00 kg/s →  64.4 °C
      6.69 kg/s →  70.4 °C
-  Network energy balance: wells and pipes lose 966 kW, lifting takes 175 kW, residual -0.002 kW
+  Network energy balance: wells and pipes lose 966 kW, lifting takes 175 kW, residual -0.001 kW
 
 Part F — separator pressure (back-pressure on the wells)
    Separator  Manifold   Well 1   Well 2   (oil, m³/d)

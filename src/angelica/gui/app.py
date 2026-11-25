@@ -244,6 +244,7 @@ class NetSimGui:
         "length_m":        "length",
         "diameter_m":      "diameter",
         "orifice_diameter_m": "diameter",
+        "set_pressure_pa": "pressure",
         "roughness_m":     "roughness",
         "height_change_m": "height_change",
     }
@@ -2742,6 +2743,12 @@ class NetSimGui:
                 self.status_var.set(f"Simulation converged for case '{case.name}'.")
             else:
                 self.status_var.set(f"Simulation did not converge for case '{case.name}'.")
+                diagnosis = getattr(result, "diagnosis", None)
+                if diagnosis is not None:
+                    messagebox.showwarning(
+                        "Simulation did not converge",
+                        diagnosis.message.replace("; ", ";\n"),
+                    )
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -3615,6 +3622,17 @@ class NetSimGui:
                 ),
                 width=12,
             ).pack(anchor="w", pady=4)
+            ttk.Button(
+                palette,
+                text="Regulator",
+                command=lambda: self._add_component_to_link(
+                    link.link_id,
+                    "pressure_regulator",
+                    components_list,
+                    properties_frame,
+                ),
+                width=12,
+            ).pack(anchor="w", pady=4)
         if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil", "compositional"):
             ttk.Button(
                 palette,
@@ -3870,12 +3888,14 @@ class NetSimGui:
             if comp.component_type == "pipe":
                 canvas.create_line(x0c, y0c, x1c, y1c, fill=pipe_color, width=2)
                 legend_seen.setdefault("Pipe", (pipe_color, ()))
-            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow", "well", "separator_outlet"):
+            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow", "well", "separator_outlet",
+                                         "pressure_regulator"):
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=fitting_color, width=2, dash=(6, 3))
                 legend_seen.setdefault(
                     {"fitting": "Fitting", "choke": "Choke", "check_valve": "Check valve",
                      "well_inflow": "Well IPR", "well": "Well",
-                     "separator_outlet": "Separator outlet"}[comp.component_type],
+                     "separator_outlet": "Separator outlet",
+                     "pressure_regulator": "Pressure regulator"}[comp.component_type],
                     (fitting_color, (6, 3)))
             elif comp.component_type == "pump":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
@@ -3911,7 +3931,7 @@ class NetSimGui:
             else:
                 lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke",
                            "check_valve": "check", "well_inflow": "IPR", "well": "well",
-                           "separator_outlet": "sep. outlet"}
+                           "separator_outlet": "sep. outlet", "pressure_regulator": "regulator"}
                 clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
                 lbl = lbl_map.get(comp.component_type, comp.component_type)
                 clr = clr_map.get(comp.component_type, fitting_color)
@@ -4724,12 +4744,14 @@ class NetSimGui:
             if comp.component_type == "pipe":
                 canvas.create_line(x0c, y0c, x1c, y1c, fill=temp_color, width=2)
                 legend_seen.setdefault("Pipe", (temp_color, ()))
-            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow", "well", "separator_outlet"):
+            elif comp.component_type in ("fitting", "choke", "check_valve", "well_inflow", "well", "separator_outlet",
+                                         "pressure_regulator"):
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=fitting_color, width=2, dash=(6, 3))
                 legend_seen.setdefault(
                     {"fitting": "Fitting", "choke": "Choke", "check_valve": "Check valve",
                      "well_inflow": "Well IPR", "well": "Well",
-                     "separator_outlet": "Separator outlet"}[comp.component_type],
+                     "separator_outlet": "Separator outlet",
+                     "pressure_regulator": "Pressure regulator"}[comp.component_type],
                     (fitting_color, (6, 3)))
             elif comp.component_type == "pump":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
@@ -4763,7 +4785,7 @@ class NetSimGui:
             else:
                 lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke",
                            "check_valve": "check", "well_inflow": "IPR", "well": "well",
-                           "separator_outlet": "sep. outlet"}
+                           "separator_outlet": "sep. outlet", "pressure_regulator": "regulator"}
                 clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
                 lbl = lbl_map.get(comp.component_type, comp.component_type)
                 clr = clr_map.get(comp.component_type, fitting_color)
@@ -4918,6 +4940,21 @@ class NetSimGui:
                       "node's other connections or its pressure boundary.  Put it first in\n"
                       "its connection.  Its flow is set by the split (level-control valve):\n"
                       "an outlet pressure above the separator's means the liquid needs a pump."),
+            )
+            return
+        if component.component_type == "pressure_regulator":
+            self._render_simple_component_properties(
+                component, properties_frame, link_id, components_list,
+                fields=[("set_pressure_pa", f"Set pressure ({self._unit_label('pressure')})"),
+                        ("diameter_m", f"Bore ({self._unit_label('diameter')})"),
+                        ("loss_coefficient", "Wide-open K")],
+                choices={"mode": ("Holds", ("downstream", "upstream"))},
+                note=("downstream: pressure-reducing regulator, holds its outlet at the set\n"
+                      "pressure.  upstream: back-pressure regulator, holds its inlet (e.g. a\n"
+                      "separator on its gas line).  Flow passes from the connection's start\n"
+                      "to its end only.  When the set point cannot be held it is wide open\n"
+                      "(a fitting with the wide-open K) or closed.  The node it holds must\n"
+                      "not be a boundary.  Black-oil or compositional mode."),
             )
             return
         if component.component_type == "well_inflow":
@@ -5527,6 +5564,8 @@ class NetSimGui:
             return f"Well IPR #{display_index}"
         if component.component_type == "separator_outlet":
             return f"Separator outlet #{display_index}"
+        if component.component_type == "pressure_regulator":
+            return f"Pressure regulator #{display_index}"
         if component.component_type == "well":
             return f"Well #{display_index}"
         return f"{component.component_type.capitalize()} #{display_index}"

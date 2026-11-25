@@ -12,10 +12,16 @@ def assemble_pressure_system(network_state, couplings: list[float]):
     b = np.zeros(n, dtype=float)
 
     separators = getattr(network_state, "separators", None) or {}
+    # A controlling regulator limited by its wide-open capacity in this
+    # iteration acts as the open valve (K-factor coupling, flow as computed).
+    regulators = [r for r in (getattr(network_state, "regulators", None) or ())
+                  if r.regulator_state == "controlling" and not r.regulator_capped]
     for link_state, coupling in zip(network_state.components, couplings):
         link_state.coupling = coupling
     if separators:
         _separator_outlet_flows(separators)
+    if regulators:
+        _regulator_flows(regulators)
 
     for link_state, coupling in zip(network_state.components, couplings):
         i = node_index[link_state.start_node.node_id]
@@ -30,10 +36,12 @@ def assemble_pressure_system(network_state, couplings: list[float]):
 
     if separators:
         _separator_outlet_jacobian(separators, node_index, A)
+    if regulators:
+        _regulator_jacobian(regulators, node_index, A, separators)
 
     for node_id in node_ids:
         node = network_state.nodes[node_id]
-        if node.is_pressure_boundary:
+        if node.is_pressure_boundary or node.regulated:
             idx = node_index[node_id]
             A.rows[idx] = []
             A.data[idx] = []
@@ -96,3 +104,41 @@ def _separator_outlet_jacobian(separators, node_index, A) -> None:
                 A[s, s] -= g
                 A[out, k] -= g
                 A[out, s] += g
+
+
+# ── pressure regulators ───────────────────────────────────────────────────────
+#
+# A controlling ``PressureRegulator`` holds its controlled node C at the set
+# point (a fixed-pressure row) and carries the flow that balances C's other
+# links: ṁ_r = Σ_k (flow from C through k) for a reducing regulator (C its
+# end node), the supply arriving at C for a back-pressure regulator (C its
+# start node).  With δP_C = 0 that flow moves with the pressures of C's
+# neighbours: δṁ_r = ∓Σ_k |c_k|·δP_k, which enters the row of the
+# regulator's other node O (net inflow into O changes by +|c_k|·δP_k in
+# both modes).  Lagging ṁ_r instead is the separator-outlet mistake of
+# v1.26.0.
+
+def _regulator_flows(regulators) -> None:
+    from angelica.closures.regulator import regulator_mass_flow
+
+    for r in regulators:
+        r.mass_flow_kg_per_s = regulator_mass_flow(r)
+
+
+def _regulator_jacobian(regulators, node_index, A, separators=None) -> None:
+    from angelica.closures.regulator import controlled_node
+
+    for r in regulators:
+        c = controlled_node(r)
+        other = r.start_node if c is r.end_node else r.end_node
+        o = node_index[other.node_id]
+        # At a separator node the liquid outlets take the fraction F of
+        # what arrives, so only (1 − F) of a change in a feed link reaches
+        # the regulator (a back-pressure regulator on a separator's gas line).
+        outlets = (separators or {}).get(c.node_id, ())
+        scale = max(1.0 - sum(o_.separator_fraction for o_ in outlets), 0.0)
+        for link in r.regulator_links:
+            if any(link is o_ for o_ in outlets):
+                continue
+            k_node = link.start_node if link.end_node is c else link.end_node
+            A[o, node_index[k_node.node_id]] -= scale * abs(float(link.coupling))
