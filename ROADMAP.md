@@ -7,7 +7,7 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.34.0, checked against the code)
+## 1. Where Angelica stands (v1.35.0, checked against the code)
 
 | Area | Present today |
 |---|---|
@@ -19,7 +19,7 @@ This file is the working source of truth. Each item is released on its own
 | Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve, gas compressor (ratio, rise or power; isentropic or polytropic efficiency), heater/cooler (fixed duty or outlet temperature, with a duty limit), separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
 | GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI, US and oil-field units (psia, °F, ft, in, lb/s), Excel export; standard-volume rates (Sm³/d, STB/d, MMscf/d) in the exports |
-| Quality | 971 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
+| Quality | 1001 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
 
 **Validation debt (2026-11-25).**  Most models since v1.19 are validated
 by internal consistency only: of the last ten log summaries, eight say
@@ -122,7 +122,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   data (Ng & Robinson 1985) within the accuracy of the chosen method.
 
 ### Stage 2b — advanced flow assurance (added 2026-11-23, after stage 4)
-- 2b.1 Water content of the gas as an input (ppm, mg/Sm³ or saturation
+- 2b.1 **Done in v1.35.0.** Water content of the gas as an input (ppm, mg/Sm³ or saturation
   fraction); water dew point; hydrate check for undersaturated gas (no free
   water: hydrate–vapour equilibrium with the water in the gas phase).
   *Done when:* a gas at its water saturation reproduces the current curve,
@@ -1034,4 +1034,22 @@ Summary:
 
 Summary: consistency only (the report rearranges the solution: segments
 join, lengths, rises and drops add up).
+
+### 2026-11-27 — Item 2b.1: water content and undersaturated hydrate check (v1.35.0)
+
+- `water_content` module (inputs, dew point); hydrate functions take the
+  gas's water content (hydrate–vapour below saturation); compositional
+  all-vapour streams checked at their water content; GUI envelope curve.
+
+Summary:
+- Validated against data read in a source: water P_sat against NIST
+  (≤ 7.2e-5, 1–91 °C).
+- Validated by consistency: saturated gas = saturated curve; undersaturated
+  hydrate temperature between dew point and saturated curve.
+- Not validated: water content at pressure (ideal vapour), hydrate–vapour
+  equilibria (water activity without Poynting and φ_w: estimated 0.6–2 K
+  warm, conservative).
+- Review before the tag: GUI curve now follows the solver's phase rule
+  (`hydrate_curve_at_water_content`); out-of-range inputs raise; pipe test
+  checks the exact value against a direct call.
 

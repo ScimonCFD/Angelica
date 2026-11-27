@@ -242,7 +242,9 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
     @staticmethod
     def _hydrate_report(link, fluid, node_temperatures) -> dict:
         """Hydrate formation temperature and subcooling at the pipe end where
-        the fluid is coldest relative to the formation curve.  Empty (fields
+        the fluid is coldest relative to the formation curve — for an
+        all-vapour stream with a water component, at its water content
+        (no free water: hydrate–vapour equilibrium).  Empty (fields
         stay None) for links that are not pipes, carry no hydrate former, or
         where no hydrate is stable above 0 °C at either end's pressure."""
         from angelica.properties.hydrate import hydrate_formation_temperature
@@ -251,12 +253,24 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
         zs = getattr(link, "zs", ()) or fluid.default_zs
         worst: dict = {}
         try:
+            # Water content (roadmap 2b.1): a stream that is all vapour carries
+            # its water as vapour; if it is below saturation at an end there is
+            # no free water and the check is hydrate–vapour.  A stream with any
+            # liquid (free water or condensate) keeps the water-saturated curve
+            # (free water present, or a conservative assumption with
+            # condensate).  No water component: water assumed in excess, as
+            # before.
+            from angelica.properties.free_water import find_water_index
+            w = find_water_index(tuple(fluid.component_names))
+            y_water = None
+            if w is not None and zs[w] > 0.0 and fluid.vapor_fraction_for_link(link) >= 0.999:
+                y_water = float(zs[w])
             for node in (link.start_node, link.end_node):
                 T = node_temperatures.get(node.node_id)
                 if T is None or node.pressure_pa is None:
                     continue
                 pt = hydrate_formation_temperature(fluid.component_names, zs, float(node.pressure_pa),
-                                                   fluid.eos_name)
+                                                   fluid.eos_name, water_mole_fraction_gas=y_water)
                 if pt is None:
                     continue                  # no hydrate stable above 0 °C at this end
                 sub = pt.temperature_c - T

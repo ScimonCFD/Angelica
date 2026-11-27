@@ -1,5 +1,54 @@
 # Changelog
 
+## [1.35.0] — 2026-11-27
+
+Roadmap item 2b.1: water content of the gas, water dew point, hydrate check
+of an undersaturated gas.
+
+### Added
+  - **`angelica.properties.water_content`**: water mole fraction from ppm
+    (mol), mg/Sm³ (60 °F, 1 atm) or a saturation fraction at (T, P);
+    `saturated_water_mole_fraction`; `water_dew_point_c` (P_sat(T) = y_w·P,
+    the free-water model's ideal vapour and Raoult's law; below 0 °C over
+    supercooled water, no frost point).
+  - **Hydrate check of an undersaturated gas**: `hydrate_formation_
+    temperature`, `hydrate_formation_pressure` and `hydrate_curve` take
+    `water_mole_fraction_gas`.  The water term of van der Waals-Platteeuw
+    uses the smaller of the aqueous phase's water fraction and the vapour's
+    water activity y_w·P/P_sat(T): at or above saturation the
+    water-saturated curve exactly; below it the hydrate–vapour curve, which
+    lies between the gas's water dew point and the saturated curve (70 bar,
+    C1/C2/C3 gas: saturated 17.03 °C; dew point 5 °C → hydrate 7.22 °C; a
+    gas of 41 ppm (dew point −10 °C) forms none above 0 °C).
+  - In compositional runs, an all-vapour stream with a water component is
+    checked at its water content; a stream with any liquid keeps the
+    water-saturated curve (free water, or conservatively with condensate);
+    without a water component water is assumed in excess, as before.  The
+    switch at VF = 0.999 is a step: a trace of condensate moves a 60 ppm gas
+    from 0.42 °C to the saturated 17.03 °C (70–80 bar).  Tutorial results
+    change by at most 7·10⁻¹⁰ K (10_separator_train's hydrate temperature: a
+    different iteration path of the formation solve).
+  - **`hydrate_curve_at_water_content`**: the GUI's phase-envelope hydrate
+    curve for a feed with water, point by point with the solver's rule
+    (hydrate–vapour where the hydrocarbons are all vapour, the saturated
+    point otherwise — including a dense phase the flash labels liquid, so
+    the curve can step back to the saturated one).
+  - Validation: water saturation pressure against NIST WebBook (IAPWS-95),
+    1–91 °C, within 7.2·10⁻⁵ (read in source); the dew point inverts it
+    within 0.002 K.  Not validated: water content at pressure (the ideal
+    vapour neglects the non-ideal enhancement) and hydrate–vapour
+    equilibria (no measured data read).  Known bias of the hydrate–vapour
+    water activity y_w·P/P_sat: it omits the Poynting factor (+5.5 % on a_w
+    at 70 bar, 10 °C, computed) and water's vapour fugacity coefficient
+    (estimated +10–15 %), so the undersaturated hydrate temperature is about
+    0.6–2 K too warm (estimate; conservative).
+  - Review before the tag: the GUI curve used the feed's water whatever the
+    phases (now the solver's rule); inputs out of range (dew point beyond
+    −50 … 373.85 °C, NaN, P ≤ 0, fractions above 1, negative water) raise
+    instead of returning clamped numbers; the compositional pipe test now
+    checks the exact value (0.420 °C) against a direct call, since the
+    report swallows exceptions; 42.21 mol/Sm³ (not 42.30) in the docstring.
+
 ## [1.34.0] — 2026-11-27
 
 Roadmap item 7.4: per-link profile report.

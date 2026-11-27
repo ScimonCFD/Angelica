@@ -28,6 +28,41 @@ maintainer y recoge lo que espera su decisión.
 
 ## Releases
 
+### v1.35.0 — Ítem 2b.1: contenido de agua del gas e hidratos con gas no saturado
+
+**Qué cambió.**  Módulo `water_content` (contenido de agua en ppm, mg/Sm³
+o fracción de saturación; punto de rocío de agua).  Las funciones de
+hidratos aceptan el contenido de agua: bajo saturación usan el equilibrio
+hidrato–vapor.  En composicional, una corriente toda vapor con agua se
+evalúa con su contenido de agua; con líquido, se mantiene la curva
+saturada (conservador).  El cambio en VF = 0.999 es un salto: un gas con
+60 ppm pasa de 0.42 °C a 17.03 °C con una traza de condensado.  Los
+tutoriales cambian como máximo 7·10⁻¹⁰ K.  La curva de hidratos de la GUI
+aplica la misma regla punto a punto (`hydrate_curve_at_water_content`).
+
+**Revisión antes del tag.**  La GUI usaba el agua del feed sin mirar las
+fases (ahora regla del solver); entradas fuera de rango (rocío fuera de
+−50 … 373.85 °C, NaN, P ≤ 0, fracciones > 1, agua negativa) dan error en
+vez de un número recortado; el test del tubo compara el valor exacto
+(0.420 °C) con una llamada directa; 42.21 mol/Sm³ en el docstring.
+
+**Validado contra fuente.**  Presión de saturación del agua frente a NIST
+WebBook (IAPWS-95), 1–91 °C: ≤ 7.2·10⁻⁵; el punto de rocío la invierte a
+0.002 K.
+
+**Validado por consistencia.**  Gas saturado: la curva saturada exacta.  Gas
+no saturado: la temperatura de hidrato queda entre su punto de rocío y la
+curva saturada (70 bar: rocío 5 °C → hidrato 7.22 °C; saturada 17.03 °C).
+
+**No validado / supuesto.**  El contenido de agua a presión usa vapor ideal
+(Raoult) y subestima el agua real a alta presión; el equilibrio
+hidrato–vapor no se ha comparado con datos medidos.  Sesgo conocido de la
+actividad del agua y_w·P/P_sat: omite Poynting (+5.5 % en a_w a 70 bar y
+10 °C, calculado) y el coeficiente de fugacidad del agua en el vapor
+(+10–15 %, estimado): la temperatura de hidrato del gas no saturado sale
+≈ 0.6–2 K más alta (estimación; del lado seguro).  Una fase densa sobre la
+cricondenbara que el flash etiqueta líquida toma la curva saturada.
+
 ### v1.34.0 — Ítem 7.4: informe de perfiles por conexión
 
 **Qué cambió.**  `profile_table(case, result)`: para cada conexión, sus

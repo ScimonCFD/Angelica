@@ -143,6 +143,41 @@ def water_mole_fraction(T: float, fug_atm: dict[str, float]) -> float:
     return (1.0 / _M_WATER) / (1.0 / _M_WATER + m_total)
 
 
+def _water_activity(T: float, P: float, fug: dict[str, float], y_water: float | None) -> float:
+    """Mole fraction (activity basis) of water for the vdW-P liquid term.
+
+    With liquid water present, the aqueous phase with the dissolved formers
+    (``water_mole_fraction``).  With ``y_water`` (the water mole fraction of
+    an undersaturated gas, roadmap 2b.1): the water activity relative to pure
+    liquid water, y_w·P/P_sat(T) (ideal vapour, Raoult — the free-water
+    model), when that is the smaller: no free water, hydrate–vapour
+    equilibrium.  At saturation the two coincide and the curve is the
+    water-saturated one.
+
+    Known bias (estimated by the v1.35.0 review, not measured): the strict
+    activity is y_w·P·φ_w/(P_sat·φ_sat·exp(v_L(P−P_sat)/RT)).  Omitting the
+    Poynting factor raises a_w by about 5.5 % at 70 bar and 10 °C, and the
+    vapour fugacity coefficient of water in methane roughly 10–15 % more;
+    with dT/d ln a_w ≈ 12 K the undersaturated hydrate temperature is about
+    0.6–2 K too warm — on the safe side for a hydrate check."""
+    x_w = water_mole_fraction(T, fug)
+    if y_water is None:
+        return x_w
+    from .free_water import water_psat_pa
+    return min(x_w, y_water * P / water_psat_pa(T))
+
+
+def _checked_water_fraction(y: float | None) -> float | None:
+    """The water mole fraction of a gas, rounded for the caches: None (water
+    in excess) or a finite value in [0, 1]."""
+    if y is None:
+        return None
+    y = float(y)
+    if not (math.isfinite(y) and 0.0 <= y <= 1.0):
+        raise ValueError(f"water_mole_fraction_gas must be finite and in [0, 1] (got {y})")
+    return float(f"{y:.8g}")
+
+
 def _langmuir(cas: str, structure: int, cavity: int, T: float) -> float:
     """Langmuir constant (1/atm) of a guest in a cavity (0 small, 1 large)."""
     A, B = _MUNCK[cas][2 * structure + cavity]
@@ -215,7 +250,7 @@ def _dry_basis(component_names, zs):
 
 
 def _solve_formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: float, eos_name: str,
-                              p_guess: float | None = None):
+                              p_guess: float | None = None, y_water: float | None = None):
     """(P_eq, structure) with the lowest formation pressure, or None.
 
     With ``p_guess`` (e.g. the previous point of a curve) the root is
@@ -239,7 +274,7 @@ def _solve_formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: 
         def F(lnP: float, st=st, si=si) -> float:
             P = math.exp(lnP)
             fug = _former_fugacities(names, zs, T, P, eos_name)
-            return _dmu_water_liquid(st, T, P, water_mole_fraction(T, fug)) - _dmu_water_hydrate(si, T, fug)
+            return _dmu_water_liquid(st, T, P, _water_activity(T, P, fug, y_water)) - _dmu_water_hydrate(si, T, fug)
 
         if best is not None and F(math.log(best[0])) > 0.0:
             continue                          # not stable at the other structure's pressure
@@ -300,27 +335,34 @@ def _solve_formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: 
 
 
 @lru_cache(maxsize=4096)
-def _formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: float, eos_name: str):
-    return _solve_formation_pressure(names, zs, T, eos_name)
+def _formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: float, eos_name: str,
+                        y_water: float | None = None):
+    return _solve_formation_pressure(names, zs, T, eos_name, y_water=y_water)
 
 
-def hydrate_formation_pressure(component_names, zs, temperature_c: float, eos_name: str = "PR") -> HydratePoint | None:
+def hydrate_formation_pressure(component_names, zs, temperature_c: float, eos_name: str = "PR",
+                               water_mole_fraction_gas: float | None = None) -> HydratePoint | None:
     """Pressure (Pa) above which hydrate forms at ``temperature_c`` (≥ 0 °C),
     and the stable structure; None if no former is present or it does not
-    form below 1500 bar."""
+    form below 1500 bar.  ``water_mole_fraction_gas``: the water content of
+    an undersaturated gas (None: water in excess, the water-saturated curve)."""
     names, z = _dry_basis(component_names, zs)
     T = temperature_c + 273.15
     if T < _T0 - 1e-9:
         raise ValueError("The ice branch (T < 0 °C) is not implemented.")
     z_r = tuple(round(x, 8) for x in z)
-    res = _formation_pressure(names, z_r, round(T, 4), eos_name.upper())
+    yw = _checked_water_fraction(water_mole_fraction_gas)
+    if yw == 0.0:
+        return None                           # a gas with no water forms no hydrate
+    res = _formation_pressure(names, z_r, round(T, 4), eos_name.upper(), yw)
     if res is None:
         return None
     return HydratePoint(temperature_c, res[0], res[1])
 
 
 @lru_cache(maxsize=4096)
-def _formation_temperature(names: tuple[str, ...], zs: tuple[float, ...], P: float, eos_name: str):
+def _formation_temperature(names: tuple[str, ...], zs: tuple[float, ...], P: float, eos_name: str,
+                           y_water: float | None = None):
     """Highest T (K) at which some structure is stable at pressure P, or None."""
     from .compositional_fluid import _get_flash_obj
     cas = _get_flash_obj(names, eos_name).constants.CASs
@@ -331,7 +373,7 @@ def _formation_temperature(names: tuple[str, ...], zs: tuple[float, ...], P: flo
     for si, st in enumerate(STRUCTURES):
         def G(T: float) -> float:
             fug = _former_fugacities(names, zs, T, P, eos_name)
-            return _dmu_water_liquid(st, T, P, water_mole_fraction(T, fug)) - _dmu_water_hydrate(si, T, fug)
+            return _dmu_water_liquid(st, T, P, _water_activity(T, P, fug, y_water)) - _dmu_water_hydrate(si, T, fug)
 
         g_lo = G(T_lo0)
         if g_lo > 0.0:
@@ -364,37 +406,99 @@ def _formation_temperature(names: tuple[str, ...], zs: tuple[float, ...], P: flo
     return best
 
 
-def hydrate_formation_temperature(component_names, zs, pressure_pa: float, eos_name: str = "PR") -> HydratePoint | None:
+def hydrate_formation_temperature(component_names, zs, pressure_pa: float, eos_name: str = "PR",
+                                  water_mole_fraction_gas: float | None = None) -> HydratePoint | None:
     """Temperature (°C) below which hydrate forms at ``pressure_pa``, and the
     stable structure; None when no hydrate is stable above 0 °C at that
-    pressure (45 °C is reported as a cap)."""
+    pressure (45 °C is reported as a cap).  ``water_mole_fraction_gas``: the
+    water content of an undersaturated gas (None: water in excess)."""
     names, z = _dry_basis(component_names, zs)
     z_r = tuple(round(x, 8) for x in z)
-    res = _formation_temperature(names, z_r, float(round(pressure_pa, -2)), eos_name.upper())
+    yw = _checked_water_fraction(water_mole_fraction_gas)
+    if yw == 0.0:
+        return None                           # a gas with no water forms no hydrate
+    res = _formation_temperature(names, z_r, float(round(pressure_pa, -2)), eos_name.upper(), yw)
     if res is None:
         return None
     return HydratePoint(res[0] - 273.15, pressure_pa, res[1])
 
 
 def hydrate_curve(component_names, zs, t_min_c: float = 0.0, t_max_c: float = 30.0,
-                  n: int = 31, eos_name: str = "PR", p_max_pa: float = 1.0e8) -> list[HydratePoint]:
+                  n: int = 31, eos_name: str = "PR", p_max_pa: float = 1.0e8,
+                  water_mole_fraction_gas: float | None = None) -> list[HydratePoint]:
     """Formation curve: points (T, P_formation, structure) from t_min to t_max,
     stopping after the first point above ``p_max_pa`` (the curve is steep, and
     points far above a plot's range only cost time).  Each point starts its
-    search from the previous one (warm start)."""
+    search from the previous one (warm start).  ``water_mole_fraction_gas``:
+    the curve of a gas with that water content (None: water in excess)."""
+    yw = _checked_water_fraction(water_mole_fraction_gas)
+    if yw == 0.0:
+        return []                             # a gas with no water forms no hydrate
     names, z = _dry_basis(component_names, zs)
     z_r = tuple(round(x, 8) for x in z)
     pts: list[HydratePoint] = []
     guess = None
     for i in range(n):
         T = t_min_c + (t_max_c - t_min_c) * i / max(n - 1, 1)
-        res = _solve_formation_pressure(names, z_r, max(T, 0.0) + 273.15, eos_name.upper(), guess)
+        res = _solve_formation_pressure(names, z_r, max(T, 0.0) + 273.15, eos_name.upper(), guess,
+                                        y_water=yw)
         if res is None:
             continue
         guess = res[0]
         pts.append(HydratePoint(T, res[0], res[1]))
         if res[0] > p_max_pa:
             break
+    return pts
+
+
+def hydrate_curve_at_water_content(component_names, zs, t_min_c: float = 0.0, t_max_c: float = 30.0,
+                                   n: int = 31, eos_name: str = "PR",
+                                   p_max_pa: float = 1.0e8) -> list[HydratePoint]:
+    """Hydrate curve of a feed that may contain water, with the compositional
+    solver's rule (roadmap 2b.1): at a point where the hydrocarbons are all
+    vapour (HC flash VF ≥ 0.999) the gas carries the feed's water, y_w = z_w,
+    and the point is the hydrate–vapour one at that water content; where any
+    hydrocarbon liquid is present the water-saturated point (conservative:
+    the condensate would concentrate the water in the gas).  A dense phase
+    above the cricondenbar that the flash labels liquid also takes the
+    saturated point, so the curve can step back down to the saturated one
+    (C1/C2/C3 with 60 ppm water: 116 bar at 5 °C, then 25.5 bar at 10 °C,
+    where the hydrate–vapour point would be 173 bar).  Where the gas is
+    all vapour and forms no hydrate in the curve's range the point is
+    omitted.  No water component: the water-saturated curve."""
+    from .compositional_fluid import _hc_phase_compositions
+    from .free_water import find_water_index
+    names = tuple(component_names)
+    w = find_water_index(names)
+    total = sum(zs)
+    saturated = hydrate_curve(names, zs, t_min_c, t_max_c, n, eos_name, p_max_pa)
+    if w is None or total <= 0.0 or zs[w] <= 0.0:
+        return saturated
+    y_w = float(zs[w]) / total
+    hc_names = tuple(c for i, c in enumerate(names) if i != w)
+    hc = [float(z) for i, z in enumerate(zs) if i != w]
+    s = sum(hc)
+    if s <= 0.0:
+        return saturated
+    hc_zs = tuple(round(z / s, 10) for z in hc)
+    wet = {round(p.temperature_c, 9): p for p in hydrate_curve(names, zs, t_min_c, t_max_c, n, eos_name,
+                                                               p_max_pa, water_mole_fraction_gas=y_w)}
+    def all_vapour(pt: HydratePoint) -> bool:
+        try:
+            return _hc_phase_compositions(hc_names, float(pt.pressure_pa), float(pt.temperature_c), hc_zs,
+                                          eos_name)[2] >= 0.999
+        except Exception:
+            return False                      # unknown: keep the conservative point
+
+    pts = []
+    for sat in saturated:
+        p = wet.get(round(sat.temperature_c, 9))
+        if p is not None and all_vapour(p):
+            pts.append(p)
+        elif p is None and all_vapour(sat):
+            continue                          # dry gas: no hydrate within the curve's pressure range
+        else:
+            pts.append(sat)
     return pts
 
 

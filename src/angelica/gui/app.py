@@ -4404,13 +4404,13 @@ class NetSimGui:
 
             def _compute_hydrate() -> None:
                 try:
-                    from angelica.properties.hydrate import hydrate_curve
                     env_p = [p for _t, p in result_holder.get("bubble", []) + result_holder.get("dew", [])]
                     op_p = [p for _t, p in (op_points or [])]
                     p_top = 1.3 * max(env_p + op_p + [1.0e6])      # just above the plot's range
+                    from angelica.properties.hydrate import hydrate_curve_at_water_content
                     pts = [(pt.temperature_c + 273.15, pt.pressure_pa)
-                           for pt in hydrate_curve(component_names, zs, 0.0, 40.0, 21, eos_name=eos_name,
-                                                   p_max_pa=p_top)]
+                           for pt in hydrate_curve_at_water_content(component_names, zs, 0.0, 40.0, 21,
+                                                                    eos_name=eos_name, p_max_pa=p_top)]
                 except Exception:
                     pts = []
                 result_holder["hydrate"] = pts
