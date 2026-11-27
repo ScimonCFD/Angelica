@@ -313,8 +313,11 @@ def tubing_wellhead_pressure(
     return None if res is None else res.wellhead_pressure_pa
 
 
-def _thermal_key(comp) -> tuple:
-    """Hashable thermal description of a ``Well``."""
+def _thermal_key(comp, link_state=None) -> tuple:
+    """Hashable thermal description of a ``Well``: isothermal tubing (at the
+    reservoir temperature) when the solve is isothermal, else Ramey."""
+    if getattr(link_state, "isothermal", False):
+        return ("isothermal",)
     return ("ramey", float(comp.geothermal_gradient_k_per_m), float(comp.wellbore_diameter_m),
             float(comp.tubing_u_w_per_m2k), float(comp.formation_conductivity_w_per_mk),
             float(comp.formation_diffusivity_m2_per_s), float(comp.production_time_days))
@@ -429,7 +432,7 @@ def _well_args(comp, fluid, p_res: float, T: float, link_state=None) -> tuple:
         wf, p_res, T, ipr_of(comp),
         float(comp.diameter_m), float(comp.tubing_length_m), float(comp.tubing_height_change_m),
         float(comp.tubing_roughness_m), int(comp.tubing_segments),
-        str(getattr(comp, "tubing_correlation", "beggs_brill")), _thermal_key(comp),
+        str(getattr(comp, "tubing_correlation", "beggs_brill")), _thermal_key(comp, link_state),
         _lift_args(comp, wf),
     )
 

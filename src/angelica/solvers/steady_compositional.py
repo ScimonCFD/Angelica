@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from angelica.closures.choke import ChokeFlowModel
 from angelica.closures.convection_scheme import ConvectionScheme, HybridScheme
 from angelica.closures.pressure_drop import PressureDropCorrelation
-from angelica.core.case import NetworkCase
+from angelica.core.case import NetworkCase, check_temperature_c
 from angelica.core.network import build_network_state
 from angelica.core.results import ComponentFlowResult, SolveResult
 from angelica.core.settings import SolverSettings
@@ -45,6 +45,11 @@ class CompositionalSolverSettings:
             True).  False drops them, for comparison with the pre-1.18 model
             (valves stay isenthalpic); the energy balance is still computed
             with real enthalpy, so it then shows what that model leaves out.
+        isothermal_temperature_c: None (default) solves the energy equation.
+            A temperature (°C) makes the solve isothermal: every node, pipe
+            and well tubing at that temperature, no energy equation (so no
+            energy balance in the result); heater duties and thermal
+            boundaries at other temperatures are ignored with a warning.
     """
 
     max_outer_iterations: int = 50
@@ -53,6 +58,11 @@ class CompositionalSolverSettings:
     temperature_relaxation: float = 1.0
     composition_relaxation: float = 1.0
     pipe_enthalpy_terms: bool = True
+    isothermal_temperature_c: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.isothermal_temperature_c is not None:
+            check_temperature_c(self.isothermal_temperature_c, "isothermal_temperature_c")
 
 
 class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNetworkMixin, DiagnosisMixin, BaseSolver):
@@ -266,7 +276,6 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
 
     def _solve_once(self, case: NetworkCase, progress_callback=None,
                     latch_disabled: frozenset[str] = frozenset()) -> SolveResult:
-        from angelica.numerics.energy import solve_energy_system
 
         if not isinstance(case.fluid_model, CompositionalFluid):
             raise TypeError(
@@ -274,7 +283,9 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
                 f"case.fluid_model, got {type(case.fluid_model).__name__}"
             )
 
-        self._require_fixed_temperature(case)
+        iso = self.compositional_settings.isothermal_temperature_c
+        if iso is None:
+            self._require_fixed_temperature(case)
 
         fluid: CompositionalFluid = case.fluid_model
         default_zs = fluid.default_zs
@@ -310,13 +321,14 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
             else:
                 node_st.thermal_gradient_dc_per_m = tb.gradient_dc_per_m
 
-        T_init = self._initial_temperature(case)
+        T_init = self._initial_temperature(case) if iso is None else float(iso)
         for node in network_state.nodes.values():
             if node.temperature_c is None:
                 node.temperature_c = T_init
         for ps in network_state.components:
             if isinstance(ps, (PipeState, HeatSourceState)):
                 ps.temperature_c = T_init
+        iso_warnings = self._make_isothermal(network_state, T_init) if iso is not None else ()
 
         # ── initialise per-link compositions ─────────────────────────────────
         for ps in network_state.components:
@@ -411,7 +423,7 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
                 new_node_temps, pipe_mean_temps = self._held_temperatures(network_state, T_init)
                 regulators_changed = True
             else:
-                new_node_temps, pipe_mean_temps = solve_energy_system(
+                new_node_temps, pipe_mean_temps = self._energy_step(iso,
                     network_state, fluid, self.convection_scheme, T_ref=T_init,
                     pipe_enthalpy_terms=settings.pipe_enthalpy_terms,
                 )
@@ -429,9 +441,10 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
             self._update_component_temperatures(network_state, T_init, pipe_mean_temps)
 
             _gb  = self._compute_global_balance(network_state)
-            _geb = self._compute_global_energy_balance(network_state, fluid)
             mass_balance_history.append(_gb.mass_error_pct)
-            energy_balance_history.append(_geb.energy_error_pct)
+            if iso is None:
+                _geb = self._compute_global_energy_balance(network_state, fluid)
+                energy_balance_history.append(_geb.energy_error_pct)
 
             new_densities = [fluid.density_for_link(link) for link in network_state.components]
             max_rel_delta = max(
@@ -459,7 +472,7 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
         outer_boundaries.append(len(all_turb_metrics))
         if turb_metrics:
             outer_turb_final.append(turb_metrics[-1])
-        final_node_temps, final_pipe_mean_temps = solve_energy_system(
+        final_node_temps, final_pipe_mean_temps = self._energy_step(iso,
             network_state, fluid, self.convection_scheme, T_ref=T_init,
             pipe_enthalpy_terms=settings.pipe_enthalpy_terms,
         )
@@ -550,7 +563,7 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
             outer_turbulent_final_metrics=tuple(outer_turb_final),
             outer_iteration_boundaries=tuple(outer_boundaries),
             global_balance=self._compute_global_balance(network_state),
-            global_energy_balance=self._compute_global_energy_balance(network_state, fluid),
+            global_energy_balance=None if iso is not None else self._compute_global_energy_balance(network_state, fluid),
             mass_balance_history=mass_balance_history,
             energy_balance_history=energy_balance_history,
             component_names=fluid.component_names,
@@ -560,5 +573,5 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
             separators=separator_results,
             regulators=self._regulator_results(network_state),
             diagnosis=self._diagnose(failed, network_state, pattern_history),
-            warnings=self._regulator_warnings(network_state),
+            warnings=iso_warnings + self._regulator_warnings(network_state),
         )

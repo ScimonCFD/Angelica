@@ -43,6 +43,7 @@ from angelica.properties.eos import IdealGasEOS, PengRobinsonEOS
 from angelica.properties.single_component import SingleComponentFluid
 from angelica.properties.thermal_fluid import ThermalFluid
 from angelica.solvers import (
+    BlackOilSolverSettings,
     CompositionalSolverSettings,
     CompressibleSolverSettings,
     NonIsothermalSolverSettings,
@@ -689,7 +690,8 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             )
             if tb is not None
         )
-        if not any(tb.bc_type == "fixed_temperature" for tb in thermal_inlets):
+        if not any(tb.bc_type == "fixed_temperature" for tb in thermal_inlets) \
+                and scene.solver_settings.get("isothermal_temperature_c") is None:
             raise ValueError(
                 "Compressible mode requires at least one boundary node with a fixed "
                 "temperature. Open a source or sink node and set its thermal boundary "
@@ -783,7 +785,8 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             )
             if tb is not None
         )
-        if not any(tb.bc_type == "fixed_temperature" for tb in thermal_inlets):
+        if not any(tb.bc_type == "fixed_temperature" for tb in thermal_inlets) \
+                and scene.solver_settings.get("isothermal_temperature_c") is None:
             raise ValueError(
                 "Black-oil mode requires at least one boundary node with a fixed "
                 "temperature. Open a source or sink node and set its thermal boundary "
@@ -848,7 +851,8 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             )
             if tb is not None
         )
-        if not any(tb.bc_type == "fixed_temperature" for tb in thermal_inlets):
+        if not any(tb.bc_type == "fixed_temperature" for tb in thermal_inlets) \
+                and scene.solver_settings.get("isothermal_temperature_c") is None:
             raise ValueError(
                 "Compositional mode requires at least one boundary node with a fixed "
                 "temperature. Open a source node and set its thermal boundary "
@@ -913,7 +917,7 @@ def build_solver_from_scene(scene: CanvasScene):
     _COMP_KEYS = {
         "max_outer_iterations", "max_density_iterations", "density_rel_tolerance",
         "temperature_tolerance_k", "temperature_relaxation", "composition_relaxation",
-        "convection_scheme",
+        "convection_scheme", "isothermal_temperature_c",
     }
     _GEOM_KEYS = {"num_segments"}   # geometry keys — consumed by build_network_case, not the solver
     _OUTER_KEYS = _NI_KEYS | _COMP_KEYS | _GEOM_KEYS
@@ -940,6 +944,8 @@ def build_solver_from_scene(scene: CanvasScene):
             comp_kwargs["temperature_relaxation"] = float(comp_raw["temperature_relaxation"])
         if "composition_relaxation" in comp_raw:
             comp_kwargs["composition_relaxation"] = float(comp_raw["composition_relaxation"])
+        if comp_raw.get("isothermal_temperature_c") is not None:
+            comp_kwargs["isothermal_temperature_c"] = float(comp_raw["isothermal_temperature_c"])
         scheme_key = str(comp_raw.get("convection_scheme", "hybrid"))
         convection_scheme = _CONVECTION_SCHEMES.get(scheme_key, HybridScheme)()
         return SteadyCompositionalSolver(
@@ -950,8 +956,10 @@ def build_solver_from_scene(scene: CanvasScene):
         )
 
     if scene.physics_mode == "black_oil":
+        iso = comp_raw.get("isothermal_temperature_c")
         return SteadyBlackOilSolver(
             hydraulic_settings=settings if hyd_raw else None,
+            black_oil_settings=None if iso is None else BlackOilSolverSettings(isothermal_temperature_c=float(iso)),
             turbulent_pipe_correlation=turbulent_pipe_correlation,
         )
 
@@ -970,6 +978,8 @@ def build_solver_from_scene(scene: CanvasScene):
             comp_kwargs["temperature_tolerance_k"] = float(comp_raw["temperature_tolerance_k"])
         if "temperature_relaxation" in comp_raw:
             comp_kwargs["temperature_relaxation"] = float(comp_raw["temperature_relaxation"])
+        if comp_raw.get("isothermal_temperature_c") is not None:
+            comp_kwargs["isothermal_temperature_c"] = float(comp_raw["isothermal_temperature_c"])
         scheme_key = str(comp_raw.get("convection_scheme", "hybrid"))
         convection_scheme = _CONVECTION_SCHEMES.get(scheme_key, HybridScheme)()
         return SteadyCompressibleSolver(

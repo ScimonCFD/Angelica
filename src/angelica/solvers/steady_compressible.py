@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from angelica.closures.convection_scheme import ConvectionScheme, HybridScheme
 from angelica.closures.pressure_drop import PressureDropCorrelation
-from angelica.core.case import NetworkCase
+from angelica.core.case import NetworkCase, check_temperature_c
 from angelica.core.network import build_network_state
 from angelica.core.results import ComponentFlowResult, IterationMetrics, SolveResult
 from angelica.core.settings import SolverSettings
@@ -35,6 +35,11 @@ class CompressibleSolverSettings:
             drops them, for comparison with the pre-1.18 model; the energy
             balance is still computed with real enthalpy, so it then shows
             what that model leaves out.
+        isothermal_temperature_c: None (default) solves the energy equation.
+            A temperature (°C) makes the solve isothermal: every node, pipe
+            and well tubing at that temperature, no energy equation (so no
+            energy balance in the result); heater duties and thermal
+            boundaries at other temperatures are ignored with a warning.
     """
 
     max_density_iterations: int = 50
@@ -42,6 +47,11 @@ class CompressibleSolverSettings:
     temperature_tolerance_k: float = 0.01
     temperature_relaxation: float = 1.0
     pipe_enthalpy_terms: bool = True
+    isothermal_temperature_c: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.isothermal_temperature_c is not None:
+            check_temperature_c(self.isothermal_temperature_c, "isothermal_temperature_c")
 
 
 class SteadyCompressibleSolver(BaseSolver):
@@ -91,9 +101,10 @@ class SteadyCompressibleSolver(BaseSolver):
         self.turbulent_pipe_correlation = self._hydraulic_solver.turbulent_pipe_correlation
 
     def solve(self, case: NetworkCase, progress_callback=None) -> SolveResult:
-        from angelica.numerics.energy import solve_energy_system
 
-        self._require_fixed_temperature(case)
+        iso = self.compressible_settings.isothermal_temperature_c
+        if iso is None:
+            self._require_fixed_temperature(case)
         network_state = build_network_state(case)
         settings = self.compressible_settings
         fluid_model = case.fluid_model
@@ -108,13 +119,14 @@ class SteadyCompressibleSolver(BaseSolver):
             else:
                 node_st.thermal_gradient_dc_per_m = tb.gradient_dc_per_m
 
-        T_init = self._initial_temperature(case)
+        T_init = self._initial_temperature(case) if iso is None else float(iso)
         for node in network_state.nodes.values():
             if node.temperature_c is None:
                 node.temperature_c = T_init
         for ps in network_state.components:
             if isinstance(ps, (PipeState, HeatSourceState)):
                 ps.temperature_c = T_init
+        iso_warnings = self._make_isothermal(network_state, T_init) if iso is not None else ()
 
         density_history: list[float] = []
         temperature_history: list[float] = []
@@ -152,7 +164,7 @@ class SteadyCompressibleSolver(BaseSolver):
             if turb_metrics:
                 outer_turb_final.append(turb_metrics[-1])
 
-            new_node_temps, pipe_mean_temps = solve_energy_system(
+            new_node_temps, pipe_mean_temps = self._energy_step(iso,
                 network_state, fluid_model, self.convection_scheme, T_ref=T_init,
                 pipe_enthalpy_terms=self.compressible_settings.pipe_enthalpy_terms,
             )
@@ -171,8 +183,9 @@ class SteadyCompressibleSolver(BaseSolver):
 
             _gb = self._compute_global_balance(network_state)
             mass_balance_history.append(_gb.mass_error_pct)
-            _geb = self._compute_global_energy_balance(network_state, fluid_model)
-            energy_balance_history.append(_geb.energy_error_pct)
+            if iso is None:
+                _geb = self._compute_global_energy_balance(network_state, fluid_model)
+                energy_balance_history.append(_geb.energy_error_pct)
 
             new_densities = [fluid_model.density_for_link(link) for link in network_state.components]
             max_rel_delta = max(
@@ -199,7 +212,7 @@ class SteadyCompressibleSolver(BaseSolver):
         outer_boundaries.append(len(all_turb_metrics))
         if turb_metrics:
             outer_turb_final.append(turb_metrics[-1])
-        final_node_temps, final_pipe_mean_temps = solve_energy_system(
+        final_node_temps, final_pipe_mean_temps = self._energy_step(iso,
             network_state, fluid_model, self.convection_scheme, T_ref=T_init,
             pipe_enthalpy_terms=self.compressible_settings.pipe_enthalpy_terms,
         )
@@ -246,10 +259,11 @@ class SteadyCompressibleSolver(BaseSolver):
             outer_turbulent_final_metrics=tuple(outer_turb_final),
             outer_iteration_boundaries=tuple(outer_boundaries),
             global_balance=self._compute_global_balance(network_state),
-            global_energy_balance=self._compute_global_energy_balance(
+            global_energy_balance=None if iso is not None else self._compute_global_energy_balance(
                 network_state, fluid_model
             ),
             mass_balance_history=mass_balance_history,
             energy_balance_history=energy_balance_history,
+            warnings=iso_warnings,
         )
 

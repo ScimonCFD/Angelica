@@ -1,5 +1,61 @@
 # Changelog
 
+## [1.28.0] — 2026-11-27
+
+Goal check, part 1: what Angelica already does for gathering networks,
+checked with numbers in every fluid mode — loops, thermal and isothermal,
+oil–gas–water, hydrate margin.  It found that the gas, black-oil and
+compositional solvers had no isothermal option.
+
+### Added
+  - **Isothermal solves for gas, black-oil and compositional fluids.**
+    `isothermal_temperature_c` in `CompressibleSolverSettings`,
+    `BlackOilSolverSettings` and `CompositionalSolverSettings` (default
+    None: the energy equation is solved as before).  With a temperature,
+    every node, pipe, separator and `Well` tubing is at that temperature
+    and no energy equation is solved (`global_energy_balance` is None); a
+    case needs no fixed-temperature boundary.  `SolveResult.warnings` names
+    what has no effect then: thermal boundaries at another temperature or
+    with a gradient, heater/cooler duties, the heating of pumps and
+    compressors, the Joule-Thomson change across valves, chokes and
+    regulators, and the wells' heat exchange with the formation.  In the
+    GUI: *Numerics → Isothermal at (°C, blank = off)*.  Off by default, so
+    no existing result changes.
+  - **Tests of looped networks in every mode** (`test_two_loop_networks.py`,
+    26 tests).  A network with two independent loops and two inlets, in
+    water (isothermal and thermal), methane (Peng-Robinson), black-oil
+    crude with gas and water (WOR 0.4) and a seven-component condensate
+    with water (free water and condensate form), thermal and isothermal.
+    Every run converges, with junction mass imbalance ≤ 1.07·10⁻⁵ (the
+    solver's own criterion is 10⁻³, so this mostly guards bookkeeping).
+    The loop law holds by construction with one pressure per node; what is
+    checked is that each link's drop is its correlation's at its flow: each
+    pipe solved alone with the network's flow and upstream state gives the
+    network's downstream pressure within 3.02·10⁻⁵ of its pressure drop
+    (tolerance 10⁻⁴, the velocity loop's tolerance and the outer loops'
+    density criterion).  Energy balance of the thermal runs ≤ 2.77·10⁻⁴ %
+    (roadmap figure 0.01 %); hydrate margin per pipe in black-oil and
+    compositional equal to the stand-alone functions at the pipe's colder
+    end.  Validation by consistency only; the published looped network
+    remains the Hanoi water network (EPANET results, tutorial 07).
+  - Isothermal out of range (`test_isothermal.py`): −150 to 1000 °C, network
+    at rest, reversed flow, wells, gas lift, separators and regulators —
+    every case converges and holds every node at the temperature, except
+    black-oil at 5, 5.5 and 6 °C, where a pipe sits at Re ≈ 2300 (the
+    laminar-turbulent jump of the roadmap's limitations; the diagnosis
+    names it).  With no temperature coupling at all, this shows the jump
+    itself, not the energy equation, leaves the pipe with no solution.
+
+### Fixed
+  - **Temperatures are checked.**  A fixed-temperature `ThermalBoundary`
+    and the new isothermal setting must be finite and above −273.15 °C
+    (`ValueError` otherwise).  Found in review: NaN, inf or −300 °C raised
+    deep in the gas solver (root finder, division by zero), and black-oil
+    reported a converged solve at −300 °C.
+  - GUI *Numerics* dialog: the "Max Temperature Iterations" entry was
+    placed over the convection-scheme box (row 20 instead of 21), so it
+    could not be seen or edited.
+
 ## [1.27.1] — 2026-11-25
 
 Review of v1.27.0: regulators beyond the tutorials (pairs in series, swept

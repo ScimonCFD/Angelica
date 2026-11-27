@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from angelica.properties.base import FluidModel
@@ -95,6 +96,12 @@ class FlowBoundary:
             )
 
 
+def check_temperature_c(value: float, what: str) -> None:
+    """Raise unless ``value`` is a finite temperature above absolute zero (°C)."""
+    if not math.isfinite(value) or value <= -273.15:
+        raise ValueError(f"{what} must be a finite temperature above −273.15 °C (got {value})")
+
+
 @dataclass(frozen=True)
 class ThermalBoundary:
     """Thermal boundary condition for a node in a non-isothermal network.
@@ -136,6 +143,8 @@ class ThermalBoundary:
                 f"ThermalBoundary bc_type must be one of {self._VALID_BC_TYPES!r}, "
                 f"got {self.bc_type!r}"
             )
+        if self.bc_type == "fixed_temperature":
+            check_temperature_c(self.temperature_c, "ThermalBoundary temperature_c")
 
 
 @dataclass(frozen=True)

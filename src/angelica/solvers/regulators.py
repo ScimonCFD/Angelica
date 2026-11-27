@@ -289,22 +289,6 @@ class RegulatorNetworkMixin:
         return changed
 
     @staticmethod
-    def _held_temperatures(network_state, T_default: float):
-        """Present node and pipe temperatures, in the form the energy solve
-        returns them (pipe index counts pipes and heat sources)."""
-        from angelica.core.state import HeatSourceState, PipeState
-        nodes = {nid: (n.temperature_c if n.temperature_c is not None else T_default)
-                 for nid, n in network_state.nodes.items()}
-        pipes = {}
-        idx = 0
-        for link in network_state.components:
-            if isinstance(link, (PipeState, HeatSourceState)):
-                if link.temperature_c is not None:
-                    pipes[idx] = link.temperature_c
-                idx += 1
-        return nodes, pipes
-
-    @staticmethod
     def _regulator_warnings(network_state) -> tuple[str, ...]:
         """Nodes cut off by closed regulators: no flow and no pressure of
         their own, so the pressure reported for them is arbitrary."""

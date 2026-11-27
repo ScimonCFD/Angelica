@@ -39,6 +39,75 @@ class BaseSolver(ABC):
         )
 
     @staticmethod
+    def _make_isothermal(network_state, T: float) -> tuple[str, ...]:
+        """Hold every node, pipe and heater at ``T`` for an isothermal solve
+        (``isothermal_temperature_c`` in the gas, black-oil and compositional
+        settings): no energy equation, every node a fixed temperature, and
+        ``Well`` tubing at the reservoir node's temperature (``T``).  Returns
+        the warnings: heater/cooler duties and thermal boundaries at another
+        temperature have no effect."""
+        from angelica.core.components import Well, WellInflow
+        from angelica.core.state import FittingState, PumpState
+
+        warnings = []
+        at = f"the solve is isothermal at {T:g} °C"
+        for nid, node in network_state.nodes.items():
+            if node.is_thermal_inlet and node.temperature_c is not None and abs(node.temperature_c - T) > 1e-9:
+                warnings.append(f"node {nid}: thermal boundary {node.temperature_c:g} °C ignored, {at}")
+            if node.thermal_gradient_dc_per_m:
+                warnings.append(f"node {nid}: thermal gradient boundary ignored, {at}")
+            node.temperature_c = T
+            node.is_thermal_inlet = True
+        pumps, valves, wells = [], [], []
+        for link in network_state.components:
+            cid = link.component.component_id
+            if isinstance(link, HeatSourceState):
+                if float(getattr(link.component, "power_w", 0.0) or 0.0) != 0.0:
+                    warnings.append(f"{cid}: heater/cooler duty ignored, {at}")
+                link.temperature_c = T
+            elif isinstance(link, PipeState):
+                link.temperature_c = T
+            elif isinstance(link, PumpState):
+                pumps.append(cid)
+            elif isinstance(link.component, (Well, WellInflow)):
+                wells.append(cid)
+            elif isinstance(link, FittingState):
+                valves.append(cid)
+            link.isothermal = True     # read by the Well model (tubing at T)
+        if pumps:
+            warnings.append(f"{', '.join(pumps)}: heating by the pump/compressor not computed, {at}")
+        if valves:
+            warnings.append(f"{', '.join(valves)}: Joule-Thomson change across the valve(s) not computed, {at}")
+        if wells:
+            warnings.append(f"{', '.join(wells)}: tubing and inflow at {T:g} °C, no heat exchange with "
+                            f"the formation (isothermal solve)")
+        return tuple(warnings)
+
+    def _energy_step(self, isothermal_c, network_state, fluid, scheme, T_ref: float,
+                     pipe_enthalpy_terms: bool = True):
+        """The energy solve, or the held temperatures of an isothermal solve."""
+        if isothermal_c is not None:
+            return self._held_temperatures(network_state, T_ref)
+        from angelica.numerics.energy import solve_energy_system
+        return solve_energy_system(network_state, fluid, scheme, T_ref=T_ref,
+                                   pipe_enthalpy_terms=pipe_enthalpy_terms)
+
+    @staticmethod
+    def _held_temperatures(network_state, T_default: float):
+        """Present node and pipe temperatures, in the form the energy solve
+        returns them (pipe index counts pipes and heat sources)."""
+        nodes = {nid: (n.temperature_c if n.temperature_c is not None else T_default)
+                 for nid, n in network_state.nodes.items()}
+        pipes = {}
+        idx = 0
+        for link in network_state.components:
+            if isinstance(link, (PipeState, HeatSourceState)):
+                if link.temperature_c is not None:
+                    pipes[idx] = link.temperature_c
+                idx += 1
+        return nodes, pipes
+
+    @staticmethod
     def _initial_temperature(case: NetworkCase) -> float:
         for tb in case.thermal_inlets:
             if tb.bc_type == "fixed_temperature":

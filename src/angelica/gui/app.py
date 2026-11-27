@@ -1357,6 +1357,8 @@ class NetSimGui:
         max_temp_iter_var = tk.StringVar(master=dialog, value=current_max_temp_iter)
         temp_tol_var = tk.StringVar(master=dialog, value=current_temp_tol)
         temp_relax_var = tk.StringVar(master=dialog, value=current_temp_relax)
+        _iso = self.scene.solver_settings.get("isothermal_temperature_c")
+        isothermal_var = tk.StringVar(master=dialog, value="" if _iso is None else f"{float(_iso):g}")
 
         alpha_var = tk.StringVar(master=dialog, value=current_alpha)
         transition_re_var = tk.StringVar(master=dialog, value=current_transition_re)
@@ -1578,7 +1580,7 @@ class NetSimGui:
             row=21, column=0, sticky="w", padx=(0, 8), pady=4
         )
         ttk.Entry(frame, textvariable=max_temp_iter_var, width=26).grid(
-            row=20, column=1, sticky="ew", pady=4
+            row=21, column=1, sticky="ew", pady=4
         )
 
         ttk.Label(frame, text="Temperature Tol (K)").grid(
@@ -1595,17 +1597,24 @@ class NetSimGui:
             row=23, column=1, sticky="ew", pady=4
         )
 
+        ttk.Label(frame, text="Isothermal at (°C, blank = off)").grid(
+            row=24, column=0, sticky="w", padx=(0, 8), pady=4
+        )
+        ttk.Entry(frame, textvariable=isothermal_var, width=26).grid(
+            row=24, column=1, sticky="ew", pady=4
+        )
+
         ttk.Separator(frame, orient="horizontal").grid(
-            row=24, column=0, columnspan=2, sticky="ew", pady=(6, 2)
+            row=25, column=0, columnspan=2, sticky="ew", pady=(6, 2)
         )
         ttk.Label(frame, text="— Pipe discretisation —", foreground="gray").grid(
-            row=25, column=0, columnspan=2, pady=(0, 4)
+            row=26, column=0, columnspan=2, pady=(0, 4)
         )
         ttk.Label(frame, text="Segments per pipe (default)").grid(
-            row=26, column=0, sticky="w", padx=(0, 8), pady=4
+            row=27, column=0, sticky="w", padx=(0, 8), pady=4
         )
         ttk.Entry(frame, textvariable=num_segments_var, width=26).grid(
-            row=26, column=1, sticky="ew", pady=4
+            row=27, column=1, sticky="ew", pady=4
         )
 
         def apply_velocity_method_selection(_event: tk.Event | None = None) -> None:
@@ -1628,7 +1637,7 @@ class NetSimGui:
         friction_method_box.bind("<<ComboboxSelected>>", apply_friction_method_selection)
 
         button_row = ttk.Frame(frame)
-        button_row.grid(row=27, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        button_row.grid(row=28, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(button_row, text="Cancel", command=dialog.destroy).pack(side="right")
         ttk.Button(
             button_row,
@@ -1653,6 +1662,7 @@ class NetSimGui:
                 temp_tol_var,
                 temp_relax_var,
                 num_segments_var,
+                isothermal_var,
             ),
         ).pack(side="right", padx=(0, 8))
 
@@ -1929,7 +1939,22 @@ class NetSimGui:
         temp_tol_var: tk.StringVar,
         temp_relax_var: tk.StringVar,
         num_segments_var: tk.StringVar,
+        isothermal_var: tk.StringVar | None = None,
     ) -> None:
+        iso_text = isothermal_var.get().strip() if isothermal_var is not None else ""
+        isothermal_c: float | None = None
+        if iso_text:
+            try:
+                isothermal_c = float(iso_text)
+                if not math.isfinite(isothermal_c) or isothermal_c <= -273.15:
+                    raise ValueError(iso_text)
+            except ValueError:
+                messagebox.showerror(
+                    "Invalid numerics",
+                    "Isothermal temperature must be a finite number above −273.15 °C, or blank to solve the energy equation.",
+                    parent=dialog,
+                )
+                return
         laminar_iterations_text = laminar_iterations_var.get().strip()
         if laminar_iterations_text.lower() in ("", "auto"):
             laminar_iterations = None
@@ -2236,6 +2261,7 @@ class NetSimGui:
                 "temperature_tolerance_k": temp_tol,
                 "temperature_relaxation": temp_relax,
                 "num_segments": num_segments,
+                "isothermal_temperature_c": isothermal_c,
             }
         )
         self._refresh_global_summaries()

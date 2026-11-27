@@ -7,19 +7,19 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.27.1, checked against the code)
+## 1. Where Angelica stands (v1.28.0, checked against the code)
 
 | Area | Present today |
 |---|---|
 | Fluids | Single-phase liquid, thermal liquid, compressible gas (ideal / PR), black-oil (Standing, Hall-Yarborough, Beggs-Robinson, Lee-Gonzalez-Eakin; enthalpy model), compositional (PR/SRK through `thermo`, free water, phase envelope and quality lines) |
 | Pressure drop | Colebrook, Hazen-Williams, Weymouth, Panhandle A/B; Beggs-Brill for black-oil and (opt-in) compositional fluids, with a per-pipe flow-pattern, holdup and erosional-velocity report |
-| Heat transfer | Fixed U or series layers (flat-wall form); Joule-Thomson, friction heating, latent heat and potential energy along pipes; isenthalpic valves; closed global energy balance |
+| Heat transfer | Thermal or isothermal (every mode; isothermal option for gas, black-oil and compositional since v1.28.0); fixed U or series layers (flat-wall form); Joule-Thomson, friction heating, latent heat and potential energy along pipes; isenthalpic valves; closed global energy balance |
 | Flow assurance | Hydrate curve (vdW-Platteeuw, compositional) and gas-gravity chart (black-oil); hydrate margin per pipe |
 | Wells | `WellInflow` and `Well`: IPR linear, Vogel, Fetkovich, gas back-pressure; tubing Beggs-Brill, Hagedorn-Brown or Gray; Ramey temperature profile; black-oil and compositional fluids; gas lift; dead / bistable well states |
 | Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve (also used as a "compressor"), fixed-duty heater/cooler, separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
 | GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI and US units (ft, psi, lb/s), Excel export |
-| Quality | 788 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
+| Quality | 832 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
 
 **Validation debt (2026-11-25).**  Most models since v1.19 are validated
 by internal consistency only: of the last ten log summaries, eight say
@@ -877,3 +877,39 @@ Summary:
   equal to the one at the floor (0.02 K).
 - Not validated: the regulator against a published case; the
   low-temperature viscosity (no data below 21.1 °C).
+
+### 2026-11-27 — Goal check, part 1 (v1.28.0)
+
+Autonomous run towards the goal "PIPEPHASE's basic capabilities for oil,
+gas and water gathering networks" (summaries in Spanish in `STATUS.md`).
+Part 1 checks what exists, with numbers, before new items.
+
+- Looped networks: a network with two independent loops and two inlets in
+  every fluid mode (water, methane PR, black-oil with gas and water,
+  compositional with free water and condensate), thermal and isothermal.
+  Junction imbalance ≤ 1.07e-5; each pipe solved alone with the network's
+  flow gives the network's pressure within 3.02e-5 of its ΔP (the loop
+  law itself holds by construction with one pressure per node — a loop-sum
+  test was circular and was removed in review); energy balance ≤ 2.77e-4 %;
+  hydrate margin per pipe equal to the stand-alone functions.
+- Found missing: no isothermal option in the gas, black-oil and
+  compositional solvers.  Added (`isothermal_temperature_c`, GUI
+  Numerics), off by default.
+- Found on the way: the laminar-turbulent jump also stops an isothermal
+  black-oil solve (5–6 °C in the two-loop network) — the discontinuity
+  itself, not the thermal coupling.  Recorded for the maintainer's choice.
+- GUI Numerics dialog: an entry hidden under another (fixed).
+- Review before the tag: GUI still required a fixed-temperature boundary in
+  black-oil and compositional; NaN / −300 °C accepted (exceptions in gas,
+  a "converged" black-oil at −300 °C) — temperatures are now checked;
+  devices whose temperature change the isothermal mode drops are named in
+  the warnings.  Not fixed (pre-existing): the gas solver returns no
+  diagnosis when it does not converge.
+
+Summary:
+- Validated against data read in a source: nothing new (the published
+  looped network is still Hanoi, water, EPANET results).
+- Validated by consistency: everything above.
+- Not validated: looped gas and multiphase networks against a published
+  case; mixture phase envelopes against measured data.
+
