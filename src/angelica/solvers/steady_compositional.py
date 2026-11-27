@@ -13,7 +13,7 @@ from angelica.core.settings import SolverSettings
 from angelica.core.state import HeatSourceState, NetworkState, PipeState
 from angelica.properties.compositional_fluid import CompositionalFluid
 
-from .base import BaseSolver
+from .base import ABSOLUTE_PRESSURE_FLOOR_PA, COMPRESSOR_RISE_TOLERANCE, BaseSolver
 from .diagnosis import DiagnosisMixin
 from .regulators import RegulatorNetworkMixin
 from .separators import SEPARATOR_FRACTION_TOLERANCE, SeparatorNetworkMixin
@@ -125,6 +125,7 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
             # tubing (Well) links with the compositional fluid.
             fitting_correlation=ChokeFlowModel(),
         )
+        self._hydraulic_solver.pressure_floor_pa = ABSOLUTE_PRESSURE_FLOOR_PA
 
     # ── Composition propagation ───────────────────────────────────────────────
 
@@ -364,10 +365,13 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
         unsettled_passes = 0
         self._reset_flow_pattern_trace()
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
+        compressor_change = 0.0
         for _outer in range(settings.max_outer_iterations):
 
             # Lift gas of gas-lifted wells: internal sources at their wellheads.
             self._set_gas_lift_sources(network_state, fluid)
+            # Pressure rise of power-specified compressors at the present flow.
+            compressor_change = self._set_compressor_rises(network_state, fluid, T_init)
 
             # Propagate compositions from inlets → PipeState.zs
             # (separators also need it: their outlets carry different phases)
@@ -457,7 +461,7 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
             density_converged     = max_rel_delta < settings.density_rel_tolerance
             separators_settled = separator_change < SEPARATOR_FRACTION_TOLERANCE
             if temperature_converged and density_converged and separators_settled and not wells_started \
-                    and not regulators_changed:
+                    and not regulators_changed and compressor_change < COMPRESSOR_RISE_TOLERANCE:
                 break
 
         # Final synchronous pass — always runs so that the reported flow field
@@ -547,6 +551,8 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
                                        separator_results)
         if regulators_changed:
             failed.append("regulator states")
+        if compressor_change >= COMPRESSOR_RISE_TOLERANCE:
+            failed.append("compressor power (pressure rise not settled)")
         failed += [f"regulator {cid} keeps switching state" for cid in self._regulators_stuck(network_state)]
         return SolveResult(
             case_name=case.name,
@@ -573,6 +579,8 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
             separators=separator_results,
             regulators=self._regulator_results(network_state),
             heaters=self._heater_results(network_state, iso is not None),
+            compressors=self._compressor_results(network_state, fluid, T_init),
             diagnosis=self._diagnose(failed, network_state, pattern_history),
-            warnings=iso_warnings + self._regulator_warnings(network_state),
+            warnings=iso_warnings + self._compressor_warnings(network_state, fluid, T_init)
+            + self._regulator_warnings(network_state),
         )

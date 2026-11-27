@@ -46,6 +46,15 @@ preheater = HeatSource(
     max_duty_w=600e3,
 )
 # result.heaters: state, duty_w, inlet/outlet temperatures of each heater
+
+# Compressor (gas, black-oil and compositional solvers): exactly one of
+# pressure_ratio, pressure_rise_pa or power_w; isentropic or polytropic
+from angelica import Compressor
+booster = Compressor(
+    start_node=6, end_node=7, diameter_m=0.3,
+    pressure_ratio=2.0, efficiency=0.75, efficiency_type="isentropic",
+)
+# result.compressors: power, ratio, discharge (and isentropic discharge) temperature
 ```
 
 ## Boundary Conditions

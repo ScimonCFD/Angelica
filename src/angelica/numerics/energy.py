@@ -9,7 +9,14 @@ import numpy as np
 
 from angelica.closures.convection_scheme import ConvectionScheme
 from angelica.closures.gravity import GRAVITY_M_PER_S2
-from angelica.core.state import FittingState, HeatSourceState, NetworkState, PipeState, PumpState
+from angelica.core.state import (
+    CompressorState,
+    FittingState,
+    HeatSourceState,
+    NetworkState,
+    PipeState,
+    PumpState,
+)
 
 
 def _load_scipy():
@@ -743,6 +750,15 @@ def device_thermal_state(dev, fluid_model, T_ref: float) -> DeviceThermalState |
             return well
         return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_up, cp, "passthrough")
     h_up = fluid_enthalpy(fluid_model, dev, P_up, T_up)
+    if isinstance(dev, CompressorState):
+        # Compression along the fluid's own h and v (closures.compressor);
+        # its enthalpy rise is the shaft work of the energy balance.
+        from angelica.closures.compressor import CompressorFluid, compress
+        comp = dev.component
+        res = compress(CompressorFluid(fluid_model, dev), float(P_up), T_up, float(P_down),
+                       comp.efficiency, comp.efficiency_type, comp.n_steps)
+        cp_out = _specific_heat_at(fluid_model, dev, P_down, res.t_out_c)
+        return DeviceThermalState(mdot, up_node, down_node, T_up, cp, res.t_out_c, cp_out, "pump")
     if isinstance(dev, PumpState):
         rho = fluid_model.density_for_link(dev)
         w_shaft = (P_down - P_up) / rho

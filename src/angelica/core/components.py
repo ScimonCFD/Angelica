@@ -518,6 +518,68 @@ class Pump(PressureChanger):
 
 
 @dataclass(frozen=True)
+class Compressor(PressureChanger):
+    """Gas compressor (see ``angelica.closures.compressor``).
+
+    Specification, exactly one of:
+      - ``pressure_ratio``: P_out / P_in (≥ 1);
+      - ``pressure_rise_pa``: P_out − P_in (≥ 0);
+      - ``power_w``: shaft power given to the gas, ṁ·(h_out − h_in); the
+        pressure rise is the one this power delivers at the solved flow, up
+        to ``max_pressure_ratio`` (also the ratio at zero flow).
+
+    ``efficiency`` (0–1] is isentropic (h2 = h1 + W_s/η) or polytropic
+    (``efficiency_type``): the path dh = v·dP/η.  The same number gives more
+    work as a polytropic efficiency.  ``n_steps``: steps of the compression
+    march in ln P (20: error ≤ 6e-5 of the work up to ratio 6).  Discharge temperature and
+    power follow from the fluid's enthalpy model; it needs a gas,
+    black-oil or compositional solver.  It does not run backwards.  The
+    solution's ``compressors`` give power, ratio and temperatures.
+    """
+
+    pressure_ratio: float = math.nan
+    pressure_rise_pa: float = math.nan
+    power_w: float = math.nan
+    efficiency: float = 0.75
+    efficiency_type: str = "isentropic"
+    max_pressure_ratio: float = 10.0
+    n_steps: int = 20
+
+    def __post_init__(self) -> None:
+        if not (math.isfinite(self.diameter_m) and self.diameter_m > 0.0):
+            raise ValueError(f"Compressor diameter_m must be positive (got {self.diameter_m})")
+        given = [n for n in ("pressure_ratio", "pressure_rise_pa", "power_w") if not math.isnan(getattr(self, n))]
+        if len(given) != 1:
+            raise ValueError("Compressor needs exactly one of pressure_ratio, pressure_rise_pa, power_w "
+                             f"(got {given or 'none'})")
+        if not math.isnan(self.pressure_ratio) and not (math.isfinite(self.pressure_ratio)
+                                                        and self.pressure_ratio >= 1.0):
+            raise ValueError(f"Compressor pressure_ratio must be finite and ≥ 1 (got {self.pressure_ratio})")
+        if not math.isnan(self.pressure_rise_pa) and not (math.isfinite(self.pressure_rise_pa)
+                                                          and self.pressure_rise_pa >= 0.0):
+            raise ValueError(f"Compressor pressure_rise_pa must be finite and ≥ 0 (got {self.pressure_rise_pa})")
+        if not math.isnan(self.power_w) and not (math.isfinite(self.power_w) and self.power_w >= 0.0):
+            raise ValueError(f"Compressor power_w must be finite and ≥ 0 (got {self.power_w})")
+        if not (0.0 < self.efficiency <= 1.0):
+            raise ValueError(f"Compressor efficiency must be in (0, 1] (got {self.efficiency})")
+        if self.efficiency_type not in ("isentropic", "polytropic"):
+            raise ValueError("Compressor efficiency_type must be 'isentropic' or 'polytropic' "
+                             f"(got {self.efficiency_type!r})")
+        if not (math.isfinite(self.max_pressure_ratio) and self.max_pressure_ratio >= 1.0):
+            raise ValueError(f"Compressor max_pressure_ratio must be finite and ≥ 1 (got {self.max_pressure_ratio})")
+        if self.n_steps < 1:
+            raise ValueError(f"Compressor n_steps must be ≥ 1 (got {self.n_steps})")
+
+    @property
+    def specification(self) -> str:
+        if not math.isnan(self.pressure_ratio):
+            return "pressure ratio"
+        if not math.isnan(self.pressure_rise_pa):
+            return "pressure rise"
+        return "power"
+
+
+@dataclass(frozen=True)
 class HeatSource(PressureChanger):
     """Inline heater or cooler.
 

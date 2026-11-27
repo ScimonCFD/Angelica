@@ -2,6 +2,7 @@ from .case import FlowBoundary, InletFluidBC, NetworkCase, PressureBoundary
 from .components import (
     CheckValve,
     Choke,
+    Compressor,
     Fitting,
     Pipe,
     PressureChanger,
@@ -17,6 +18,7 @@ from .state import FittingState, NetworkState, NodeState, PipeState, PressureCha
 __all__ = [
     "CheckValve",
     "Choke",
+    "Compressor",
     "ComponentFlowResult",
     "Fitting",
     "FittingState",

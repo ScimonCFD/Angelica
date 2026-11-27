@@ -14,6 +14,58 @@ from angelica.core.results import GlobalBalance, GlobalEnergyBalance
 from angelica.core.state import HeatSourceState, PipeState
 
 
+def _rise_step(link, rise: float, f: float, P1: float, target: float, cap: float, limit_growth: bool) -> float:
+    """Next pressure rise imposed by a compressor link.
+
+    ``f`` = ln(P2/P1 at the nodes) − ln(target) increases with the imposed
+    rise: a larger rise drives more flow, lowers P1 and raises P2.  The
+    target is the specified ratio, (P1 + rise_spec)/P1, or the ratio the
+    specified power delivers at the present flow.  One evaluation per outer
+    iteration (each needs a hydraulic pass): a bracket on f is kept on the
+    link and refined by false position with the Illinois modification.
+    Without a bracket the step corrects the rise by the pressure it misses at
+    the outlet (dP2/d rise ≈ 1); for a power specification the imposed ratio
+    grows at most ×1.5 per step (zero flow asks for the ratio limit, whose
+    flow emptied the suction line, v1.30.0 development).  The rise stays
+    within [0, cap]."""
+    lo, flo, hi, fhi, side = getattr(link, "rise_bracket", None) or (None, None, None, None, 0)
+    if f < 0.0:
+        lo, flo = rise, f
+        if side == -1 and fhi is not None:
+            fhi *= 0.5                     # Illinois: the other end retained twice
+        side = -1
+    else:
+        hi, fhi = rise, f
+        if side == 1 and flo is not None:
+            flo *= 0.5
+        side = 1
+    if lo is not None and hi is not None and (hi - lo) <= 1e-6 * max(abs(hi), 1e3):
+        # Collapsed onto one rise with f of both signs, or inverted (f < 0 at a
+        # larger rise than f > 0): f moved between passes (temperatures, or
+        # the flow through other links, shift the pressures); the old end is
+        # stale.  (Inverted, the step was clamped to the same rise for ever —
+        # a flow-specified inlet, found in review.)
+        lo = flo = hi = fhi = None
+        side = 0
+    link.rise_bracket = (lo, flo, hi, fhi, side)
+    if lo is not None and hi is not None and flo is not None and fhi is not None:
+        x = lo - flo * (hi - lo) / (fhi - flo)
+        return min(max(x, lo), hi, cap)
+    new = rise - math.expm1(f) * P1 * target           # outlet pressure missed: P2 − target·P1
+    if limit_growth:
+        new = min(new, 1.5 * (P1 + rise) - P1)
+    return min(max(new, 0.0), cap)
+
+
+# Lowest node pressure of the solvers that work in absolute pressure (gas,
+# black-oil, compositional): the equation of state divides by P.
+ABSOLUTE_PRESSURE_FLOOR_PA = 1.0e3
+
+# Relative change of a power-specified compressor's pressure rise below which
+# the outer loop counts it as settled.
+COMPRESSOR_RISE_TOLERANCE = 1e-4
+
+
 class BaseSolver(ABC):
     @abstractmethod
     def solve(
@@ -92,6 +144,99 @@ class BaseSolver(ABC):
         from angelica.numerics.energy import solve_energy_system
         return solve_energy_system(network_state, fluid, scheme, T_ref=T_ref,
                                    pipe_enthalpy_terms=pipe_enthalpy_terms)
+
+    @staticmethod
+    def _set_compressor_rises(network_state, fluid, T_default: float = 20.0) -> float:
+        """Pressure rise each ``Compressor`` imposes, adjusted until the node
+        pressures meet its specification (at the present flow and inlet
+        temperature for a power); returns the largest mismatch
+        |ln(P2/P1) − ln(target)| at the nodes."""
+        from angelica.closures.compressor import CompressorFluid, outlet_pressure_for_power
+        from angelica.core.state import CompressorState
+        change = 0.0
+        for link in network_state.components:
+            if not isinstance(link, CompressorState):
+                continue
+            comp = link.component
+            P1 = float(link.start_node.pressure_pa or 0.0)
+            P2 = float(link.end_node.pressure_pa or 0.0)
+            if P1 <= 0.0 or P2 <= 0.0:
+                continue
+            if comp.specification == "pressure ratio":
+                target = comp.pressure_ratio
+            elif comp.specification == "pressure rise":
+                target = (P1 + comp.pressure_rise_pa) / P1
+            else:
+                T1 = link.start_node.temperature_c if link.start_node.temperature_c is not None else T_default
+                target = outlet_pressure_for_power(CompressorFluid(fluid, link), comp, P1, T1,
+                                                   max(float(link.mass_flow_kg_per_s), 0.0)) / P1
+            target = max(target, 1.0)
+            if getattr(link, "rise_bracket", None) is None and link.compressor_rise_pa == 0.0 \
+                    and comp.specification != "power":
+                link.compressor_rise_pa = (target - 1.0) * P1      # first guess: a transparent link
+            f = math.log(P2 / P1) - math.log(target)
+            # The outer loop is converged only when the pressures at the nodes
+            # meet the specification, not when the imposed rise stops moving —
+            # except for a machine the network pushes beyond its specification
+            # (f > 0) with no rise left and no flow: it is idle, a settled
+            # state (e.g. a ratio-1.8 unit beside a ratio-2 one in parallel, or
+            # an outlet above what it can reach).
+            idle = f > 0.0 and link.compressor_rise_pa <= 0.0 and float(link.mass_flow_kg_per_s) <= 1e-9
+            if not idle:
+                change = max(change, abs(f))
+            cap = (max(comp.max_pressure_ratio, target) * 1.5 - 1.0) * P1
+            link.compressor_rise_pa = _rise_step(link, max(link.compressor_rise_pa, 0.0), f, P1, target, cap,
+                                                 comp.specification == "power")
+        return change
+
+    @staticmethod
+    def _compressor_warnings(network_state, fluid, T_default: float = 20.0) -> tuple[str, ...]:
+        """Compressors fed with a stream that is not (almost) all gas."""
+        from angelica.closures.compressor import CompressorFluid
+        from angelica.core.state import CompressorState
+        out = []
+        for link in network_state.components:
+            if not isinstance(link, CompressorState) or float(link.mass_flow_kg_per_s) <= 1e-12:
+                continue
+            P1 = float(link.start_node.pressure_pa or 0.0)
+            T1 = link.start_node.temperature_c if link.start_node.temperature_c is not None else T_default
+            try:
+                note = CompressorFluid(fluid, link).liquid_at(P1, T1)
+            except Exception:       # a check must never break a converged solve
+                note = None
+            if note:
+                out.append(f"{link.component.component_id}: the feed is not all gas at suction ({note}); "
+                           "the compressor model is a single-phase gas's")
+        return tuple(out)
+
+    @staticmethod
+    def _compressor_results(network_state, fluid, T_default: float = 20.0) -> tuple:
+        """Power, pressure ratio and temperatures of every ``Compressor``."""
+        from angelica.closures.compressor import CompressorFluid, compress
+        from angelica.core.results import CompressorResult
+        from angelica.core.state import CompressorState
+        out = []
+        for link in network_state.components:
+            if not isinstance(link, CompressorState):
+                continue
+            comp = link.component
+            m = float(link.mass_flow_kg_per_s)
+            P1, P2 = float(link.start_node.pressure_pa or 0.0), float(link.end_node.pressure_pa or 0.0)
+            T1 = link.start_node.temperature_c if link.start_node.temperature_c is not None else T_default
+            if m <= 1e-12 or P2 <= P1 or P1 <= 0.0:
+                state = "no flow" if m <= 1e-12 else "no pressure rise"
+                out.append(CompressorResult(comp.component_id, comp.specification, state, m, P1, P2,
+                                            P2 / P1 if P1 > 0 else float("nan"), T1, T1, T1, 0.0, 0.0))
+                continue
+            res = compress(CompressorFluid(fluid, link), P1, T1, P2, comp.efficiency, comp.efficiency_type,
+                           comp.n_steps)
+            state = "running"
+            if comp.specification == "power" and P2 / P1 >= comp.max_pressure_ratio * (1.0 - 1e-6):
+                state = "at max pressure ratio"
+            out.append(CompressorResult(comp.component_id, comp.specification, state, m, P1, P2, P2 / P1, T1,
+                                        res.t_out_c, res.t_out_isentropic_c, m * res.actual_work_j_per_kg,
+                                        m * res.isentropic_work_j_per_kg))
+        return tuple(out)
 
     @staticmethod
     def _heater_results(network_state, isothermal: bool = False) -> tuple:

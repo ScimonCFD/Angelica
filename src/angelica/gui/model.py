@@ -4,7 +4,7 @@ from dataclasses import dataclass, field, replace
 
 NODE_TYPES = ("source", "sink", "junction")
 LINK_COMPONENT_TYPES = ("pipe", "fitting", "pump", "heat_source", "choke", "check_valve", "well_inflow", "well",
-                        "separator_outlet", "pressure_regulator")
+                        "separator_outlet", "pressure_regulator", "compressor")
 DEFAULT_LIBRARY_MATERIAL = {
     "library_key": "water_liquid",
     "definition_mode": "library",
@@ -342,6 +342,15 @@ class CanvasScene:
             return {
                 "diameter_m": "0.0762",
                 "phase": "liquid",
+            }
+        if component_type == "compressor":
+            return {
+                "diameter_m": "0.3048",
+                "specification": "pressure_ratio",
+                "value": "2.0",
+                "efficiency": "0.75",
+                "efficiency_type": "isentropic",
+                "max_pressure_ratio": "10.0",
             }
         if component_type == "pressure_regulator":
             return {

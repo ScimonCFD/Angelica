@@ -25,6 +25,7 @@ from angelica.core.components import (
     FITTING_PRESET_LIBRARY,
     CheckValve,
     Choke,
+    Compressor,
     Fitting,
     HeatSource,
     Pipe,
@@ -564,6 +565,31 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                         diameter_m=_optional_float(component, "diameter_m", default=0.0762),
                         phase=component.properties.get("phase", "liquid").strip() or "liquid",
                         component_id=f"link_{link.link_id}_separator_outlet_{component.component_id}",
+                    )
+                )
+            elif component.component_type == "compressor":
+                if not (is_compressible or is_black_oil or is_compositional):
+                    raise ValueError(
+                        f"Connection #{link.link_id} has a compressor, which needs compressible, black-oil "
+                        "or compositional mode (use a pump for liquids)."
+                    )
+                spec = component.properties.get("specification", "pressure_ratio").strip() or "pressure_ratio"
+                if spec not in ("pressure_ratio", "pressure_rise_pa", "power_w"):
+                    raise ValueError(f"Connection #{link.link_id}: unknown compressor specification '{spec}'.")
+                value = _optional_float(component, "value", default=math.nan)
+                if math.isnan(value):
+                    raise ValueError(f"Connection #{link.link_id}: the compressor needs a value for {spec}.")
+                components.append(
+                    Compressor(
+                        start_node=current_start,
+                        end_node=current_end,
+                        diameter_m=_optional_float(component, "diameter_m", default=0.3048),
+                        efficiency=_optional_float(component, "efficiency", default=0.75),
+                        efficiency_type=component.properties.get("efficiency_type", "isentropic").strip()
+                        or "isentropic",
+                        max_pressure_ratio=_optional_float(component, "max_pressure_ratio", default=10.0),
+                        component_id=f"link_{link.link_id}_compressor_{component.component_id}",
+                        **{spec: value},
                     )
                 )
             elif component.component_type == "pressure_regulator":

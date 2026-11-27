@@ -88,6 +88,12 @@ def export_solve_result_csv(result, output_path: str) -> None:
             writer.writerow(["Heaters / coolers"])
             for row in heaters:
                 writer.writerow(row)
+        compressors = _compressor_rows(result)
+        if compressors:
+            writer.writerow([])
+            writer.writerow(["Compressors"])
+            for row in compressors:
+                writer.writerow(row)
 
 
 def _heater_rows(result) -> list[list]:
@@ -102,6 +108,23 @@ def _heater_rows(result) -> list[list]:
                      round(h.outlet_temperature_c, 4),
                      "" if h.outlet_temperature_spec_c is None else h.outlet_temperature_spec_c,
                      round(h.mass_flow_kg_per_s, 4)])
+    return rows
+
+
+def _compressor_rows(result) -> list[list]:
+    """Header and one row per compressor (empty when there is none)."""
+    comps = getattr(result, "compressors", ())
+    if not comps:
+        return []
+    rows: list[list] = [["Compressor", "Specification", "State", "Mass flow (kg/s)", "P_in (Pa)", "P_out (Pa)",
+                         "Ratio (-)", "T_in (°C)", "T_out (°C)", "T_out isentropic (°C)", "Power (kW)",
+                         "Isentropic power (kW)"]]
+    for c in comps:
+        rows.append([c.component_id, c.specification, c.state, round(c.mass_flow_kg_per_s, 4),
+                     round(c.inlet_pressure_pa, 1), round(c.outlet_pressure_pa, 1), round(c.pressure_ratio, 5),
+                     round(c.inlet_temperature_c, 3), round(c.outlet_temperature_c, 3),
+                     round(c.outlet_temperature_isentropic_c, 3), round(c.power_w / 1e3, 3),
+                     round(c.isentropic_power_w / 1e3, 3)])
     return rows
 
 
@@ -205,6 +228,11 @@ def export_solve_result_workbook(result, output_path: str) -> None:
     if heaters:
         sheet = workbook.create_sheet("Heaters")
         for row in heaters:
+            sheet.append(row)
+    compressors = _compressor_rows(result)
+    if compressors:
+        sheet = workbook.create_sheet("Compressors")
+        for row in compressors:
             sheet.append(row)
     _write_compositions_sheet(workbook, result)
     _write_component_mass_flows_sheet(workbook, result)
@@ -395,6 +423,14 @@ def print_solve_result(result, detailed: bool = False) -> None:
     if getattr(result, "separators", ()):
         print("")
         _print_separator_table(result.separators)
+    if getattr(result, "compressors", ()):
+        print("")
+        print("Compressors")
+        for c in result.compressors:
+            print(f"  {c.component_id}: {c.state} ({c.specification}), ratio {c.pressure_ratio:.4f}, "
+                  f"{c.mass_flow_kg_per_s:.3f} kg/s, power {c.power_w / 1e3:.1f} kW, "
+                  f"{c.inlet_temperature_c:.2f} → {c.outlet_temperature_c:.2f} °C "
+                  f"(isentropic {c.outlet_temperature_isentropic_c:.2f} °C)")
     if getattr(result, "heaters", ()):
         print("")
         print("Heaters / coolers")

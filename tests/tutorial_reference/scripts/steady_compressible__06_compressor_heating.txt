@@ -33,3 +33,15 @@ Compression heating comparison:
   Real gas (PR):  ΔT = +49.46 °C
   Ideal gas:      ΔT = +45.99 °C
   Difference:     +3.47 °C  (PR heats more — departure enthalpy at high P)
+
+Part B — a Compressor at the same pressure ratio (2.0155), Peng-Robinson
+  Machine                             ṁ (kg/s)  T out (°C)  Power (MW)
+  isentropic, η = 1 (reversible)        14.953       75.76       1.623
+  isentropic, η = 0.75                  14.726       90.34       2.131
+  polytropic, η = 0.75                  14.699       92.13       2.192
+  • Per kg of gas the head curve gives w = ΔP/ρ = 92.4 kJ/kg, the
+    reversible compressor ∫v·dP = 108.5 kJ/kg (+17.5 %): ρ at the
+    mean pressure but the inlet temperature misses the heating along the
+    compression, and the gas leaves 6.5 K hotter than the curve says.
+  • A real machine (η = 0.75) needs 33 % more work per kg; the same number
+    as a polytropic efficiency means a less efficient machine, hotter still.

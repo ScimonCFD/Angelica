@@ -1,5 +1,93 @@
 # Changelog
 
+## [1.30.0] — 2026-11-27
+
+Roadmap item 5.2: gas compressor, in the gas, black-oil and compositional
+solvers.
+
+### Added
+  - **`Compressor`.**  Specified by a pressure ratio, a pressure rise or a
+    shaft power; isentropic or polytropic efficiency.  The isentropic work
+    ∫v·dP is marched in ln P along the fluid's own h(P, T) and v(P, T)
+    (Heun, 20 steps), so the same code serves Peng-Robinson or ideal gas,
+    black-oil and compositional fluids; isentropic: h2 = h1 + W_s/η;
+    polytropic: the march with dh = v·dP/η.  The discharge temperature
+    enters the energy equation and its enthalpy rise is the shaft work of
+    the energy balance.  A power specification finds the rise that power
+    delivers at the solved flow (up to `max_pressure_ratio`, default 10).
+    The compressor does not run backwards: against an outlet it cannot
+    reach it passes no flow.  New `SolveResult.compressors`
+    (`CompressorResult`: state, power, isentropic power, ratio, inlet,
+    outlet and isentropic outlet temperatures).  GUI: *Compressor* in the
+    connection palette (compressible, black-oil, compositional), its power
+    and ratio on the canvas.  A liquid solver refuses it (use a pump).
+  - Validation:
+    - analytical, ideal gas with constant cp: W_s and T2s = T1·r^(R/cp)
+      within 8.8·10⁻⁵ (ratio 1.5–6);
+    - the roadmap's isentropic-limit check against the EOS entropy: the end
+      of the march lies on the isentrope, T2s·|Δs| ≤ 1.3·10⁻⁴ of W_s for
+      Peng-Robinson methane (entropy from thermo's departure function) and
+      ≤ 4.7·10⁻⁵ for a natural gas (thermo's flash entropy);
+    - tolerance 5·10⁻⁴, the accuracy asked of the march (its error against
+      a 320-step march is ≤ 6·10⁻⁵ up to ratio 6).
+    - In networks (gas, black-oil, compositional; ratio, rise, power): the
+      node pressures meet a ratio or rise within 10⁻⁴ (the outer-loop
+      criterion, on ln P2/P1) and a power within 3·10⁻⁴ (obtained 1.2·10⁻⁴);
+      the reported power equals ṁ·Δh recomputed from the fluid at the
+      reported state; mass through the compressor equals the pipes' within
+      2·10⁻³ (the per-node hydraulic criterion; obtained 1.3·10⁻³); energy
+      balance ≤ 1.5·10⁻³ %.  Also converged: two in series, identical units
+      in parallel, a recycle loop, inlet or outlet at a boundary, a
+      flow-specified inlet, a 0.05 m nozzle, η = 0.1 and 1.  Gas sweep:
+      ratios 1.7–6 and powers 0.1–10 MW converge; ratio ≤ 1.5 (45 bar
+      against 50), a reversed machine or an unreachable outlet pass no flow
+      (converged: the machine is idle).
+    - No published compressor case was read (GPSA is not in the
+      repository); black-oil has no entropy function to check against.
+  - Compressible tutorial 06, Part B: the head-curve "compressor" against a
+    `Compressor` at the same ratio.  Per kg of gas the head curve's
+    w = ΔP/ρ is 92.4 kJ/kg, the reversible isentrope 108.5 kJ/kg (+17.5 %;
+    ρ at the inlet temperature misses the heating along the compression),
+    and the gas leaves 6.5 K hotter; at η = 0.75, 33 % more work.
+
+  - A compressor fed with a stream that is not almost all gas (black-oil
+    liquid volume above 1 %, compositional vapour fraction below 0.99) is
+    named in `SolveResult.warnings`; compressor results are printed and
+    exported (CSV section, "Compressors" workbook sheet).
+
+### Fixed
+  - The gas, black-oil and compositional solvers let a node reach 0 Pa
+    absolute, where the equation of state divides by the pressure (a 30 MW
+    compressor emptying its suction line raised ZeroDivisionError).  Their
+    interior nodes now stay above 1 kPa (or half the lowest pressure
+    boundary, if lower); pressure boundaries keep their value; liquids keep
+    0 Pa (gauge pressures).
+
+### Review before the tag
+  - The first version compared the rise it imposed with the target, not
+    the node pressures: with both ends at boundaries (30 → 50 bar, ratio 2,
+    no steady state) it reported "converged" at 5 370 kg/s and 553 MW, and
+    a 0.05 m nozzle missed the ratio by 2.1·10⁻³ (its own K loss).  The rise
+    is now adjusted until the node pressures meet the specification, and
+    the outer loop converges on that mismatch.  Also from the review: the
+    1 kPa floor lifted a 0.5 kPa outlet boundary; a flow-specified inlet
+    went to −72 kPa and raised; a bracket left inverted stalled; idle
+    machines were reported as not converged; a flowing machine with no
+    rise was labelled "no flow"; a zero diameter was accepted; an
+    ideal-gas test used a gas constant (8.3144626) other than the EOS's
+    (8.314).
+
+### Known limitations
+  - A ratio of 10 or 30 MW in the test station (discharge ≈ 280 °C, the
+    suction line nearly emptied), and powers of 1–30 kW (under 1 % of the
+    design flow), end not converged with "compressor power" named.
+    Single-stage ratios above about 6 are outside normal practice; no
+    intercooling or staging model.
+  - Compressors in parallel with different specifications (ratio 2 beside
+    1 MW, 2 MW beside 1 MW) do not converge: each adjusts its own rise
+    against the shared node pressures.  Identical parallel units do.
+  - No compressor map (head and efficiency against flow), surge or stonewall.
+
 ## [1.29.0] — 2026-11-27
 
 Roadmap item 5.3: heater/cooler set by its outlet temperature, in every

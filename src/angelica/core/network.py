@@ -1,8 +1,17 @@
 from __future__ import annotations
 
 from .case import NetworkCase
-from .components import Fitting, HeatSource, Pipe, Pump
-from .state import FittingState, HeatSourceState, NetworkState, NodeState, PipeState, PressureChangerState, PumpState
+from .components import Compressor, Fitting, HeatSource, Pipe, Pump
+from .state import (
+    CompressorState,
+    FittingState,
+    HeatSourceState,
+    NetworkState,
+    NodeState,
+    PipeState,
+    PressureChangerState,
+    PumpState,
+)
 
 
 def build_network_state(case: NetworkCase) -> NetworkState:
@@ -46,6 +55,9 @@ def build_network_state(case: NetworkCase) -> NetworkState:
             components.append(PipeState(component=component, start_node=start_node, end_node=end_node))
         elif isinstance(component, Fitting):
             components.append(FittingState(component=component, start_node=start_node, end_node=end_node))
+        elif isinstance(component, Compressor):
+            components.append(CompressorState(component=component, start_node=start_node,  # type: ignore[arg-type]
+                                              end_node=end_node))
         elif isinstance(component, Pump):
             components.append(PumpState(component=component, start_node=start_node, end_node=end_node))
         elif isinstance(component, HeatSource):

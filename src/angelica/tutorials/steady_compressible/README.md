@@ -21,7 +21,9 @@ Available cases:
 - `03_looped_gas_pipeline_heat_loss` — looped gas network with wall heat loss.
 - `04_hill_crossing` — gas over a 500 m hill: the elevation term with a pressure-dependent density.
 - `05_valve_jt_effect` — Joule-Thomson cooling across a throttling valve and in the pipes before and after it.
-- `06_compressor_heating` — compressor station: shaft-work heating of a real gas.
+- `06_compressor_heating` — compressor station: shaft-work heating of a real gas; Part B
+  compares the head-curve machine with a `Compressor` (isentropic and polytropic
+  efficiency, power and discharge temperature from the gas's isentrope).
 
 ## Running a tutorial
 

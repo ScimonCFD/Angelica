@@ -7,7 +7,7 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.29.0, checked against the code)
+## 1. Where Angelica stands (v1.30.0, checked against the code)
 
 | Area | Present today |
 |---|---|
@@ -16,10 +16,10 @@ This file is the working source of truth. Each item is released on its own
 | Heat transfer | Thermal or isothermal (every mode; isothermal option for gas, black-oil and compositional since v1.28.0); fixed U or series layers (flat-wall form); Joule-Thomson, friction heating, latent heat and potential energy along pipes; isenthalpic valves; closed global energy balance |
 | Flow assurance | Hydrate curve (vdW-Platteeuw, compositional) and gas-gravity chart (black-oil); hydrate margin per pipe |
 | Wells | `WellInflow` and `Well`: IPR linear, Vogel, Fetkovich, gas back-pressure; tubing Beggs-Brill, Hagedorn-Brown or Gray; Ramey temperature profile; black-oil and compositional fluids; gas lift; dead / bistable well states |
-| Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve (also used as a "compressor"), heater/cooler (fixed duty or outlet temperature, with a duty limit), separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
+| Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve, gas compressor (ratio, rise or power; isentropic or polytropic efficiency), heater/cooler (fixed duty or outlet temperature, with a duty limit), separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
 | GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI and US units (ft, psi, lb/s), Excel export |
-| Quality | 867 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
+| Quality | 917 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
 
 **Validation debt (2026-11-25).**  Most models since v1.19 are validated
 by internal consistency only: of the last ten log summaries, eight say
@@ -61,7 +61,7 @@ or more (human-equivalent).
 | 11 | Gas lift (injection point in tubing) | None | B | M | Brown, *The Technology of Artificial Lift Methods*; Economides examples (gradient curves vs GLR) |
 | 12 | ESP (stage curves, viscosity and gas derating) | None | C | M | Takacs, *Electrical Submersible Pumps Manual* examples; affinity laws |
 | 13 | Separator (phase split node, gas / oil / water outlets) | Done in v1.26.0 (`SeparatorOutlet`) | A | M | Mass and component balance; outlet streams equal an independent `thermo` flash |
-| 14 | Compressor (polytropic / isentropic, efficiency, power, discharge T; curves) | Pump head curve only | A | M | GPSA *Engineering Data Book* §13 examples; isentropic limit against EOS entropy |
+| 14 | Compressor (polytropic / isentropic, efficiency, power, discharge T; curves) | Done in v1.30.0 (`Compressor`; no map / curves) | A | M | GPSA *Engineering Data Book* §13 examples; isentropic limit against EOS entropy (done) |
 | 15 | Pressure regulator / back-pressure controller | Done in v1.27.0 (`PressureRegulator`) | B | M | Analytical: set-point held when feasible, open or closed otherwise |
 | 16 | Heater/cooler with outlet-temperature spec | Done in v1.29.0 (`HeatSource(outlet_temperature_c=…)`) | B | S | Energy balance; water duty against NIST enthalpies |
 | 17 | Buried pipe, cylindrical layers, computed inner film coefficient, water/air surroundings | Flat-wall layers, user film coefficients | B | M | Conduction shape factor (Incropera); GPSA / Gnielinski; cylindrical-wall analytic solution |
@@ -175,8 +175,9 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 
 ### Stage 5 — equipment (items 13, 14, 15, 16)
 - 5.1 **Done in v1.26.0.** Separator node with gas / liquid (/ water) outlets (`SeparatorOutlet`).
-- 5.2 Compressor: polytropic or isentropic with efficiency; power and
-  discharge temperature; specified ΔP, pressure ratio or power.
+- 5.2 **Done in v1.30.0.** Compressor: polytropic or isentropic with efficiency; power and
+  discharge temperature; specified ΔP, pressure ratio or power.  (No
+  compressor map, surge or staging.)
 - 5.3 **Done in v1.29.0.** Heater/cooler with outlet-temperature spec (and maximum duty).
 - 5.4 **Done in v1.27.0.** Pressure regulator (reducing and back-pressure).
 
@@ -955,4 +956,31 @@ Summary:
   −60 to 300 °C.
 - Not validated: duties in gas, black-oil and compositional fluids against
   a published heater (they rest on each fluid's enthalpy model).
+
+### 2026-11-27 — Item 5.2: compressor (v1.30.0)
+
+- `Compressor` (ratio, rise or power; isentropic or polytropic) in gas,
+  black-oil and compositional; ∫v·dP marched in ln P on each fluid's h and
+  v; `SolveResult.compressors`; GUI; compressible tutorial 06 Part B.
+- Development found: a ratio taken from the inlet pressure inside the
+  pressure correction ran away (5 000 kg/s) and a power at zero flow asked
+  for the ratio limit — both now set once per outer iteration by a
+  bracketed false-position search on the rise; a node at 0 Pa made the EOS
+  divide by zero (floor 1 kPa in absolute-pressure solvers).
+
+- Review before the tag found the first version judged convergence on the
+  imposed rise, not the node pressures (a station with no steady state
+  reported converged; a small nozzle missed its ratio), the 1 kPa floor
+  overriding a 0.5 kPa boundary and a flow-boundary exception — fixed.
+- Limitations recorded: ratio 10 / 30 MW and 1–30 kW in the test station;
+  parallel compressors with different specifications.
+
+Summary:
+- Validated against data read in a source: none.
+- Validated analytically / against the EOS: ideal-gas isentrope (8.8e-5);
+  isentrope against EOS entropy, PR (1.3e-4) and compositional (4.7e-5).
+- Validated by consistency: specification met (1e-4), power = ṁ·Δh,
+  energy balance ≤ 1.5e-3 %.
+- Not validated: against a published compressor case (GPSA examples not
+  available); black-oil compression (no entropy function).
 

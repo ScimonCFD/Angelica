@@ -69,6 +69,11 @@ class SteadyNonIsothermalIncompressibleSolver(DiagnosisMixin, BaseSolver):
     def solve(self, case: NetworkCase, progress_callback=None) -> SolveResult:
         from dataclasses import replace as _replace
 
+        from angelica.core.components import Compressor
+        if any(isinstance(c, Compressor) for c in case.components):
+            raise ValueError("A Compressor needs a gas, black-oil or compositional solver (its discharge "
+                             "temperature and power come from the fluid's enthalpy); use a Pump for liquids.")
+
         from angelica.numerics.energy import solve_energy_system
         from angelica.properties.thermal_fluid import ThermalFluid
 

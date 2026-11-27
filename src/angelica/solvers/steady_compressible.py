@@ -10,7 +10,7 @@ from angelica.core.results import ComponentFlowResult, IterationMetrics, SolveRe
 from angelica.core.settings import SolverSettings
 from angelica.core.state import HeatSourceState, PipeState
 
-from .base import BaseSolver
+from .base import ABSOLUTE_PRESSURE_FLOOR_PA, COMPRESSOR_RISE_TOLERANCE, BaseSolver
 from .diagnosis import DiagnosisMixin
 from .steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
 
@@ -98,6 +98,7 @@ class SteadyCompressibleSolver(DiagnosisMixin, BaseSolver):
             settings=self.hydraulic_settings,
             turbulent_pipe_correlation=turbulent_pipe_correlation,
         )
+        self._hydraulic_solver.pressure_floor_pa = ABSOLUTE_PRESSURE_FLOOR_PA
         self.settings = self._hydraulic_solver.settings
         self.turbulent_pipe_correlation = self._hydraulic_solver.turbulent_pipe_correlation
 
@@ -148,7 +149,10 @@ class SteadyCompressibleSolver(DiagnosisMixin, BaseSolver):
         temperature_converged = False
 
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
+        compressor_change = 0.0
         for _outer in range(settings.max_density_iterations):
+            # Pressure rise of power-specified compressors at the present flow.
+            compressor_change = self._set_compressor_rises(network_state, fluid_model, T_init)
             old_densities = [fluid_model.density_for_link(link) for link in network_state.components]
 
             lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
@@ -197,7 +201,7 @@ class SteadyCompressibleSolver(DiagnosisMixin, BaseSolver):
 
             temperature_converged = max_delta_t < settings.temperature_tolerance_k
             density_converged = max_rel_delta < settings.density_rel_tolerance
-            if temperature_converged and density_converged:
+            if temperature_converged and density_converged and compressor_change < COMPRESSOR_RISE_TOLERANCE:
                 break
 
         lam_hist, lam_metrics, _ = self._hydraulic_solver._solve_laminar(
@@ -247,6 +251,8 @@ class SteadyCompressibleSolver(DiagnosisMixin, BaseSolver):
 
         # Named criteria not met (v1.29.0: this solver gave no reason before).
         failed = self._failed_criteria(hydraulic_converged, temperature_converged, density_converged, True, True)
+        if compressor_change >= COMPRESSOR_RISE_TOLERANCE:
+            failed.append("compressor power (pressure rise not settled)")
         return SolveResult(
             case_name=case.name,
             converged=not failed,
@@ -268,7 +274,8 @@ class SteadyCompressibleSolver(DiagnosisMixin, BaseSolver):
             ),
             mass_balance_history=mass_balance_history,
             energy_balance_history=energy_balance_history,
-            warnings=iso_warnings,
+            warnings=iso_warnings + self._compressor_warnings(network_state, fluid_model, T_init),
             heaters=self._heater_results(network_state, iso is not None),
+            compressors=self._compressor_results(network_state, fluid_model, T_init),
         )
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .components import Fitting, HeatSource, Pipe, PressureChanger, Pump
+from .components import Compressor, Fitting, HeatSource, Pipe, PressureChanger, Pump
 
 
 @dataclass
@@ -86,6 +86,14 @@ class FittingState(PressureChangerState):
 class PumpState(PressureChangerState):
     component: Pump
     reynolds: float = 0.0
+
+
+@dataclass
+class CompressorState(PumpState):
+    """A ``Compressor`` link: a pump for every pump code path (shaft work in
+    the energy balance), with the pressure rise it imposes this iteration."""
+    component: Compressor  # type: ignore[assignment]
+    compressor_rise_pa: float = 0.0
 
 
 @dataclass

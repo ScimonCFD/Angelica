@@ -19,6 +19,7 @@ from .core.case import (
 from .core.components import (
     CheckValve,
     Choke,
+    Compressor,
     Fitting,
     HeatSource,
     Pipe,
@@ -61,6 +62,7 @@ __all__ = [
     "ComponentFlowResult",
     "CheckValve",
     "Choke",
+    "Compressor",
     "CompositionalFluid",
     "CompositionalSolverSettings",
     "CompressibleFluid",

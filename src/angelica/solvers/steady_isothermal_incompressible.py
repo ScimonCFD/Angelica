@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from angelica.closures import (
     ColebrookPipeCorrelation,
     HeatSourceModel,
@@ -12,7 +14,7 @@ from angelica.core.case import NetworkCase
 from angelica.core.network import build_network_state
 from angelica.core.results import ComponentFlowResult, IterationMetrics, SolveResult
 from angelica.core.settings import SolverSettings
-from angelica.core.state import FittingState, HeatSourceState, PipeState, PumpState
+from angelica.core.state import CompressorState, FittingState, HeatSourceState, PipeState, PumpState
 from angelica.numerics import assemble_pressure_system, max_abs_value, solve_linear_system
 
 from .base import BaseSolver
@@ -34,8 +36,15 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         self.fitting_correlation = fitting_correlation or MinorLossModel()
         self.pump_correlation = pump_correlation or PumpCurveModel()
         self.heat_source_correlation = heat_source_correlation or HeatSourceModel()
+        from angelica.closures.compressor import CompressorModel
+        self.compressor_correlation = CompressorModel()
+        self.pressure_floor_pa: float = 0.0     # gas / black-oil / compositional solvers set 1 kPa
 
     def solve(self, case: NetworkCase, progress_callback=None) -> SolveResult:
+        from angelica.core.components import Compressor
+        if any(isinstance(c, Compressor) for c in case.components):
+            raise ValueError("A Compressor needs a gas, black-oil or compositional solver (its discharge "
+                             "temperature and power come from the fluid's enthalpy); use a Pump for liquids.")
         network_state = build_network_state(case)
         self._initialise_pressure_field(network_state, case)
 
@@ -330,6 +339,8 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
             return self.turbulent_pipe_correlation
         if isinstance(link_state, FittingState):
             return self.fitting_correlation
+        if isinstance(link_state, CompressorState):
+            return self.compressor_correlation
         if isinstance(link_state, PumpState):
             return self.pump_correlation
         if isinstance(link_state, HeatSourceState):
@@ -337,21 +348,37 @@ class SteadyIsothermalIncompressibleSolver(BaseSolver):
         raise TypeError(f"Unsupported state type: {type(link_state).__name__}")
 
     def _apply_pressure_correction(self, network_state, correction) -> tuple[float, float, float]:
-        _P_MIN = 0.0  # Pa — absolute pressure cannot be negative
+        # Pressure floor: 0 Pa for liquids (gauge pressures are common, e.g. the
+        # Poiseuille benchmark's outlet at 0); the gas, black-oil and
+        # compositional solvers set 1 kPa absolute — at exactly 0 the equation
+        # of state divides by P (a 30 MW compressor emptying its suction line
+        # raised ZeroDivisionError, v1.30.0).
+        # The floor never exceeds half the lowest boundary pressure, and
+        # boundary nodes keep their own pressure (review of v1.30.0: a 0.5 kPa
+        # outlet was lifted to the 1 kPa floor).
         node_ids = sorted(network_state.nodes)
+        _P_MIN = float(getattr(self, "pressure_floor_pa", 0.0))
+        if _P_MIN > 0.0:
+            bc = [float(network_state.nodes[n].pressure_pa) for n in node_ids  # type: ignore[arg-type]
+                  if network_state.nodes[n].is_pressure_boundary and network_state.nodes[n].pressure_pa is not None]
+            if bc:
+                _P_MIN = min(_P_MIN, 0.5 * max(min(bc), 0.0))
+        # Pressure boundaries keep their pressure; every other node (flow
+        # boundaries too: their pressure is free) stays above the floor.
+        floors = [(-math.inf if network_state.nodes[n].is_pressure_boundary else _P_MIN) for n in node_ids]
         old_pressures = [float(network_state.nodes[nid].pressure_pa) for nid in node_ids]  # type: ignore[arg-type]
         raw_corrections = [float(correction[i]) for i in range(len(node_ids))]
 
-        # Adaptive relaxation: halve alpha until all new pressures are non-negative.
+        # Adaptive relaxation: halve alpha until all new pressures are above the floor.
         alpha = float(self.settings.pressure_relaxation)
         alpha_floor = alpha * (0.5 ** 20)  # ~20 halvings before giving up
         while alpha > alpha_floor:
-            if all(p + alpha * dp >= _P_MIN for p, dp in zip(old_pressures, raw_corrections)):
+            if all(p + alpha * dp >= fl for p, dp, fl in zip(old_pressures, raw_corrections, floors)):
                 break
             alpha *= 0.5
 
-        new_pressures = [max(p + alpha * dp, _P_MIN)
-                         for p, dp in zip(old_pressures, raw_corrections)]
+        new_pressures = [max(p + alpha * dp, fl)
+                         for p, dp, fl in zip(old_pressures, raw_corrections, floors)]
         for nid, new_p in zip(node_ids, new_pressures):
             network_state.nodes[nid].pressure_pa = new_p
 

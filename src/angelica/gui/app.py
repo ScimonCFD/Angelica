@@ -3203,7 +3203,7 @@ class NetSimGui:
         types = {c.component_type for c in link.components}
         if "heat_source" in types:
             link_color = "#c0397d"
-        elif "pump" in types:
+        elif "pump" in types or "compressor" in types:
             link_color = self._t["plot_turbulent"]
         else:
             vf = self._get_link_vf(link)
@@ -3225,6 +3225,20 @@ class NetSimGui:
             tags=("link", f"link_{link.link_id}"),
         )
         self.canvas.tag_lower("link")
+
+        # Compressor power and ratio from the latest result
+        if self.latest_result is not None:
+            prefix = f"link_{link.link_id}_compressor_"
+            for c in getattr(self.latest_result, "compressors", ()):
+                if c.component_id.startswith(prefix) and c.state != "no flow":
+                    self.canvas.create_text(
+                        mid_x,
+                        mid_y - 24,
+                        text=f"W = {c.power_w / 1e3:.0f} kW, r = {c.pressure_ratio:.2f}",
+                        font=("TkDefaultFont", 8, "bold"),
+                        fill=self._t["plot_turbulent"],
+                        tags=("link", f"link_{link.link_id}"),
+                    )
 
         # Heater/cooler duty from the latest result (red when the outlet
         # temperature set point needs more than the maximum duty)
@@ -3679,6 +3693,18 @@ class NetSimGui:
                 ),
                 width=12,
             ).pack(anchor="w", pady=4)
+        if self.scene.physics_mode in ("compressible", "black_oil", "compositional"):
+            ttk.Button(
+                palette,
+                text="Compressor",
+                command=lambda: self._add_component_to_link(
+                    link.link_id,
+                    "compressor",
+                    components_list,
+                    properties_frame,
+                ),
+                width=12,
+            ).pack(anchor="w", pady=4)
         if self.scene.physics_mode in ("non_isothermal", "compressible", "black_oil", "compositional"):
             ttk.Button(
                 palette,
@@ -3943,9 +3969,10 @@ class NetSimGui:
                      "separator_outlet": "Separator outlet",
                      "pressure_regulator": "Pressure regulator"}[comp.component_type],
                     (fitting_color, (6, 3)))
-            elif comp.component_type == "pump":
+            elif comp.component_type in ("pump", "compressor"):
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
-                legend_seen.setdefault("Pump", (pump_color, (6, 3)))
+                legend_seen.setdefault("Pump" if comp.component_type == "pump" else "Compressor",
+                                       (pump_color, (6, 3)))
             elif comp.component_type == "heat_source":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=heater_color, width=2, dash=(4, 4))
                 legend_seen.setdefault("Heat Source", (heater_color, (4, 4)))
@@ -3977,8 +4004,10 @@ class NetSimGui:
             else:
                 lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke",
                            "check_valve": "check", "well_inflow": "IPR", "well": "well",
-                           "separator_outlet": "sep. outlet", "pressure_regulator": "regulator"}
-                clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
+                           "separator_outlet": "sep. outlet", "pressure_regulator": "regulator",
+                           "compressor": "compressor"}
+                clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color,
+                           "compressor": pump_color}
                 lbl = lbl_map.get(comp.component_type, comp.component_type)
                 clr = clr_map.get(comp.component_type, fitting_color)
                 mid_y = _cy(0.5 * (pressures_disp[i] + pressures_disp[i + 1]))
@@ -4799,9 +4828,10 @@ class NetSimGui:
                      "separator_outlet": "Separator outlet",
                      "pressure_regulator": "Pressure regulator"}[comp.component_type],
                     (fitting_color, (6, 3)))
-            elif comp.component_type == "pump":
+            elif comp.component_type in ("pump", "compressor"):
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=pump_color, width=2, dash=(6, 3))
-                legend_seen.setdefault("Pump", (pump_color, (6, 3)))
+                legend_seen.setdefault("Pump" if comp.component_type == "pump" else "Compressor",
+                                       (pump_color, (6, 3)))
             elif comp.component_type == "heat_source":
                 canvas.create_line(x0c, y0c, x0c, y1c, fill=heater_color, width=2, dash=(4, 4))
                 legend_seen.setdefault("Heat Source", (heater_color, (4, 4)))
@@ -4831,8 +4861,10 @@ class NetSimGui:
             else:
                 lbl_map = {"pump": "pump", "fitting": "fitting", "heat_source": "heater", "choke": "choke",
                            "check_valve": "check", "well_inflow": "IPR", "well": "well",
-                           "separator_outlet": "sep. outlet", "pressure_regulator": "regulator"}
-                clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color}
+                           "separator_outlet": "sep. outlet", "pressure_regulator": "regulator",
+                           "compressor": "compressor"}
+                clr_map = {"pump": pump_color, "fitting": fitting_color, "heat_source": heater_color,
+                           "compressor": pump_color}
                 lbl = lbl_map.get(comp.component_type, comp.component_type)
                 clr = clr_map.get(comp.component_type, fitting_color)
                 mid_y = _cy(0.5 * (temps_disp[i] + temps_disp[i + 1]))
@@ -4986,6 +5018,21 @@ class NetSimGui:
                       "node's other connections or its pressure boundary.  Put it first in\n"
                       "its connection.  Its flow is set by the split (level-control valve):\n"
                       "an outlet pressure above the separator's means the liquid needs a pump."),
+            )
+            return
+        if component.component_type == "compressor":
+            self._render_simple_component_properties(
+                component, properties_frame, link_id, components_list,
+                fields=[("value", "Value (ratio −, rise Pa or power W)"),
+                        ("diameter_m", f"Nozzle diameter ({self._unit_label('diameter')})"),
+                        ("efficiency", "Efficiency (−)"),
+                        ("max_pressure_ratio", "Max pressure ratio (power spec.)")],
+                choices={"specification": ("Specified by", ("pressure_ratio", "pressure_rise_pa", "power_w")),
+                         "efficiency_type": ("Efficiency", ("isentropic", "polytropic"))},
+                note=("Gas compressor: raises the pressure from the connection's start to its\n"
+                      "end by the specified ratio, rise or shaft power (at the solved flow).\n"
+                      "Discharge temperature and power from the fluid's enthalpy; it does not\n"
+                      "run backwards.  The canvas shows its power after a run."),
             )
             return
         if component.component_type == "pressure_regulator":
@@ -5650,6 +5697,8 @@ class NetSimGui:
             return f"Separator outlet #{display_index}"
         if component.component_type == "pressure_regulator":
             return f"Pressure regulator #{display_index}"
+        if component.component_type == "compressor":
+            return f"Compressor #{display_index}"
         if component.component_type == "well":
             return f"Well #{display_index}"
         return f"{component.component_type.capitalize()} #{display_index}"

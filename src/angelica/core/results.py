@@ -245,6 +245,27 @@ class SeparatorResult:
 
 
 @dataclass(frozen=True)
+class CompressorResult:
+    """A ``Compressor`` at the solution.  ``state``: "running", "at max
+    pressure ratio" (power specification that the flow cannot absorb below
+    the ratio limit) or "no flow".  ``power_w`` = ṁ·(h_out − h_in), the shaft
+    power given to the gas; ``isentropic_power_w`` = ṁ·(h_2s − h_in)."""
+
+    component_id: str
+    specification: str
+    state: str
+    mass_flow_kg_per_s: float
+    inlet_pressure_pa: float
+    outlet_pressure_pa: float
+    pressure_ratio: float
+    inlet_temperature_c: float
+    outlet_temperature_c: float
+    outlet_temperature_isentropic_c: float
+    power_w: float
+    isentropic_power_w: float
+
+
+@dataclass(frozen=True)
 class HeaterResult:
     """A ``HeatSource`` (heater/cooler) at the solution.
 
@@ -369,6 +390,7 @@ class SolveResult:
     separators: tuple[SeparatorResult, ...] = ()
     regulators: tuple[RegulatorResult, ...] = ()
     heaters: tuple[HeaterResult, ...] = ()
+    compressors: tuple[CompressorResult, ...] = ()
     # None when converged (see ConvergenceDiagnosis)
     diagnosis: ConvergenceDiagnosis | None = None
     # Converged or not: correlations used outside their data range, etc.

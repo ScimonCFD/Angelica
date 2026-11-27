@@ -14,7 +14,7 @@ from angelica.core.state import HeatSourceState, NetworkState, PipeState
 from angelica.properties.base import FluidModel
 from angelica.properties.black_oil import BlackOilComposition, mix_black_oil_streams
 
-from .base import BaseSolver
+from .base import ABSOLUTE_PRESSURE_FLOOR_PA, COMPRESSOR_RISE_TOLERANCE, BaseSolver
 from .diagnosis import DiagnosisMixin
 from .regulators import RegulatorNetworkMixin
 from .separators import SEPARATOR_FRACTION_TOLERANCE, SeparatorNetworkMixin
@@ -113,6 +113,7 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
             turbulent_pipe_correlation=turbulent_pipe_correlation,
             fitting_correlation=ChokeFlowModel(),
         )
+        self._hydraulic_solver.pressure_floor_pa = ABSOLUTE_PRESSURE_FLOOR_PA
 
     def _set_correlation_fluid(self, fluid) -> None:
         """Pass the current (possibly per-pipe) fluid to fluid-aware correlations."""
@@ -478,10 +479,13 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
         unsettled_passes = 0
         self._reset_flow_pattern_trace()
         self._hydraulic_solver._initialise_pressure_field(network_state, case)
+        compressor_change = 0.0
         for _outer in range(settings.max_outer_iterations):
 
             # Lift gas of gas-lifted wells: internal sources at their wellheads.
             self._set_gas_lift_sources(network_state, effective_fluid)
+            # Pressure rise of power-specified compressors at the present flow.
+            compressor_change = self._set_compressor_rises(network_state, effective_fluid, T_init)
 
             # ── build effective fluid model for this iteration ────────────────
             if use_per_inlet:
@@ -586,7 +590,7 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
             density_converged     = max_rel_delta  < settings.density_rel_tolerance
             separators_settled = separator_change < SEPARATOR_FRACTION_TOLERANCE
             if temperature_converged and density_converged and separators_settled and not wells_started \
-                    and not regulators_changed:
+                    and not regulators_changed and compressor_change < COMPRESSOR_RISE_TOLERANCE:
                 break
 
         # ── final synchronous pass ────────────────────────────────────────────
@@ -652,7 +656,10 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
                                        separator_results)
         if regulators_changed:
             failed.append("regulator states")
-        warnings = iso_warnings + self._range_warnings(case, node_temperatures, network_state) \
+        if compressor_change >= COMPRESSOR_RISE_TOLERANCE:
+            failed.append("compressor power (pressure rise not settled)")
+        warnings = iso_warnings + self._compressor_warnings(network_state, effective_fluid, T_init) \
+            + self._range_warnings(case, node_temperatures, network_state) \
             + self._regulator_warnings(network_state)
         failed += [f"regulator {cid} keeps switching state" for cid in self._regulators_stuck(network_state)]
         return SolveResult(
@@ -679,6 +686,7 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
             separators=separator_results,
             regulators=self._regulator_results(network_state),
             heaters=self._heater_results(network_state, iso is not None),
+            compressors=self._compressor_results(network_state, effective_fluid, T_init),
             diagnosis=self._diagnose(failed, network_state, pattern_history),
             warnings=warnings,
         )

@@ -14,6 +14,8 @@ Shaft work raises the gas temperature significantly.  This tutorial shows:
      physics that causes real-gas cooling on expansion causes enhanced
      heating on compression.
   3. The hot compressed gas cools as it flows downstream.
+  4. (Part B) A ``Compressor`` at the same pressure ratio: the work of the gas's
+     own isentrope, ∫v·dP, and of a real machine with an efficiency.
 
 Network layout (series):
 
@@ -179,6 +181,44 @@ def main() -> None:
     print(f"  Real gas (PR):  ΔT = {dT_pr:+.2f} °C")
     print(f"  Ideal gas:      ΔT = {dT_id:+.2f} °C")
     print(f"  Difference:     {dT_pr - dT_id:+.2f} °C  (PR heats more — departure enthalpy at high P)")
+
+    # ── Part B: the same pressure ratio through a Compressor ─────────────────
+    # The head-curve "compressor" above gives the gas w = ΔP/ρ (one density):
+    # the work of a reversible machine on a liquid.  A Compressor follows the
+    # gas's own isentrope (dh = v·dP) and its efficiency.
+    from dataclasses import replace
+
+    from angelica.core.components import Compressor
+
+    ratio = result_pr.node_pressures_pa[3] / result_pr.node_pressures_pa[2]
+    print()
+    print(f"Part B — a Compressor at the same pressure ratio ({ratio:.4f}), Peng-Robinson")
+    print(f"  {'Machine':34} {'ṁ (kg/s)':>9} {'T out (°C)':>11} {'Power (MW)':>11}")
+    base = _build_case(eos_pr)
+    fl = base.fluid_model
+    T2, T3 = result_pr.node_temperatures_c[2], result_pr.node_temperatures_c[3]
+    w_curve = fl.enthalpy_j_per_kg(result_pr.node_pressures_pa[3], T3) - \
+        fl.enthalpy_j_per_kg(result_pr.node_pressures_pa[2], T2)
+    works = {}
+    for label, eta in (("isentropic, η = 1 (reversible)", 1.0), ("isentropic, η = 0.75", 0.75),
+                       ("polytropic, η = 0.75", 0.75)):
+        kind = "polytropic" if label.startswith("polytropic") else "isentropic"
+        comps = tuple(Compressor(start_node=2, end_node=3, diameter_m=_D, pressure_ratio=ratio, efficiency=eta,
+                                 efficiency_type=kind, component_id="compressor")
+                      if c.component_id == "compressor" else c for c in base.components)
+        r = SteadyCompressibleSolver().solve(replace(base, components=comps))
+        c = r.compressors[0]
+        works[label] = (c.power_w / c.mass_flow_kg_per_s, c.outlet_temperature_c)
+        print(f"  {label:34} {c.mass_flow_kg_per_s:9.3f} {c.outlet_temperature_c:11.2f} {c.power_w / 1e6:11.3f}"
+              + ("" if r.converged else "  (not converged)"))
+    w_rev, t_rev = works["isentropic, η = 1 (reversible)"]
+    w_75 = works["isentropic, η = 0.75"][0]
+    print(f"  • Per kg of gas the head curve gives w = ΔP/ρ = {w_curve / 1e3:.1f} kJ/kg, the")
+    print(f"    reversible compressor ∫v·dP = {w_rev / 1e3:.1f} kJ/kg ({(w_rev / w_curve - 1) * 100:+.1f} %): ρ at the")
+    print("    mean pressure but the inlet temperature misses the heating along the")
+    print(f"    compression, and the gas leaves {t_rev - T3:.1f} K hotter than the curve says.")
+    print(f"  • A real machine (η = 0.75) needs {(w_75 / w_rev - 1) * 100:.0f} % more work per kg; the same number")
+    print("    as a polytropic efficiency means a less efficient machine, hotter still.")
 
 
 if __name__ == "__main__":

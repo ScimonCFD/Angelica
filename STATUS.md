@@ -28,6 +28,64 @@ maintainer y recoge lo que espera su decisión.
 
 ## Releases
 
+### v1.30.0 — Ítem 5.2: compresor
+
+**Qué cambió.**
+- `Compressor` en gas, black-oil y composicional: especificado por relación
+  de presiones, subida de presión o potencia; eficiencia isentrópica o
+  politrópica.  El trabajo isentrópico ∫v·dP se integra en ln P sobre la
+  h y la v de cada fluido, así que no necesita una función de entropía y
+  sirve igual para los tres.  Resultados en `SolveResult.compressors`
+  (potencia, relación, temperaturas de descarga real e isentrópica), en la
+  GUI (paleta y canvas) y en la Parte B del tutorial de gas 06.
+- Corregido: los solvers de presión absoluta dejaban llegar un nodo a 0 Pa
+  y la EOS dividía por cero; ahora el suelo es 1 kPa (los líquidos siguen
+  en 0 Pa, usan presión manométrica).
+
+**Validado contra fuente.**  Ninguna fuente leída (los ejemplos de GPSA no
+están en el repositorio).
+
+**Validado analíticamente o contra la EOS (medido).**
+- Gas ideal con cp constante: trabajo y T₂ₛ = T₁·r^(R/cp) a ≤ 8.8·10⁻⁵.
+- La comprobación pedida del límite isentrópico: el final de la
+  integración cae sobre la isentrópica de la EOS, s(P₂,T₂ₛ) = s(P₁,T₁), con
+  la entropía calculada aparte: T₂ₛ·|Δs| ≤ 1.3·10⁻⁴ del trabajo (PR
+  metano) y ≤ 4.7·10⁻⁵ (gas natural composicional, entropía del flash de
+  thermo).
+
+**Validado solo por consistencia.**  En red: relación o subida cumplidas en
+las presiones de los nodos a 10⁻⁴, potencia a 3·10⁻⁴; potencia = ṁ·Δh
+recalculada con el fluido; masa coherente a 2·10⁻³; balance de energía ≤
+1.5·10⁻³ %.  Barrido en gas:
+relaciones 1.7–6 y potencias 0.1–10 MW convergen; relación ≤ 1.5 (45 bar
+contra 50) da caudal nulo, como debe.
+
+**No validado.**  Frente a un caso publicado de compresor; la compresión
+en black-oil (no hay función de entropía con qué comprobarla).
+
+**Medido frente a supuesto.**  Cifras medidas.  Supuesto: un compresor sin
+mapa (sin curvas de altura y eficiencia frente a caudal, sin surge), una
+etapa, sin interenfriamiento.
+
+**Hallazgo del tutorial 06.**  La "bomba como compresor" que se usaba hasta
+ahora (w = ΔP/ρ) da 92.4 kJ/kg donde la isentrópica del gas da 108.5
+(+17.5 %) y el gas sale 6.5 K más caliente: para gas, conviene el
+`Compressor`.
+
+**Revisión independiente.**  Encontró fallos serios de mi primera versión,
+todos corregidos: daba por convergida una especificación imposible (ambos
+extremos en contorno: 5 370 kg/s y 553 MW) y no cumplía la relación con
+una tobera pequeña, porque comparaba la subida impuesta en vez de las
+presiones de los nodos; el suelo de 1 kPa pisaba un contorno de 0.5 kPa;
+un nodo de caudal impuesto llegaba a −72 kPa y lanzaba excepción;
+máquinas paradas se daban por no convergidas.  Además añadí el aviso de
+alimentación no gaseosa y la exportación de resultados.
+
+**Limitaciones.**  Relación 10 o 30 MW en la estación de prueba (descarga
+≈ 280 °C, succión casi vacía) y potencias de 1–30 kW (menos del 1 % del
+caudal de diseño): no convergido con diagnóstico.  Compresores en
+paralelo con especificaciones distintas no convergen (iguales sí).
+
 ### v1.29.0 — Ítem 5.3: calentador/enfriador por temperatura de salida
 
 **Qué cambió.**
