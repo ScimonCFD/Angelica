@@ -7,7 +7,7 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.33.0, checked against the code)
+## 1. Where Angelica stands (v1.34.0, checked against the code)
 
 | Area | Present today |
 |---|---|
@@ -19,7 +19,7 @@ This file is the working source of truth. Each item is released on its own
 | Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve, gas compressor (ratio, rise or power; isentropic or polytropic efficiency), heater/cooler (fixed duty or outlet temperature, with a duty limit), separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
 | GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI, US and oil-field units (psia, °F, ft, in, lb/s), Excel export; standard-volume rates (Sm³/d, STB/d, MMscf/d) in the exports |
-| Quality | 966 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
+| Quality | 971 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
 
 **Validation debt (2026-11-25).**  Most models since v1.19 are validated
 by internal consistency only: of the last ten log summaries, eight say
@@ -73,7 +73,7 @@ or more (human-equivalent).
 | 23 | Liquid viscosity with dissolved gas (compositional) | Low with dissolved methane | B | M | Pedersen et al. (1984, 1987) corresponding-states method; Lee, Gonzalez & Eakin (1966) methane–n-decane data |
 | 24 | Slug and pigging liquid volumes | None | C | M | Brill et al. (1981) Prudhoe Bay slug correlation |
 | 25 | Completion pressure drops (perforations, gravel pack) | None | C | S | McLeod (1983); Jones et al. (1976) |
-| 26 | Reports: per-link profile tables, standard-volume rates, CSV/Excel | Partial | B | S | Regression tests |
+| 26 | Reports: per-link profile tables, standard-volume rates, CSV/Excel | Done in v1.34.0 (profiles, v1.31.0 rates) | B | S | Regression tests |
 | 27 | Validation manual (benchmarks collected in the docs) | Scattered across tutorials | A | M | — |
 
 PIPEPHASE features deliberately left out: steam, optimisation, time-stepping
@@ -248,7 +248,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - 7.1 **Done in v1.31.0.** Oil-field unit system in the GUI; standard-volume rates in results.
 - 7.2 **Done in v1.32.0.** Sensitivity runner (API and GUI): vary one or two parameters, plot; nodal analysis of a well.
 - 7.3 **Done in v1.33.0.** Calibration factors; line sizing.
-- 7.4 Per-link profile report export.
+- 7.4 **Done in v1.34.0.** Per-link profile report export.
 
 ### Stage 8 — second wave (items 7, 12, 23, 24, 25, 27)
 - 8.1 Pedersen corresponding-states viscosity.
@@ -1026,4 +1026,12 @@ Summary:
 - Validated by consistency: factor 1 leaves the tutorial suite unchanged;
   monotone network response to friction; holdup effect as Beggs-Brill gives.
 - Not validated: against field data (the factors are the user's to fit).
+
+### 2026-11-27 — Item 7.4: per-link profile report (v1.34.0)
+
+- `profile_table` / `profile_rows`; "Profiles" in the CSV and Excel
+  reports (GUI exports pass the case).
+
+Summary: consistency only (the report rearranges the solution: segments
+join, lengths, rises and drops add up).
 

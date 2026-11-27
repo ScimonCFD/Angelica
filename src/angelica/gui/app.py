@@ -2747,6 +2747,9 @@ class NetSimGui:
         except ValueError as exc:
             messagebox.showerror("Run failed", str(exc))
             return
+        # The case of this run, for the report's profiles: the scene may be
+        # edited after the run (review of v1.34.0).
+        self._run_case = case
 
         self._simulation_running = True
         self._stop_event.clear()
@@ -2820,6 +2823,11 @@ class NetSimGui:
 
         threading.Thread(target=_worker, daemon=True).start()
 
+    def _case_for_report(self):
+        """The case the latest result was solved from (None if unknown), for
+        the report's profiles — not the scene as edited since."""
+        return getattr(self, "_run_case", None)
+
     def _export_results_report(self) -> None:
         if self.latest_result is None:
             messagebox.showerror(
@@ -2846,7 +2854,7 @@ class NetSimGui:
             return
 
         try:
-            export_solve_result_workbook(self.latest_result, file_path)
+            export_solve_result_workbook(self.latest_result, file_path, case=self._case_for_report())
         except Exception as exc:  # pragma: no cover - UI feedback path
             messagebox.showerror("Export failed", f"Could not export report:\n{exc}")
             return
@@ -2879,7 +2887,7 @@ class NetSimGui:
             return
 
         try:
-            export_solve_result_csv(self.latest_result, file_path)
+            export_solve_result_csv(self.latest_result, file_path, case=self._case_for_report())
         except Exception as exc:  # pragma: no cover - UI feedback path
             messagebox.showerror("Export failed", f"Could not export report:\n{exc}")
             return

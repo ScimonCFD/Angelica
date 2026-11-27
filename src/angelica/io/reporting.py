@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 
-def export_solve_result_csv(result, output_path: str) -> None:
+def export_solve_result_csv(result, output_path: str, case=None) -> None:
+    """CSV report of a solve; with ``case``, also the per-connection profiles
+    (``profile_table``)."""
     import csv
 
     output = Path(output_path)
@@ -82,6 +84,18 @@ def export_solve_result_csv(result, output_path: str) -> None:
         _write_component_mass_flows_csv(writer, result)
         _write_phase_report_csv(writer, result)
         _write_multiphase_csv(writer, result)
+        if case is not None:
+            try:
+                rows = profile_rows(case, result)
+            except ValueError as exc:            # a case that is not this result's: no profiles
+                rows = []
+                writer.writerow([])
+                writer.writerow(["Profiles", f"not written: {exc}"])
+            if rows:
+                writer.writerow([])
+                writer.writerow(["Profiles (per connection, along its components)"])
+                for row in rows:
+                    writer.writerow(row)
         heaters = _heater_rows(result)
         if heaters:
             writer.writerow([])
@@ -160,7 +174,9 @@ def _notes_rows(result) -> list[list]:
     return rows
 
 
-def export_solve_result_workbook(result, output_path: str) -> None:
+def export_solve_result_workbook(result, output_path: str, case=None) -> None:
+    """Excel report of a solve; with ``case``, also a "Profiles" sheet
+    (``profile_table``)."""
     try:
         from openpyxl import Workbook
     except ImportError as _err:
@@ -265,6 +281,15 @@ def export_solve_result_workbook(result, output_path: str) -> None:
     _write_component_mass_flows_sheet(workbook, result)
     _write_phase_report_sheet(workbook, result)
     _write_multiphase_sheet(workbook, result)
+    if case is not None:
+        try:
+            rows = profile_rows(case, result)
+        except ValueError:                        # a case that is not this result's: no profiles
+            rows = []
+        if rows:
+            sheet = workbook.create_sheet("Profiles")
+            for row in rows:
+                sheet.append(row)
     workbook.save(output)
 
 
@@ -858,3 +883,84 @@ def _write_multiphase_sheet(workbook, result) -> None:
     ws.append(MULTIPHASE_HEADER)
     for row in rows:
         ws.append([None if v == "" else v for v in row])
+
+
+# ── per-connection profiles (roadmap 7.4) ─────────────────────────────────────
+
+_PROFILE_COLUMNS = ("connection", "component", "from_node", "to_node", "distance_start_m", "distance_end_m",
+                    "elevation_start_m", "elevation_end_m", "pressure_in_pa", "pressure_out_pa",
+                    "pressure_drop_pa", "temperature_in_c", "temperature_out_c", "mass_flow_kg_per_s",
+                    "flow_pattern", "liquid_holdup", "mixture_velocity_m_per_s", "erosional_velocity_ratio")
+
+
+def _gui_link(component_id: str) -> str | None:
+    """"link_<n>" for a component the GUI built for connection n, else None."""
+    parts = component_id.split("_")
+    if len(parts) > 2 and parts[0] == "link" and parts[1].isdigit():
+        return f"link_{parts[1]}"
+    return None
+
+
+def profile_table(case, result) -> list[dict]:
+    """Profile of every connection along its components, in their order:
+    one record per component (each segment of a split pipe) with the
+    distance and elevation from the connection's start, the pressures and
+    temperatures at its ends, its mass flow and — two-phase pipes — flow
+    pattern, holdup, mixture velocity and erosional-velocity ratio.
+
+    A connection is a run of consecutive components the GUI built for the
+    same link ("link_<n>_…") where each starts at the node the previous one
+    ends; any other component is a connection of its own (named by its id,
+    or "component <i>" when it has none).  Distances follow the components'
+    orientation (start → end node), not the flow; pipes add their length
+    and height change, other components (wells too) are points.
+
+    ``result`` must be the solve of ``case``: one flow per component and a
+    pressure for every node (ValueError otherwise)."""
+    comps = list(case.components)
+    if len(result.component_flows) != len(comps) or \
+            any(n not in result.node_pressures_pa for c in comps for n in (c.start_node, c.end_node)):
+        raise ValueError("the result is not the solve of this case (components or nodes differ)")
+    P, T = result.node_pressures_pa, result.node_temperatures_c
+    out: list[dict] = []
+    conn = None
+    prev_end = None
+    d0 = z0 = 0.0
+    for i, (comp, f) in enumerate(zip(comps, result.component_flows)):     # flows are in case order
+        link = _gui_link(comp.component_id)
+        if link is None or link != conn or comp.start_node != prev_end:
+            conn = link if link is not None else (comp.component_id or f"component {i}")
+            d0 = z0 = 0.0
+        is_pipe = hasattr(comp, "length_m") and hasattr(comp, "absolute_roughness_m")
+        d1 = d0 + (float(comp.length_m) if is_pipe else 0.0)
+        z1 = z0 + (float(getattr(comp, "height_change_m", 0.0)) if is_pipe else 0.0)
+        mp = getattr(f, "multiphase", None)
+        p_in, p_out = P.get(comp.start_node), P.get(comp.end_node)
+        out.append({
+            "connection": conn, "component": comp.component_id or f"component {i}",
+            "from_node": comp.start_node, "to_node": comp.end_node,
+            "distance_start_m": d0, "distance_end_m": d1, "elevation_start_m": z0, "elevation_end_m": z1,
+            "pressure_in_pa": p_in, "pressure_out_pa": p_out,
+            "pressure_drop_pa": (p_in - p_out) if p_in is not None and p_out is not None else None,
+            "temperature_in_c": T.get(comp.start_node), "temperature_out_c": T.get(comp.end_node),
+            "mass_flow_kg_per_s": f.mass_flow_kg_per_s,
+            "flow_pattern": mp.flow_pattern if mp is not None else "",
+            "liquid_holdup": mp.liquid_holdup if mp is not None else None,
+            "mixture_velocity_m_per_s": mp.mixture_velocity_m_per_s if mp is not None else None,
+            "erosional_velocity_ratio": mp.erosional_velocity_ratio if mp is not None else None,
+        })
+        d0, z0, prev_end = d1, z1, comp.end_node
+    return out
+
+
+def profile_rows(case, result) -> list[list]:
+    """``profile_table`` as a header and rows (for CSV and workbook)."""
+    table = profile_table(case, result)
+    if not table:
+        return []
+
+    def cell(v):
+        if v is None or (isinstance(v, float) and v != v):     # None or NaN: an empty cell
+            return ""
+        return v
+    return [list(_PROFILE_COLUMNS)] + [[cell(r[c]) for c in _PROFILE_COLUMNS] for r in table]

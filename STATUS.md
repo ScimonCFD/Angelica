@@ -28,6 +28,26 @@ maintainer y recoge lo que espera su decisión.
 
 ## Releases
 
+### v1.34.0 — Ítem 7.4: informe de perfiles por conexión
+
+**Qué cambió.**  `profile_table(case, result)`: para cada conexión, sus
+componentes en orden (los tramos de un tubo segmentado), con distancia y
+elevación acumuladas, presión y temperatura en cada extremo, caída de
+presión, caudal y, en tubos bifásicos, patrón, holdup, velocidad de mezcla
+y relación erosional.  Sección/hoja "Profiles" en los informes CSV y Excel
+(la GUI la incluye).
+
+**Revisión independiente.**  Encontró que la GUI podía exportar el perfil
+de una red distinta de la resuelta (la escena editada después del
+cálculo) y que el agrupamiento fallaba con ids vacíos o con un prefijo
+"link_" que no encadena.  Corregido: se guarda el caso de cada ejecución y
+un caso que no corresponde se rechaza.
+
+**Validado por consistencia.**  Los tramos encajan (nodo, distancia,
+elevación, presión); las distancias suman la longitud, las elevaciones el
+desnivel y las caídas la caída total.  No hay nada que validar contra
+fuente: el informe reordena la solución.
+
 ### v1.33.0 — Ítem 7.3: factores de calibración y dimensionamiento de línea
 
 **Qué cambió.**  Multiplicadores por tubo del factor de fricción (todas las

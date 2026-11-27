@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.34.0] — 2026-11-27
+
+Roadmap item 7.4: per-link profile report.
+
+### Added
+  - **`angelica.io.reporting.profile_table(case, result)`**: the profile of
+    every connection along its components (each segment of a pipe the GUI
+    split, in order) — distance and elevation from the connection's start,
+    pressure and temperature at each end, pressure drop, mass flow and, for
+    two-phase pipes, flow pattern, liquid holdup, mixture velocity and
+    erosional-velocity ratio.  `export_solve_result_csv` and
+    `export_solve_result_workbook` take an optional `case` and then add a
+    "Profiles" section / sheet; the GUI's report exports pass the case the
+    run was solved from (not the scene as edited since).  A connection is a
+    run of consecutive components of one GUI link that chain node to node;
+    any other component (a case built in code) is its own connection.  A
+    case that is not the result's solve raises ValueError (the reports then
+    omit the profiles and say why).
+  - Checked by consistency: along a split line the segments join (node,
+    distance, elevation, pressure), distances add to the pipe length,
+    elevations to its rise, drops to the connection's drop.
+
+### Review before the tag
+  - The first version rebuilt the case from the scene at export time, so a
+    scene edited after the run gave a profile of another network (wrong
+    nodes, shifted internal node ids, no warning); grouped by id prefix only
+    (empty ids, or code ids starting "link_<n>_", merged unrelated pipes);
+    looked flows up by label; wrote NaN into numeric Excel cells.  Fixed;
+    tests over the 34-link Hanoi scene, empty ids and a mismatched result.
+
 ## [1.33.0] — 2026-11-27
 
 Roadmap item 7.3: calibration factors and line sizing.
