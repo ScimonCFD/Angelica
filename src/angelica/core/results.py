@@ -54,6 +54,11 @@ class ComponentFlowResult:
     hydrate_temperature_c: float | None = None   # formation temperature at that end's pressure
     hydrate_subcooling_k: float | None = None    # T_hydrate − T_fluid (> 0: inside the hydrate region)
     hydrate_structure: str = ""
+    # Pipes in thermal solves (roadmap 6.1): overall U referred to the inner
+    # surface, and the inner film when computed from the flow.
+    heat_transfer_coefficient_w_per_m2k: float | None = None
+    inner_film_coefficient_w_per_m2k: float | None = None
+    inner_film_in_range: bool | None = None     # False: outside the correlation's range (see wall_heat)
 
 
 @dataclass(frozen=True)

@@ -164,6 +164,7 @@ def solve_energy_system(
 STAGNANT_FLOW_REL = 1e-9
 STAGNANT_FLOW_ABS = 1e-9      # kg/s (0.09 g/day)
 _SOURCE_RELAXATION = 0.5
+_FILM_RELAXATION = 0.3       # computed inner film, in ln h (roadmap 6.1)
 
 
 def _mixing_denominator(total_in: float, total_out: float) -> float:
@@ -286,20 +287,20 @@ def _solve_energy_once(
         A = ps.area_m2
         D_pipe = pipe.diameter_m
 
-        if isinstance(ps, HeatSourceState):
-            U = 0.0
-            T_amb = T_ref  # U=0 so this is unused; kept for structural symmetry with pipe branch
-        else:
-            assert isinstance(ps, PipeState)
-            U = ps.component.u_overall_w_per_m2k
-            T_amb = ps.component.ambient_temperature_c
-
         T_repr = ps.temperature_c if ps.temperature_c is not None else T_ref
         _ls = _LinkAtTemperature(ps, T_repr)
 
         cp = fluid_model.specific_heat_for_link(_ls)
         k_fl = fluid_model.thermal_conductivity_for_link(_ls)
         mdot = float(ps.mass_flow_kg_per_s)
+
+        if isinstance(ps, HeatSourceState):
+            U = 0.0
+            T_amb = T_ref  # U=0 so this is unused; kept for structural symmetry with pipe branch
+        else:
+            assert isinstance(ps, PipeState)
+            U = pipe_u_value(ps, fluid_model, _ls, cp, k_fl)
+            T_amb = ps.component.ambient_temperature_c
 
         F = mdot * cp          # convective strength (W/K), signed
         D = k_fl * A / dx      # diffusive conductance (W/K)
@@ -929,3 +930,37 @@ class _LinkAtTemperature:
 
     def __getattr__(self, name: str):
         return getattr(self._link, name)
+
+
+def pipe_u_value(ps, fluid_model, link_at_t, cp: float, k_fl: float) -> float:
+    """Overall U (W/m²K, inner surface) of a pipe for this energy solve, with
+    the inner film computed from the flow when the pipe asks for it
+    (roadmap 6.1); stored on the state for the energy balance and results."""
+    pipe = ps.component
+    h_i = None
+    previous = ps.inner_film_w_per_m2k
+    ps.inner_film_w_per_m2k, ps.inner_film_in_range = None, True
+    if pipe.compute_inner_film:
+        from angelica.closures.wall_heat import inner_film
+        # Properties at the upstream (inlet) temperature, not the pipe's own
+        # mean: with the mean, a viscous oil's film and temperature feed back
+        # on each other (cold → laminar → colder) and the iteration flips
+        # between a laminar and a turbulent state (v1.38.0 review).  Split a
+        # long pipe into segments for a film that follows the cooling.
+        upstream = ps.start_node if float(ps.mass_flow_kg_per_s) >= 0.0 else ps.end_node
+        if upstream.temperature_c is not None:
+            link_at_t = _LinkAtTemperature(ps, float(upstream.temperature_c))
+            cp = fluid_model.specific_heat_for_link(link_at_t)
+            k_fl = fluid_model.thermal_conductivity_for_link(link_at_t)
+        mu = fluid_model.viscosity_for_link(link_at_t)
+        film = inner_film(float(ps.mass_flow_kg_per_s), pipe.diameter_m, mu, cp, k_fl, pipe.length_m)
+        h_i = film.h_w_per_m2k
+        # Under-relaxed in ln h between energy solves: with a viscous oil the
+        # film and the mean temperature feed back (laminar when cold, turbulent
+        # when warm) and the plain fixed point alternates between the two
+        # (v1.38.0 review: 1.3 ↔ 41 W/m²K, not converged).
+        if previous is not None and previous > 0.0 and h_i > 0.0:
+            h_i = math.exp(math.log(previous) + _FILM_RELAXATION * (math.log(h_i) - math.log(previous)))
+        ps.inner_film_w_per_m2k, ps.inner_film_in_range = h_i, film.in_range
+    ps.u_w_per_m2k = pipe.overall_u(h_i)
+    return ps.u_w_per_m2k

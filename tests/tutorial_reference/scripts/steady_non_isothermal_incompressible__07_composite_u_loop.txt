@@ -4,17 +4,17 @@ Converged: True
 Node                         P (bar)    T (°C)
   Source                      12.000     80.00
   Split junction               9.999     79.49
-  Upper-arm midpoint           7.000     78.74
-  Merge junction               4.001     70.99
-  Sink                         2.000     70.55
+  Upper-arm midpoint           7.000     78.16
+  Merge junction               4.001     69.53
+  Sink                         2.000     69.09
 
-Effective U — insulated arm : 0.74 W/m²K
-Effective U — bare arm      : 14.53 W/m²K
-Ratio (bare/insulated)      : 19.6×
+Effective U — insulated arm : 1.32 W/m²K
+Effective U — bare arm      : 16.77 W/m²K
+Ratio (bare/insulated)      : 12.7×
 
 Pipe                                    kg/s      m³/h   T_in °C  T_out °C
   Feed A  1→2 (D100, 200m, U=5.0)    21.5126    90.579      80.0      79.5
-  Upper B 2→3 (D80, 800m, insul)      6.8433    28.814      79.5      78.7
-  Upper C 3→4 (D80, 800m, insul)      6.8433    28.814      78.7      71.0
-  Bare D  2→4 (D100, 1200m, bare)    14.6693    61.766      79.5      71.0
-  Exit E  4→5 (D100, 200m, U=5.0)    21.5126    90.579      71.0      70.6
+  Upper B 2→3 (D80, 800m, insul)      6.8433    28.814      79.5      78.2
+  Upper C 3→4 (D80, 800m, insul)      6.8433    28.814      78.2      69.5
+  Bare D  2→4 (D100, 1200m, bare)    14.6693    61.766      79.5      69.5
+  Exit E  4→5 (D100, 200m, U=5.0)    21.5126    90.579      69.5      69.1

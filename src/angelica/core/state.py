@@ -55,6 +55,10 @@ class PipeState(PressureChangerState):
     # Enthalpy-balance sources set by the energy solve (W, + heats the fluid):
     jt_source_w: float = 0.0        # −ṁ·[h(T̄, P_out) − h(T̄, P_in)]: Joule-Thomson
     gravity_source_w: float = 0.0   # −ṁ·g·Δz: potential energy (flow direction)
+    # Wall heat transfer used by the last energy solve (roadmap 6.1):
+    u_w_per_m2k: float | None = None            # overall U, inner surface
+    inner_film_w_per_m2k: float | None = None   # computed inner film (compute_inner_film)
+    inner_film_in_range: bool = True            # Gnielinski's stated Re/Pr range
 
 
 @dataclass

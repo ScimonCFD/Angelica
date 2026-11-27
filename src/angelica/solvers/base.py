@@ -190,6 +190,21 @@ class BaseSolver(ABC):
         return change
 
     @staticmethod
+    def _wall_warnings(network_state) -> tuple[str, ...]:
+        """Pipes whose computed inner film is outside its correlation's range
+        (roadmap 6.1): Gnielinski's Re/Pr range, the 2300–3000 transition,
+        or laminar flow still developing over the pipe length."""
+        from angelica.core.state import PipeState
+        bad = [link.component.component_id or "pipe" for link in network_state.components
+               if isinstance(link, PipeState) and link.inner_film_w_per_m2k is not None
+               and not link.inner_film_in_range]
+        if not bad:
+            return ()
+        shown = ", ".join(bad[:5]) + (f" and {len(bad) - 5} more" if len(bad) > 5 else "")
+        return (f"inner film outside its correlation's range in {shown} (transition 2300–3000, "
+                "developing laminar flow, or Gnielinski's Re/Pr range)",)
+
+    @staticmethod
     def _compressor_warnings(network_state, fluid, T_default: float = 20.0) -> tuple[str, ...]:
         """Compressors fed with a stream that is not (almost) all gas."""
         from angelica.closures.compressor import CompressorFluid
@@ -237,6 +252,20 @@ class BaseSolver(ABC):
                                         res.t_out_c, res.t_out_isentropic_c, m * res.actual_work_j_per_kg,
                                         m * res.isentropic_work_j_per_kg))
         return tuple(out)
+
+    @staticmethod
+    def _wall_report(link) -> dict:
+        """Overall U (inner surface) and, when computed, the inner film of a
+        pipe in a thermal solve (roadmap 6.1); empty for other links or a
+        pipe without wall heat transfer."""
+        from angelica.core.state import PipeState
+        if not isinstance(link, PipeState) or link.u_w_per_m2k is None or link.u_w_per_m2k <= 0.0:
+            return {}
+        out = {"heat_transfer_coefficient_w_per_m2k": float(link.u_w_per_m2k)}
+        if link.inner_film_w_per_m2k is not None:
+            out["inner_film_coefficient_w_per_m2k"] = float(link.inner_film_w_per_m2k)
+            out["inner_film_in_range"] = bool(link.inner_film_in_range)
+        return out
 
     @staticmethod
     def _standard_rates(link, fluid) -> dict:
@@ -500,7 +529,7 @@ class BaseSolver(ABC):
                 e_pot_w += link.gravity_source_w
                 s_pipe = link.jt_source_w + link.gravity_source_w
                 pipe = link.component
-                U = pipe.u_overall_w_per_m2k
+                U = link.u_w_per_m2k if link.u_w_per_m2k is not None else pipe.u_overall_w_per_m2k
                 if U <= 0.0:
                     continue
                 # With a uniform source S the analytical profile relaxes to

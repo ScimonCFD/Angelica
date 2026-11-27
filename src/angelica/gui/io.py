@@ -443,7 +443,13 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 ambient_temp = _optional_float(
                     component, "ambient_temperature_c", default=20.0
                 ) if _needs_heat else 20.0
-                inner_h  = _optional_float(component, "inner_film_coefficient_w_per_m2k",       default=0.0) if _needs_heat else 0.0
+                # "auto": inner film computed from the flow (roadmap 6.1)
+                auto_film = _needs_heat and component.properties.get(
+                    "inner_film_coefficient_w_per_m2k", "").strip().lower() == "auto"
+                inner_h  = 0.0 if auto_film or not _needs_heat else _optional_float(
+                    component, "inner_film_coefficient_w_per_m2k", default=0.0)
+                burial   = _optional_float(component, "burial_depth_m",                          default=0.0) if _needs_heat else 0.0
+                k_soil   = _optional_float(component, "soil_thermal_conductivity_w_per_mk",      default=0.0) if _needs_heat else 0.0
                 t_wall   = _optional_float(component, "wall_thickness_m",                        default=0.0) if _needs_heat else 0.0
                 k_wall   = _optional_float(component, "wall_thermal_conductivity_w_per_mk",      default=0.0) if _needs_heat else 0.0
                 t_ins    = _optional_float(component, "insulation_thickness_m",                  default=0.0) if _needs_heat else 0.0
@@ -476,6 +482,9 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                             insulation_thickness_m=t_ins,
                             insulation_thermal_conductivity_w_per_mk=k_ins,
                             outer_film_coefficient_w_per_m2k=outer_h,
+                            compute_inner_film=auto_film,
+                            burial_depth_m=burial,
+                            soil_thermal_conductivity_w_per_mk=k_soil,
                             friction_factor_multiplier=_optional_float(component, "friction_factor_multiplier",
                                                                        default=1.0),
                             holdup_multiplier=_optional_float(component, "holdup_multiplier", default=1.0),

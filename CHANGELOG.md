@@ -1,5 +1,69 @@
 # Changelog
 
+## [1.38.0] — 2026-11-27
+
+Roadmap item 6.1: cylindrical layers, buried pipe, computed inner film.
+
+### Changed
+  - **Pipe wall layers are cylindrical.**  The composite U (inner film,
+    wall, insulation, outer film) now adds the resistances of concentric
+    cylinders per unit bore area, 1/U = 1/h_i + Σ r_i·ln(r_out/r_in)/k +
+    r_i/(r_o·h_o), the exact radial-conduction result, instead of the
+    flat-wall sum t/k + 1/h_o.  Physical reason: the flat sum ignores that
+    the heat spreads over a larger area through each layer, and is only
+    valid for layers thin against the radius.  It changes tutorial
+    steady_non_isothermal_incompressible/07_composite_u_loop: the insulated
+    arm (50 mm on an 80 mm bore) U 0.74 → 1.32 W/m²K, the bare arm
+    14.5 → 16.8 W/m²K; merge temperature 71.0 → 69.5 °C.  No other tutorial
+    uses layers.  U is still referred to the bore (π·D·L).
+
+### Added
+  - **Buried pipe**: `Pipe(burial_depth_m=H, soil_thermal_conductivity_w_per_mk=k)`:
+    the soil replaces the outer film with the conduction shape factor of a
+    cylinder below an isothermal surface, S/L = 2π/arccosh(2H/D_o);
+    `ambient_temperature_c` is the ground-surface temperature.
+  - **Computed inner film**: `Pipe(compute_inner_film=True)` (GUI: "auto"
+    in the inner-film field): h_i = Nu·k/D each outer iteration from the
+    pipe's flow and the fluid properties at its upstream (inlet)
+    temperature, under-relaxed in ln h — Gnielinski (1975) for Re ≥ 3000,
+    Nu = 3.66 for Re ≤ 2300, linear in between.  One film per pipe: split a
+    long pipe into segments (GUI segments) for a film that follows the
+    cooling.  With layers it replaces the inner film; alone, it goes in
+    series with the overall U given, 1/U = 1/h_i + 1/U_given.  Out of range
+    (Gnielinski's Pr 0.5–2000 / Re ≤ 5·10⁶, the 2300–3000 transition, or
+    laminar flow still developing over the pipe length, 0.05·Re·Pr·D > L)
+    → `inner_film_in_range=False` in the result and a solve warning.  Works
+    in every thermal solver (liquid, gas, black-oil, compositional;
+    two-phase with homogeneous properties).
+  - **Results**: `ComponentFlowResult.heat_transfer_coefficient_w_per_m2k`
+    (overall U used) and `inner_film_coefficient_w_per_m2k`; both in the
+    profile report.
+  - **GUI**: burial depth and soil conductivity in the pipe's layer fields.
+  - Validation: cylindrical layers and the buried-pipe shape factor are
+    exact (checked analytically, the latter by the method of images); the
+    shape factor against the worked value of the EES heat-transfer library
+    (11.33 m, citing Incropera & DeWitt; Angelica 11.347 m, +0.15 %, the
+    library using the ln(4z/D) form of the same table) — read in a
+    secondary source.  Gnielinski's formula and range read in a secondary
+    source (Wikipedia, citing Incropera & DeWitt); not validated against
+    measurements; agrees with Gnielinski's simplified forms within 13 % and
+    Dittus–Boelter within 10 % (Re 1e4–1e6).
+  - Not modelled: entrance effects (flagged); the film of two-phase flow;
+    soil moisture or frozen ground; transient soil.
+  - Input checks (stricter than before): a wall or insulation thickness
+    without its conductivity, negative or non-finite layer values, a soil
+    conductivity without a burial depth, a burial depth not below the
+    surface, an outer film on a buried pipe, and a given inner film with
+    `compute_inner_film` are now errors that name the pipe (a thickness
+    without conductivity used to be ignored).
+  - Review before the tag: with a viscous oil the film taken at the pipe's
+    mean temperature fed back on it (cold → laminar → colder) and the solve
+    flipped between a laminar and a turbulent state, not converging at
+    4–12 kg/s in a heavy-oil line (now at the inlet temperature and
+    under-relaxed: all 44 probe cases converge); "auto" with an overall U
+    dropped the U; `in_range` was not visible; the error messages did not
+    name the pipe.
+
 ## [1.37.0] — 2026-11-27
 
 Roadmap item 2b.3 (and 2.3): thermodynamic hydrate inhibitors, methanol and MEG.

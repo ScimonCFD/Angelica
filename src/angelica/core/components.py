@@ -58,14 +58,24 @@ class Pipe(PressureChanger):
     heat_transfer_coefficient_w_per_m2k: float = 0.0
     ambient_temperature_c: float = 20.0
     n_thermal_segments: int = 10
-    # Multi-layer composite U (resistances in series).
-    # When any layer parameter is set, these override heat_transfer_coefficient_w_per_m2k.
+    # Multi-layer composite U (resistances in series, cylindrical layers;
+    # roadmap 6.1).  When any layer parameter is set, these override
+    # heat_transfer_coefficient_w_per_m2k.  U is referred to the inner
+    # surface π·D·L, D = diameter_m (the bore).
     inner_film_coefficient_w_per_m2k: float = 0.0
     wall_thickness_m: float = 0.0
     wall_thermal_conductivity_w_per_mk: float = 0.0
     insulation_thickness_m: float = 0.0
     insulation_thermal_conductivity_w_per_mk: float = 0.0
     outer_film_coefficient_w_per_m2k: float = 0.0
+    # Inner film from the flow (Gnielinski / laminar), each outer iteration,
+    # instead of inner_film_coefficient_w_per_m2k.
+    compute_inner_film: bool = False
+    # Buried pipe: depth of the pipe axis below the ground surface and the
+    # soil conductivity; the soil replaces the outer film and
+    # ambient_temperature_c is the ground-surface temperature.
+    burial_depth_m: float = 0.0
+    soil_thermal_conductivity_w_per_mk: float = 0.0
     # Calibration (roadmap 7.3): the friction factor of every correlation and
     # Beggs-Brill's liquid holdup are multiplied by these (1 = the correlation
     # as published).  The holdup factor acts only where there is slip
@@ -82,6 +92,31 @@ class Pipe(PressureChanger):
             raise ValueError(f"Pipe length_m must be positive (got {self.length_m})")
         if not (math.isfinite(self.diameter_m) and self.diameter_m > 0.0):
             raise ValueError(f"Pipe diameter_m must be positive (got {self.diameter_m})")
+        for name in ("inner_film_coefficient_w_per_m2k", "wall_thickness_m", "wall_thermal_conductivity_w_per_mk",
+                     "insulation_thickness_m", "insulation_thermal_conductivity_w_per_mk",
+                     "outer_film_coefficient_w_per_m2k", "burial_depth_m", "soil_thermal_conductivity_w_per_mk",
+                     "heat_transfer_coefficient_w_per_m2k"):
+            v = getattr(self, name)
+            if not (math.isfinite(v) and v >= 0.0):
+                raise ValueError(f"Pipe {self.component_id or ''}: {name} must be finite and ≥ 0 (got {v})")
+        who = f"Pipe {self.component_id}" if self.component_id else "Pipe"
+        for t, k, what in ((self.wall_thickness_m, self.wall_thermal_conductivity_w_per_mk, "wall"),
+                           (self.insulation_thickness_m, self.insulation_thermal_conductivity_w_per_mk,
+                            "insulation")):
+            if t > 0.0 and k <= 0.0:
+                raise ValueError(f"{who}: a {what} thickness needs a {what} thermal conductivity > 0")
+        if self.soil_thermal_conductivity_w_per_mk > 0.0 and self.burial_depth_m <= 0.0:
+            raise ValueError(f"{who}: a soil conductivity needs burial_depth_m > 0")
+        if self.compute_inner_film and self.inner_film_coefficient_w_per_m2k > 0.0:
+            raise ValueError(f"{who}: give inner_film_coefficient_w_per_m2k or compute_inner_film, not both")
+        if self.burial_depth_m > 0.0:
+            if self.soil_thermal_conductivity_w_per_mk <= 0.0:
+                raise ValueError(f"{who}: a buried pipe needs soil_thermal_conductivity_w_per_mk > 0")
+            if self.burial_depth_m <= 0.5 * self.outer_diameter_m:
+                raise ValueError(f"{who}: burial_depth_m ({self.burial_depth_m}) must exceed the outer radius "
+                                 f"({0.5 * self.outer_diameter_m:.4f} m): the axis depth, pipe below the surface")
+            if self.outer_film_coefficient_w_per_m2k > 0.0:
+                raise ValueError(f"{who}: a buried pipe takes the soil instead of an outer film coefficient")
         if abs(self.height_change_m) > self.length_m:
             raise ValueError(
                 f"abs(height_change_m)={abs(self.height_change_m):.4f} exceeds "
@@ -89,25 +124,61 @@ class Pipe(PressureChanger):
             )
 
     @property
-    def u_overall_w_per_m2k(self) -> float:
-        """Effective overall heat-transfer coefficient (W/m²K).
+    def outer_diameter_m(self) -> float:
+        """Diameter over the wall and the insulation."""
+        return self.diameter_m + 2.0 * (self.wall_thickness_m + self.insulation_thickness_m)
 
-        Computes the composite U from inner-film + wall + insulation + outer-film
-        resistances in series (flat-wall approximation, valid for thin walls).
-        Falls back to heat_transfer_coefficient_w_per_m2k when no layer parameters are set.
-        """
-        R = 0.0
-        if self.inner_film_coefficient_w_per_m2k > 0.0:
-            R += 1.0 / self.inner_film_coefficient_w_per_m2k
-        if self.wall_thickness_m > 0.0 and self.wall_thermal_conductivity_w_per_mk > 0.0:
-            R += self.wall_thickness_m / self.wall_thermal_conductivity_w_per_mk
-        if self.insulation_thickness_m > 0.0 and self.insulation_thermal_conductivity_w_per_mk > 0.0:
-            R += self.insulation_thickness_m / self.insulation_thermal_conductivity_w_per_mk
-        if self.outer_film_coefficient_w_per_m2k > 0.0:
-            R += 1.0 / self.outer_film_coefficient_w_per_m2k
-        if R > 0.0:
-            return 1.0 / R
-        return self.heat_transfer_coefficient_w_per_m2k
+    @property
+    def has_layers(self) -> bool:
+        """True when the U comes from the layers (any layer parameter set;
+        a computed inner film alone does not count: it then goes in series
+        with heat_transfer_coefficient_w_per_m2k)."""
+        return (self.inner_film_coefficient_w_per_m2k > 0.0
+                or self.wall_thickness_m > 0.0 or self.insulation_thickness_m > 0.0
+                or self.outer_film_coefficient_w_per_m2k > 0.0 or self.burial_depth_m > 0.0)
+
+    def overall_u(self, inner_film_w_per_m2k: float | None = None) -> float:
+        """Overall heat-transfer coefficient (W/m²K) referred to the inner
+        surface, resistances in series per unit inner area (r_i = D/2):
+
+            1/U = 1/h_i + Σ r_i·ln(r_out/r_in)/k  (wall, insulation)
+                  + r_i/(r_o·h_o)                 (outer film)
+                  or r_i·arccosh(2H/D_o)/k_soil   (buried, axis depth H)
+
+        Cylindrical conduction (exact for concentric layers) and the
+        conduction shape factor of a cylinder below an isothermal surface,
+        S/L = 2π/arccosh(2H/D_o).  ``inner_film_w_per_m2k`` overrides the
+        given inner film (the computed one, roadmap 6.1).  Without any
+        layer parameter: heat_transfer_coefficient_w_per_m2k — in series with
+        the computed inner film when there is one (the given U then stands
+        for the wall and the outside), 1/U = 1/h_i + 1/U_given."""
+        if inner_film_w_per_m2k is not None and not math.isfinite(inner_film_w_per_m2k):
+            raise ValueError(f"inner film coefficient must be finite (got {inner_film_w_per_m2k})")
+        if not self.has_layers:
+            U = self.heat_transfer_coefficient_w_per_m2k
+            if inner_film_w_per_m2k is None or U <= 0.0:
+                return U
+            return 1.0 / (1.0 / inner_film_w_per_m2k + 1.0 / U) if inner_film_w_per_m2k > 0.0 else 0.0
+        h_i = self.inner_film_coefficient_w_per_m2k if inner_film_w_per_m2k is None else inner_film_w_per_m2k
+        r_i = 0.5 * self.diameter_m
+        r = r_i
+        R = 1.0 / h_i if h_i > 0.0 else 0.0
+        for t, k in ((self.wall_thickness_m, self.wall_thermal_conductivity_w_per_mk),
+                     (self.insulation_thickness_m, self.insulation_thermal_conductivity_w_per_mk)):
+            if t > 0.0:
+                R += r_i * math.log((r + t) / r) / k
+                r += t
+        if self.burial_depth_m > 0.0:
+            R += r_i * math.acosh(self.burial_depth_m / r) / self.soil_thermal_conductivity_w_per_mk
+        elif self.outer_film_coefficient_w_per_m2k > 0.0:
+            R += r_i / (r * self.outer_film_coefficient_w_per_m2k)
+        return 1.0 / R if R > 0.0 else 0.0
+
+    @property
+    def u_overall_w_per_m2k(self) -> float:
+        """Overall U (W/m²K, inner surface) with the given inner film; see
+        ``overall_u``.  A computed inner film is applied by the energy solve."""
+        return self.overall_u()
 
 
 @dataclass(frozen=True)

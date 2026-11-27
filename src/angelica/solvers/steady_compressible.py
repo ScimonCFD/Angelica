@@ -246,6 +246,7 @@ class SteadyCompressibleSolver(DiagnosisMixin, BaseSolver):
                     volumetric_flow_m3_per_h=float(3600.0 * link.mass_flow_kg_per_s / density),
                     temperature_in_c=t_in,
                     temperature_out_c=t_out,
+                    **self._wall_report(link),
                 )
             )
 
@@ -274,7 +275,8 @@ class SteadyCompressibleSolver(DiagnosisMixin, BaseSolver):
             ),
             mass_balance_history=mass_balance_history,
             energy_balance_history=energy_balance_history,
-            warnings=iso_warnings + self._compressor_warnings(network_state, fluid_model, T_init),
+            warnings=iso_warnings + self._compressor_warnings(network_state, fluid_model, T_init)
+            + self._wall_warnings(network_state),
             heaters=self._heater_results(network_state, iso is not None),
             compressors=self._compressor_results(network_state, fluid_model, T_init),
         )

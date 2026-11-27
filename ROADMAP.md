@@ -7,7 +7,7 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.37.0, checked against the code)
+## 1. Where Angelica stands (v1.38.0, checked against the code)
 
 | Area | Present today |
 |---|---|
@@ -19,7 +19,7 @@ This file is the working source of truth. Each item is released on its own
 | Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve, gas compressor (ratio, rise or power; isentropic or polytropic efficiency), heater/cooler (fixed duty or outlet temperature, with a duty limit), separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
 | GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI, US and oil-field units (psia, °F, ft, in, lb/s), Excel export; standard-volume rates (Sm³/d, STB/d, MMscf/d) in the exports |
-| Quality | 1042 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
+| Quality | 1074 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
 
 **Validation debt (2026-11-25).**  Most models since v1.19 are validated
 by internal consistency only: of the last ten log summaries, eight say
@@ -244,7 +244,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
     cycles; not converged, diagnosed.  Follows the two decisions above.
 
 ### Stage 6 — heat transfer (item 17)
-- 6.1 Cylindrical layers, buried pipe, computed inner film coefficient.
+- 6.1 **Done in v1.38.0.** Cylindrical layers, buried pipe, computed inner film coefficient.
 
 ### Stage 7 — engineering tools (items 18, 19, 20, 22, 26)
 - 7.1 **Done in v1.31.0.** Oil-field unit system in the GUI; standard-volume rates in results.
@@ -1099,3 +1099,20 @@ Summary:
   reference gases at 30 % methanol, the smaller taken).
 - Tried and dropped: activity from the ice points / UNIFAC (over-predicted
   the depression by up to 6.3 K at 50 % methanol, unsafe side).
+
+### 2026-11-27 — Item 6.1: cylindrical layers, buried pipe, inner film (v1.38.0)
+
+- Layers now cylindrical (exact radial conduction; tutorial 07 composite-U
+  changes, physical reason in the CHANGELOG); buried pipe by the shape
+  factor arccosh(2H/D_o); inner film computed by Gnielinski / 3.66 laminar,
+  every thermal solver; U and h_i in the results and profile report.
+
+Summary:
+- Analytical: cylindrical layers; shape factor by the method of images.
+- Secondary sources: shape factor against the EES library example
+  (+0.15 %); Gnielinski formula and range (Wikipedia citing Incropera).
+- Not validated: inner film against measurements; two-phase film;
+  entrance effects (flagged); soil moisture.
+- Review before the tag: film at the inlet temperature, under-relaxed (it
+  flipped laminar/turbulent with viscous oil at the mean temperature); the
+  film alone goes in series with a given U; range flag and warning.

@@ -890,7 +890,8 @@ def _write_multiphase_sheet(workbook, result) -> None:
 _PROFILE_COLUMNS = ("connection", "component", "from_node", "to_node", "distance_start_m", "distance_end_m",
                     "elevation_start_m", "elevation_end_m", "pressure_in_pa", "pressure_out_pa",
                     "pressure_drop_pa", "temperature_in_c", "temperature_out_c", "mass_flow_kg_per_s",
-                    "flow_pattern", "liquid_holdup", "mixture_velocity_m_per_s", "erosional_velocity_ratio")
+                    "flow_pattern", "liquid_holdup", "mixture_velocity_m_per_s", "erosional_velocity_ratio",
+                    "u_w_per_m2k", "inner_film_w_per_m2k")
 
 
 def _gui_link(component_id: str) -> str | None:
@@ -948,6 +949,8 @@ def profile_table(case, result) -> list[dict]:
             "liquid_holdup": mp.liquid_holdup if mp is not None else None,
             "mixture_velocity_m_per_s": mp.mixture_velocity_m_per_s if mp is not None else None,
             "erosional_velocity_ratio": mp.erosional_velocity_ratio if mp is not None else None,
+            "u_w_per_m2k": getattr(f, "heat_transfer_coefficient_w_per_m2k", None),
+            "inner_film_w_per_m2k": getattr(f, "inner_film_coefficient_w_per_m2k", None),
         })
         d0, z0, prev_end = d1, z1, comp.end_node
     return out

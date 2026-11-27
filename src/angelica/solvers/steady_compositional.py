@@ -536,6 +536,7 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
                     multiphase=self._multiphase_report(link, fluid),
                     **self._hydrate_report(link, fluid, node_temperatures),
                     **self._standard_rates(link, fluid),
+                    **self._wall_report(link),
                 )
             )
 
@@ -599,5 +600,6 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
             compressors=self._compressor_results(network_state, fluid, T_init),
             diagnosis=self._diagnose(failed, network_state, pattern_history),
             warnings=iso_warnings + self._compressor_warnings(network_state, fluid, T_init)
+            + self._wall_warnings(network_state)
             + self._regulator_warnings(network_state),
         )

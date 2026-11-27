@@ -4,9 +4,9 @@ Demonstrates the multi-layer thermal resistance model (composite U) on a
 looped crude-oil pipeline.  The loop splits into two parallel arms:
 
   - Upper arm (2→3→4): mineral-wool–insulated steel pipe
-      U_overall ≈ 0.74 W/m²K
+      U_overall ≈ 1.32 W/m²K
   - Lower arm (2→4):   bare uninsulated steel pipe
-      U_overall ≈ 14.5 W/m²K
+      U_overall ≈ 16.8 W/m²K
 
 Both arms start at the same temperature (80 °C) and arrive at the merge node
 (Node 4) at significantly different exit temperatures, illustrating how
@@ -45,7 +45,10 @@ T_AMB   = 10.0   # °C — cold ambient (buried / exposed)
 
 # ── Composite layer parameters ────────────────────────────────────────────────
 # Insulated: carbon-steel pipe + 50 mm mineral wool + cladding
-# R = 1/500 + 0.008/50 + 0.05/0.04 + 1/10 ≈ 1.352 m²K/W  → U ≈ 0.74 W/m²K
+# Cylindrical layers, per m² of bore (r_i = 0.04 m, roadmap 6.1):
+# R = 1/500 + r_i·ln(48/40)/50 + r_i·ln(98/48)/0.04 + r_i/(0.098·10) ≈ 0.757 m²K/W
+# → U ≈ 1.32 W/m²K  (the flat-wall sum before v1.38.0 gave 0.74: it ignored
+#   that 50 mm of insulation on an 80 mm bore spreads the heat over 2.5× the area)
 _INSULATED = {
     "inner_film_coefficient_w_per_m2k": 500.0,
     "wall_thickness_m": 0.008,
@@ -57,7 +60,8 @@ _INSULATED = {
 }
 
 # Bare: carbon-steel pipe with outer wind-exposed film only
-# R = 1/500 + 0.008/50 + 1/15 ≈ 0.069 m²K/W  → U ≈ 14.5 W/m²K
+# R = 1/500 + r_i·ln(58/50)/50 + r_i/(0.058·15) ≈ 0.0596 m²K/W  (r_i = 0.05 m)
+# → U ≈ 16.8 W/m²K  (flat-wall sum: 14.5)
 _BARE = {
     "inner_film_coefficient_w_per_m2k": 500.0,
     "wall_thickness_m": 0.008,
@@ -75,14 +79,14 @@ def build_case() -> NetworkCase:
              absolute_roughness_m=4.6e-5,
              heat_transfer_coefficient_w_per_m2k=5.0, ambient_temperature_c=T_AMB,
              n_thermal_segments=5, component_id="A"),
-        # Upper arm — insulated (composite U ≈ 0.74 W/m²K)
+        # Upper arm — insulated (composite U ≈ 1.32 W/m²K)
         Pipe(start_node=2, end_node=3, diameter_m=0.08, length_m=800.0,
              absolute_roughness_m=4.6e-5, n_thermal_segments=10,
              component_id="B", **_INSULATED),
         Pipe(start_node=3, end_node=4, diameter_m=0.08, length_m=800.0,
              absolute_roughness_m=4.6e-5, n_thermal_segments=10,
              component_id="C", **_INSULATED),
-        # Lower arm — bare steel (composite U ≈ 14.5 W/m²K)
+        # Lower arm — bare steel (composite U ≈ 16.8 W/m²K)
         Pipe(start_node=2, end_node=4, diameter_m=0.10, length_m=1200.0,
              absolute_roughness_m=4.6e-5, n_thermal_segments=15,
              component_id="D", **_BARE),
@@ -138,16 +142,10 @@ def main() -> None:
         print(f"  {node_labels[nid]:<24}  {p:>8.3f}  {T:>8.2f}")
     print()
 
-    def composite_u(inner_h, t_wall, k_wall, t_ins, k_ins, outer_h):
-        R = 0.0
-        if inner_h > 0: R += 1.0 / inner_h
-        if t_wall > 0 and k_wall > 0: R += t_wall / k_wall
-        if t_ins > 0 and k_ins > 0: R += t_ins / k_ins
-        if outer_h > 0: R += 1.0 / outer_h
-        return 1.0 / R if R > 0 else 0.0
-
-    U_ins  = composite_u(500, 0.008, 50.0, 0.05, 0.04, 10.0)
-    U_bare = composite_u(500, 0.008, 50.0, 0.00, 0.00, 15.0)
+    # Overall U of each arm from its layers (cylindrical, referred to the bore).
+    pipes = {c.component_id: c for c in case.components}
+    U_ins = pipes["B"].u_overall_w_per_m2k
+    U_bare = pipes["D"].u_overall_w_per_m2k
     print(f"Effective U — insulated arm : {U_ins:.2f} W/m²K")
     print(f"Effective U — bare arm      : {U_bare:.2f} W/m²K")
     print(f"Ratio (bare/insulated)      : {U_bare/U_ins:.1f}×")

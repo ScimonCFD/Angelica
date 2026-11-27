@@ -653,6 +653,7 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
                     multiphase=self._multiphase_report(link, effective_fluid),
                     **self._hydrate_report(link, effective_fluid, node_temperatures),
                     **self._standard_rates(link, effective_fluid),
+                    **self._wall_report(link),
                 )
             )
 
@@ -668,6 +669,7 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
         if compressor_change >= COMPRESSOR_RISE_TOLERANCE:
             failed.append("compressor power (pressure rise not settled)")
         warnings = iso_warnings + self._compressor_warnings(network_state, effective_fluid, T_init) \
+            + self._wall_warnings(network_state) \
             + self._range_warnings(case, node_temperatures, network_state) \
             + self._regulator_warnings(network_state)
         failed += [f"regulator {cid} keeps switching state" for cid in self._regulators_stuck(network_state)]

@@ -230,6 +230,7 @@ class SteadyNonIsothermalIncompressibleSolver(DiagnosisMixin, BaseSolver):
                     ),
                     temperature_in_c=node_temperatures.get(link.start_node.node_id),
                     temperature_out_c=node_temperatures.get(link.end_node.node_id),
+                    **self._wall_report(link),
                 )
             )
 
@@ -254,6 +255,7 @@ class SteadyNonIsothermalIncompressibleSolver(DiagnosisMixin, BaseSolver):
             mass_balance_history=mass_balance_history,
             energy_balance_history=energy_balance_history,
             heaters=self._heater_results(network_state),
+            warnings=self._wall_warnings(network_state),
         )
 
     @staticmethod

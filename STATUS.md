@@ -28,6 +28,47 @@ maintainer y recoge lo que espera su decisión.
 
 ## Releases
 
+### v1.38.0 — Ítem 6.1: capas cilíndricas, tubería enterrada, coeficiente interior calculado
+
+**Qué cambió.**  Las capas de la pared (película interior, pared,
+aislante, película exterior) se suman como cilindros concéntricos, no como
+pared plana.  Esto cambia el tutorial 07 (U compuesto): brazo aislado (50 mm
+sobre 80 mm) U 0.74 → 1.32 W/m²K, brazo desnudo 14.5 → 16.8 W/m²K,
+temperatura de mezcla 71.0 → 69.5 °C.  Razón física: la suma plana ignora
+que el calor se reparte en más área en cada capa; solo vale para capas
+finas frente al radio.  Nuevo: tubería enterrada (profundidad del eje y
+conductividad del suelo; factor de forma arccosh(2H/D_o), D_o sobre el
+aislante); coeficiente interior calculado del flujo (Gnielinski para
+Re ≥ 3000, Nu = 3.66 laminar, lineal entre ambos) a la temperatura de
+entrada del tubo y sub-relajado, en los cuatro solvers térmicos; fuera de
+rango (transición, laminar en desarrollo, rango de Gnielinski) lo marca el
+resultado y un aviso; U y h_i en
+los resultados y en el informe de perfiles; GUI ("auto" en la película
+interior, profundidad y k del suelo).
+
+**Validado analíticamente.**  Capas cilíndricas (solución exacta);
+factor de forma por el método de imágenes (1e-12).
+
+**Fuente secundaria.**  Factor de forma frente al ejemplo de la librería
+EES (cita Incropera y DeWitt): 11.33 m frente a 11.347 m (+0.15 %; la
+librería usa la forma ln(4z/D) de la misma tabla).  Fórmula y rango de
+Gnielinski leídos en Wikipedia (cita Incropera).
+
+**No validado / supuesto.**  Coeficiente interior frente a medidas;
+película de flujo bifásico (propiedades homogéneas); efectos de entrada;
+humedad o congelación del suelo; suelo transitorio.  La transición
+2300–3000 es una interpolación lineal (no hay correlación).  Un solo
+coeficiente por tubo (a la temperatura de entrada): segmentar los tubos
+largos.  Validación de entradas más estricta (espesor sin conductividad,
+etc. ahora es error).
+
+**Revisión antes del tag.**  Con aceite viscoso el coeficiente tomado a la
+temperatura media del tubo se realimentaba y el solve oscilaba entre
+laminar y turbulento sin converger (4–12 kg/s); ahora a la temperatura de
+entrada y sub-relajado (44/44 casos convergen).  "auto" con U dado
+descartaba la U (ahora en serie); el indicador de rango no se veía (ahora
+en el resultado y en avisos).
+
 ### v1.37.0 — Ítem 2b.3: inhibidores de hidratos, metanol y MEG
 
 **Qué cambió.**  Módulo `inhibitor`: actividad del agua en soluciones de

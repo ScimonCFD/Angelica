@@ -5231,12 +5231,14 @@ class NetSimGui:
             ).grid(row=row, column=0, columnspan=2, pady=(2, 2))
             row += 1
             composite_fields = [
-                ("inner_film_coefficient_w_per_m2k",        "h_i — Inner film (W/m²K)"),
+                ("inner_film_coefficient_w_per_m2k",        "h_i — Inner film (W/m²K or auto)"),
                 ("wall_thickness_m",                         "t_wall — Wall thickness (m)"),
                 ("wall_thermal_conductivity_w_per_mk",       "k_wall — Wall k (W/m·K)"),
                 ("insulation_thickness_m",                   "t_ins — Insulation thick. (m)"),
                 ("insulation_thermal_conductivity_w_per_mk", "k_ins — Insulation k (W/m·K)"),
                 ("outer_film_coefficient_w_per_m2k",         "h_o — Outer film (W/m²K)"),
+                ("burial_depth_m",                           "H — Burial depth to axis (m)"),
+                ("soil_thermal_conductivity_w_per_mk",       "k_soil — Soil k (W/m·K)"),
             ]
             for key, label in composite_fields:
                 ttk.Label(properties_frame, text=label).grid(
