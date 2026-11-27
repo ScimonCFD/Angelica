@@ -1,5 +1,55 @@
 # Changelog
 
+## [1.36.0] — 2026-11-27
+
+Roadmap item 2b.2: hydrate as a phase — how much hydrate forms.
+
+### Added
+  - **`angelica.properties.hydrate_flash.hydrate_partition(names, zs, T, P)`**:
+    splits a feed with water into fluid and one hydrate structure at
+    equilibrium (equal water chemical potential in hydrate and fluid, the
+    minimum of the Gibbs energy with van der Waals–Platteeuw).  Returns the
+    water and the guests in the hydrate, the fluid left (free water, water
+    vapour, each hydrocarbon), the hydration number, and what stopped the
+    growth: `"equilibrium"` (the gas lost its best formers and sits on its
+    own hydrate curve), `"water"` (free water used up; the gas ends on its
+    hydrate–vapour curve of 2b.1 — or, if the hydrocarbon has no vapour,
+    all the water is in the hydrate with it still stable), `"formers"` (a
+    former used up with the hydrate still stable, e.g. pure methane) or
+    `"none"`.
+  - Works for gas–water and oil–gas–water feeds (the hydrocarbons may be
+    two-phase; non-formers such as heptane stay in the fluid).  Examples at
+    70 bar: C1/C2/C3 gas with 95 % water at 12 °C forms 0.0888 mol of
+    hydrate water per mol feed, the gas's propane falls from 3.0 % to 0.27 %;
+    methane with 90 % water at 2 °C is consumed entirely (hydration number
+    5.895, sI; `other_structure_stable` is set: sII methane is also below
+    its curve).
+  - Compared, not validated: methane hydration number against Sum,
+    Burruss & Sloan (1997), 6.04 ± 0.03 — read in a secondary source (a
+    search excerpt of the abstract; conditions not read): the model gives
+    5.895 (−2.4 %, about 5× their stated uncertainty).
+    Consistency: the incipient amount is zero at the vdW-P curve and grows
+    linearly below it; water and former mass balances close to 1e-12; the
+    leftover gas is at its own hydrate (or hydrate–vapour) condition at T
+    within 1e-5 K.
+  - Limits: one hydrate structure (if the other is also stable at the end,
+    `other_structure_stable` is set; a two-hydrate equilibrium is not
+    computed, so the result is then not the Gibbs minimum, and near where
+    the other structure takes over the amount varies steeply: methane with
+    0.5 % propane and 95 % water at 70 bar, 0.300 mol at 6.85 °C, 0.160 at
+    6.90 °C); the free-water model gives a dense gas the EOS labels liquid
+    no water vapour, so the amount jumps there (C1/C2/C3 with 0.05 % water
+    at 15 °C: 3.79e-4 mol at 130 bar, 5.0e-4 at 140 bar); a feed with very
+    little gas (≤ 1e-5) takes 13–27 s; no ice (T ≥ 0 °C, as the vdW-P
+    curve); compositional only —
+    a black-oil fluid has no composition to split.  API only: no solver,
+    GUI or tutorial result changes.
+  - Review before the tag: a hydrocarbon without vapour (liquid propane or
+    CO2, a dense gas) was labelled "equilibrium" with G < 0 (now "water");
+    with little gas the bisection stopped at 1e-10 of the water instead of
+    1e-10 of the hydrate, leaving 0.4 % of the gas (now bracketed by
+    decades); a failed phase split no longer silently assumes all vapour.
+
 ## [1.35.0] — 2026-11-27
 
 Roadmap item 2b.1: water content of the gas, water dew point, hydrate check

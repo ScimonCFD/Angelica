@@ -28,6 +28,42 @@ maintainer y recoge lo que espera su decisión.
 
 ## Releases
 
+### v1.36.0 — Ítem 2b.2: el hidrato como fase (cantidad formada)
+
+**Qué cambió.**  `hydrate_partition(names, zs, T, P)`: reparte una
+alimentación con agua entre fluido e hidrato en equilibrio (igual
+potencial químico del agua, mínimo de Gibbs con vdW-P).  Da el agua y los
+huéspedes en el hidrato, el fluido restante (agua libre, vapor de agua,
+cada hidrocarburo), el número de hidratación y qué detuvo el crecimiento:
+equilibrio, agua agotada, formador agotado o ninguno.  Vale para gas–agua
+y petróleo–gas–agua (hidrocarburos bifásicos; el heptano no entra).  Solo
+API: ningún resultado de solver, GUI o tutorial cambia.
+
+**Comparado, no validado.**  Número de hidratación del metano: Sum,
+Burruss y Sloan (1997), 6.04 ± 0.03 (extracto del resumen vía buscador;
+condiciones no leídas).  Modelo: 5.895 a 2 °C y 70 bar (−2.4 %, unas 5
+veces su incertidumbre).  Discrepancia registrada.
+
+**Validado por consistencia.**  La cantidad incipiente es cero en la curva
+vdW-P y crece linealmente debajo (0.198 mol/K); balances de agua y de cada
+formador cierran a 1e-12; el gas restante queda en su propia curva de
+hidrato (o hidrato–vapor) a T, a 1e-5 K.
+
+**No validado / supuesto.**  Una sola estructura (si la otra también es
+estable al final se marca `other_structure_stable`; no se calcula el
+equilibrio con dos hidratos: entonces el resultado no es el mínimo de
+Gibbs y cerca del cambio de estructura la cantidad varía bruscamente,
+0.300 → 0.160 mol entre 6.85 y 6.90 °C en un caso); un gas denso que la
+EOS etiqueta líquido no lleva vapor de agua y la cantidad salta (+32 %
+entre 130 y 140 bar en un caso); con muy poco gas (≤ 1e-5) tarda 13–27 s;
+sin hielo (T ≥ 0 °C); solo composicional (black-oil no tiene composición
+que repartir).
+
+**Revisión antes del tag.**  Hidrocarburo sin vapor (propano o CO2
+líquidos, gas denso) salía "equilibrium" con G < 0 (ahora "water"); con
+poco gas la bisección dejaba 0.4 % del gas sin consumir (ahora se acota
+por décadas); un fallo del flash ya no supone todo vapor en silencio.
+
 ### v1.35.0 — Ítem 2b.1: contenido de agua del gas e hidratos con gas no saturado
 
 **Qué cambió.**  Módulo `water_content` (contenido de agua en ppm, mg/Sm³

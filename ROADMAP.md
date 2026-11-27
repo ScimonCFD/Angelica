@@ -7,7 +7,7 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.35.0, checked against the code)
+## 1. Where Angelica stands (v1.36.0, checked against the code)
 
 | Area | Present today |
 |---|---|
@@ -19,7 +19,7 @@ This file is the working source of truth. Each item is released on its own
 | Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve, gas compressor (ratio, rise or power; isentropic or polytropic efficiency), heater/cooler (fixed duty or outlet temperature, with a duty limit), separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
 | GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI, US and oil-field units (psia, °F, ft, in, lb/s), Excel export; standard-volume rates (Sm³/d, STB/d, MMscf/d) in the exports |
-| Quality | 1001 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
+| Quality | 1012 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
 
 **Validation debt (2026-11-25).**  Most models since v1.19 are validated
 by internal consistency only: of the last ten log summaries, eight say
@@ -128,7 +128,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   *Done when:* a gas at its water saturation reproduces the current curve,
   and a dehydrated gas shifts the hydrate temperature down consistently with
   its water dew point.
-- 2b.2 Phase calculation with hydrate (and ice) as additional phases
+- 2b.2 **Done in v1.36.0 (hydrate; ice not included).** Phase calculation with hydrate (and ice) as additional phases
   (Gibbs minimisation): amount of hydrate formed, water-limited cases,
   composition change. *Done when:* with excess water the incipient boundary
   equals the vdW-P curve; mass balance of water and formers closes.
@@ -1053,3 +1053,22 @@ Summary:
   (`hydrate_curve_at_water_content`); out-of-range inputs raise; pipe test
   checks the exact value against a direct call.
 
+### 2026-11-27 — Item 2b.2: hydrate as a phase (v1.36.0)
+
+- `hydrate_flash.hydrate_partition`: equilibrium split of a feed with water
+  into fluid and one hydrate structure; limited by equilibrium, water or
+  formers.  Newton in ln n for the fluid at a given hydrate water ξ,
+  bisection plus a secant step on ξ.
+
+Summary:
+- Compared, not validated (recorded discrepancy): methane hydration number
+  5.895 against 6.04 ± 0.03 (Sum et al. 1997, via a search excerpt): −2.4 %.
+- Review before the tag: liquid/dense hydrocarbon labelled "water" (was
+  "equilibrium" with G < 0); bracket by decades for little gas; no silent
+  all-vapour fallback.  Free-water model limit: a dense gas labelled liquid
+  carries no water vapour, the amount jumps (+32 % between 130 and 140 bar
+  in one case).
+- Validated by consistency: incipient amount zero at the vdW-P curve;
+  mass balances to 1e-12; leftover gas at its own hydrate condition.
+- Not done: ice phase; two hydrate structures at once (flagged);
+  black-oil (no composition).
