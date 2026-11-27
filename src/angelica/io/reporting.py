@@ -82,6 +82,27 @@ def export_solve_result_csv(result, output_path: str) -> None:
         _write_component_mass_flows_csv(writer, result)
         _write_phase_report_csv(writer, result)
         _write_multiphase_csv(writer, result)
+        heaters = _heater_rows(result)
+        if heaters:
+            writer.writerow([])
+            writer.writerow(["Heaters / coolers"])
+            for row in heaters:
+                writer.writerow(row)
+
+
+def _heater_rows(result) -> list[list]:
+    """Header and one row per heater/cooler (empty when there is none)."""
+    heaters = getattr(result, "heaters", ())
+    if not heaters:
+        return []
+    rows: list[list] = [["Heater", "State", "Duty (kW)", "T_in (°C)", "T_out (°C)", "T_out set (°C)",
+                         "Mass flow (kg/s)"]]
+    for h in heaters:
+        rows.append([h.component_id, h.state, round(h.duty_w / 1e3, 4), round(h.inlet_temperature_c, 4),
+                     round(h.outlet_temperature_c, 4),
+                     "" if h.outlet_temperature_spec_c is None else h.outlet_temperature_spec_c,
+                     round(h.mass_flow_kg_per_s, 4)])
+    return rows
 
 
 def _notes_rows(result) -> list[list]:
@@ -180,6 +201,11 @@ def export_solve_result_workbook(result, output_path: str) -> None:
         flows_sheet.append(row)
 
     _write_balance_sheet(workbook, result)
+    heaters = _heater_rows(result)
+    if heaters:
+        sheet = workbook.create_sheet("Heaters")
+        for row in heaters:
+            sheet.append(row)
     _write_compositions_sheet(workbook, result)
     _write_component_mass_flows_sheet(workbook, result)
     _write_phase_report_sheet(workbook, result)
@@ -369,6 +395,13 @@ def print_solve_result(result, detailed: bool = False) -> None:
     if getattr(result, "separators", ()):
         print("")
         _print_separator_table(result.separators)
+    if getattr(result, "heaters", ()):
+        print("")
+        print("Heaters / coolers")
+        for h in result.heaters:
+            spec = "" if h.outlet_temperature_spec_c is None else f" (set {h.outlet_temperature_spec_c:g} °C)"
+            print(f"  {h.component_id}: {h.state}, duty {h.duty_w / 1e3:.2f} kW, "
+                  f"{h.inlet_temperature_c:.2f} → {h.outlet_temperature_c:.2f} °C{spec}")
     if result.turbulent_metrics:
         print("")
         _print_final_turbulent_metrics(result.turbulent_metrics[-1])

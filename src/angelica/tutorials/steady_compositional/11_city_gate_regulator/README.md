@@ -18,7 +18,9 @@ CO2 0.01.  Ground at 10 °C, U = 2 W/(m²·K).
   (a fitting, K = 5); when the outlet side is at or above 20 bar it is
   closed.  See black-oil tutorial 15 for the three states.
 - The gas crosses it at constant enthalpy (Peng-Robinson): it cools.
-- The heater is a fixed-duty `HeatSource` before the regulator.
+- The heater is a `HeatSource` before the regulator: a fixed duty (Part B)
+  or set by its outlet temperature, up to a maximum duty (Part D).  Its
+  outlet follows from the gas's real enthalpy, h_out = h_in + Q/ṁ.
 
 ## Results
 
@@ -28,16 +30,16 @@ CO2 0.01.  Ground at 10 °C, U = 2 W/(m²·K).
   the Peng-Robinson isenthalpic expansion of this gas).
 - It reaches the consumers at −23.6 °C: the distribution line expands it
   further.
-- Energy balance residual 0.003 kW.
+- Energy balance residual 0.006 kW.
 
 **Part B — preheating.**
 
 | Heater (kW) | T in (°C) | T out (°C) | Flow (kg/s) |
 |---|---|---|---|
 | 0 | 11.44 | −15.79 | 7.589 |
-| 200 | 21.59 | −3.68 | 7.386 |
-| 400 | 32.50 | 9.14 | 7.191 |
-| 600 | 44.18 | 22.65 | 7.004 |
+| 200 | 21.57 | −3.70 | 7.386 |
+| 400 | 32.42 | 9.05 | 7.192 |
+| 600 | 43.98 | 22.41 | 7.007 |
 
 About 260 kW keeps the regulator outlet at 0 °C.  The warmer gas is less
 dense, so the distribution line passes less mass at the same pressures.
@@ -58,6 +60,25 @@ dense, so the distribution line passes less mass at the same pressures.
   the gas more, and colder gas is denser.
 - Below about 36 bar the transmission line cannot deliver the demand at 20
   bar: the regulator is wide open and the consumers get less.
+
+**Part D — the heater set by its outlet temperature** (45 °C, at most
+600 kW).
+
+| Supply (bar) | State | Duty (kW) | T heater out (°C) | T regulator out (°C) |
+|---|---|---|---|---|
+| 40 | at outlet temperature | 556.5 | 45.00 | 40.42 |
+| 50 | at outlet temperature | 573.9 | 45.00 | 34.35 |
+| 60 | at outlet temperature | 594.6 | 45.00 | 28.82 |
+| 70 | duty limited | 600.0 | 43.98 | 22.41 |
+
+- The solver finds the duty that brings the gas to 45 °C.
+- At 70 bar that needs more than 600 kW: the heater works at its maximum and
+  the gas leaves at 43.98 °C — the same state as the 600 kW fixed duty of
+  Part B.
+- Up to v1.28.0 the heater's outlet came from a constant heat capacity, so a
+  fixed duty in a gas did not close the energy balance (0.39 % at 500 kW in
+  this case); Part B's temperatures changed by up to 0.24 K when that was
+  fixed in v1.29.0.
 
 ## Limitations
 

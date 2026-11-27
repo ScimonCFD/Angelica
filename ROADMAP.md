@@ -7,7 +7,7 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.28.0, checked against the code)
+## 1. Where Angelica stands (v1.29.0, checked against the code)
 
 | Area | Present today |
 |---|---|
@@ -16,10 +16,10 @@ This file is the working source of truth. Each item is released on its own
 | Heat transfer | Thermal or isothermal (every mode; isothermal option for gas, black-oil and compositional since v1.28.0); fixed U or series layers (flat-wall form); Joule-Thomson, friction heating, latent heat and potential energy along pipes; isenthalpic valves; closed global energy balance |
 | Flow assurance | Hydrate curve (vdW-Platteeuw, compositional) and gas-gravity chart (black-oil); hydrate margin per pipe |
 | Wells | `WellInflow` and `Well`: IPR linear, Vogel, Fetkovich, gas back-pressure; tubing Beggs-Brill, Hagedorn-Brown or Gray; Ramey temperature profile; black-oil and compositional fluids; gas lift; dead / bistable well states |
-| Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve (also used as a "compressor"), fixed-duty heater/cooler, separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
+| Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve (also used as a "compressor"), heater/cooler (fixed duty or outlet temperature, with a duty limit), separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
 | GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI and US units (ft, psi, lb/s), Excel export |
-| Quality | 832 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
+| Quality | 867 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
 
 **Validation debt (2026-11-25).**  Most models since v1.19 are validated
 by internal consistency only: of the last ten log summaries, eight say
@@ -63,7 +63,7 @@ or more (human-equivalent).
 | 13 | Separator (phase split node, gas / oil / water outlets) | Done in v1.26.0 (`SeparatorOutlet`) | A | M | Mass and component balance; outlet streams equal an independent `thermo` flash |
 | 14 | Compressor (polytropic / isentropic, efficiency, power, discharge T; curves) | Pump head curve only | A | M | GPSA *Engineering Data Book* §13 examples; isentropic limit against EOS entropy |
 | 15 | Pressure regulator / back-pressure controller | Done in v1.27.0 (`PressureRegulator`) | B | M | Analytical: set-point held when feasible, open or closed otherwise |
-| 16 | Heater/cooler with outlet-temperature spec | Fixed duty only | B | S | Energy balance |
+| 16 | Heater/cooler with outlet-temperature spec | Done in v1.29.0 (`HeatSource(outlet_temperature_c=…)`) | B | S | Energy balance; water duty against NIST enthalpies |
 | 17 | Buried pipe, cylindrical layers, computed inner film coefficient, water/air surroundings | Flat-wall layers, user film coefficients | B | M | Conduction shape factor (Incropera); GPSA / Gnielinski; cylindrical-wall analytic solution |
 | 18 | Sensitivity / case-study runner (nodal analysis plots) | Scripts only | A | M | Reproduces tutorial 12 part C and tutorial sweeps from the GUI |
 | 19 | Line sizing | None | C | S | Inverse of a solved case |
@@ -177,7 +177,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - 5.1 **Done in v1.26.0.** Separator node with gas / liquid (/ water) outlets (`SeparatorOutlet`).
 - 5.2 Compressor: polytropic or isentropic with efficiency; power and
   discharge temperature; specified ΔP, pressure ratio or power.
-- 5.3 Heater/cooler with outlet-temperature spec.
+- 5.3 **Done in v1.29.0.** Heater/cooler with outlet-temperature spec (and maximum duty).
 - 5.4 **Done in v1.27.0.** Pressure regulator (reducing and back-pressure).
 
 - Known limitations (recorded 2026-11-25, from the v1.26.1 review):
@@ -225,6 +225,20 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
     correlation with low-temperature data (to be read in a source first);
     (d) refuse a solve below the range.  The numerical floor −6.7 °C (no
     overflow) stays whatever the choice.
+
+  - **Network at rest with a square-law device (recorded 2026-11-27,
+    v1.29.0).**  With every boundary at the same pressure, a heater,
+    fitting or choke (ΔP ∝ v²: infinite conductance at v = 0) turns the
+    pressure differences left at the stopping tolerance into flow (water,
+    K = 135: 0.2 kg/s while the pipes carry 10⁻⁵), and the mass criterion
+    is never met.  Reported as not converged with the criteria named, no
+    exception (an exception in the gas solver was fixed).  A remedy would
+    be a linear (viscous) law below a small velocity — a model change, not
+    done.
+  - **Black-oil cooled below about 0 °C (recorded 2026-11-27, v1.29.0).**  A
+    cooler set to −5 … −20 °C in the two-loop test network: the
+    extrapolated viscosity turns the export line laminar and the outer loop
+    cycles; not converged, diagnosed.  Follows the two decisions above.
 
 ### Stage 6 — heat transfer (item 17)
 - 6.1 Cylindrical layers, buried pipe, computed inner film coefficient.
@@ -912,4 +926,33 @@ Summary:
 - Validated by consistency: everything above.
 - Not validated: looped gas and multiphase networks against a published
   case; mixture phase envelopes against measured data.
+
+### 2026-11-27 — Item 5.3: heater/cooler by outlet temperature (v1.29.0)
+
+- `HeatSource(outlet_temperature_c, max_duty_w)` in every thermal mode; duty
+  = ṁ·Δh with the fluid's enthalpy; "duty limited" beyond the maximum;
+  `SolveResult.heaters`; GUI fields and canvas label; CSV/workbook.
+- Black-oil tutorial 16 (heater station), compositional tutorial 11 Part D.
+- Found on the way, fixed: fixed-duty heaters in gases did not conserve
+  energy (0.39 % at 500 kW, constant cp); a transparent heater stalled a
+  water network (coupling cap); a gas network at rest with a fitting raised
+  (starved junction, −310 °C); gas and thermal-liquid solvers gave no
+  diagnosis.
+- Recorded: network at rest with a square-law device; black-oil cooled
+  below ~0 °C.
+- Review before the tag: my first coupling fix (0.01 m/s floor) broke a
+  heater after a dead well (phantom 0.025 kg/s) — floor set to 1e-4 m/s,
+  test added; the gas fixed-duty error was 7.1 % (methane) and 5.9 %
+  (condensate) in the test network, not only 0.39 %; node-after-heater
+  accuracy is ≈ 1e-3 × T(°C), not the 0.004 K of one network.
+
+Summary:
+- Validated against data read in a source: water duty against NIST
+  WebBook enthalpies (+0.048 %, −0.044 %; tolerance 0.51 % from the NIST cp
+  spread).
+- Validated by consistency: outlet = set point; duty = ṁ·Δh (7.4e-6);
+  energy balance ≤ 1.9e-4 %; duty limit; reversed flow; set points from
+  −60 to 300 °C.
+- Not validated: duties in gas, black-oil and compositional fluids against
+  a published heater (they rest on each fluid's enthalpy model).
 

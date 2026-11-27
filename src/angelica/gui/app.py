@@ -3226,6 +3226,22 @@ class NetSimGui:
         )
         self.canvas.tag_lower("link")
 
+        # Heater/cooler duty from the latest result (red when the outlet
+        # temperature set point needs more than the maximum duty)
+        if self.latest_result is not None:
+            prefix = f"link_{link.link_id}_heat_source_"
+            for h in getattr(self.latest_result, "heaters", ()):
+                if h.component_id.startswith(prefix) and h.state != "no flow":
+                    limited = h.state == "duty limited"
+                    self.canvas.create_text(
+                        mid_x,
+                        mid_y - 12,
+                        text=f"Q = {h.duty_w / 1e3:.1f} kW" + ("  (duty limited)" if limited else ""),
+                        font=("TkDefaultFont", 8, "bold"),
+                        fill="#d03030" if limited else "#c0397d",
+                        tags=("link", f"link_{link.link_id}"),
+                    )
+
         # Erosional-velocity warning (API RP 14E) for two-phase links
         ero = [mp.erosional_velocity_ratio for _l, mp in self._get_link_multiphase(link)]
         if ero and max(ero) > 1.0:
@@ -5400,6 +5416,8 @@ class NetSimGui:
         dp_var = tk.StringVar(value=component.properties.get("pressure_drop_pa", "0.0"))
         rated_mdot_var = tk.StringVar(value=component.properties.get("rated_mass_flow_kg_per_s", "1.0"))
         n_segs_var = tk.StringVar(value=component.properties.get("n_thermal_segments", "10"))
+        outlet_t_var = tk.StringVar(value=component.properties.get("outlet_temperature_c", ""))
+        max_duty_var = tk.StringVar(value=component.properties.get("max_duty_w", ""))
 
         row = 1
         ttk.Label(properties_frame, text=f"Diameter ({self._unit_label('diameter')})").grid(
@@ -5412,6 +5430,20 @@ class NetSimGui:
 
         ttk.Label(properties_frame, text="Power (W)").grid(row=row, column=0, sticky="w", pady=4)
         ttk.Entry(properties_frame, textvariable=power_var, width=18).grid(
+            row=row, column=1, sticky="ew", pady=4
+        )
+        row += 1
+
+        ttk.Label(properties_frame, text="Outlet T (°C, blank = use power)").grid(
+            row=row, column=0, sticky="w", pady=4)
+        ttk.Entry(properties_frame, textvariable=outlet_t_var, width=18).grid(
+            row=row, column=1, sticky="ew", pady=4
+        )
+        row += 1
+
+        ttk.Label(properties_frame, text="Max duty (W, blank = no limit)").grid(
+            row=row, column=0, sticky="w", pady=4)
+        ttk.Entry(properties_frame, textvariable=max_duty_var, width=18).grid(
             row=row, column=1, sticky="ew", pady=4
         )
         row += 1
@@ -5483,6 +5515,8 @@ class NetSimGui:
                 n_segs_var,
                 components_list,
                 properties_frame,
+                outlet_t_var,
+                max_duty_var,
             ),
         ).pack(side="right")
 
@@ -5498,10 +5532,30 @@ class NetSimGui:
         n_segs_var: tk.StringVar,
         components_list: tk.Listbox,
         properties_frame: ttk.LabelFrame,
+        outlet_t_var: tk.StringVar | None = None,
+        max_duty_var: tk.StringVar | None = None,
     ) -> None:
+        outlet_t = outlet_t_var.get().strip() if outlet_t_var is not None else ""
+        max_duty = max_duty_var.get().strip() if max_duty_var is not None else ""
+        try:
+            if outlet_t:
+                t = float(outlet_t)
+                if not math.isfinite(t) or t <= -273.15:
+                    raise ValueError(outlet_t)
+            if max_duty and not float(max_duty) >= 0.0:
+                raise ValueError(max_duty)
+        except ValueError:
+            messagebox.showerror(
+                "Invalid heater",
+                "Outlet temperature must be a finite number above −273.15 °C (or blank), "
+                "and the maximum duty a number ≥ 0 (or blank).",
+            )
+            return
         properties = {
             "diameter_m": self._field_to_si("diameter_m", diameter_var.get().strip()),
             "power_w": power_var.get().strip(),
+            "outlet_temperature_c": outlet_t,
+            "max_duty_w": max_duty,
             "pressure_drop_mode": mode_var.get().strip(),
             "pressure_drop_pa": dp_var.get().strip(),
             "rated_mass_flow_kg_per_s": rated_mdot_var.get().strip(),

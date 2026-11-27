@@ -28,6 +28,66 @@ maintainer y recoge lo que espera su decisión.
 
 ## Releases
 
+### v1.29.0 — Ítem 5.3: calentador/enfriador por temperatura de salida
+
+**Qué cambió.**
+- `HeatSource(outlet_temperature_c=…, max_duty_w=…)` en los cuatro modos
+  térmicos: el solver calcula el duty, ṁ·(h_out − h_in) con la entalpía del
+  fluido (calor latente incluido en composicional), calentando o enfriando
+  según haga falta.  Por encima de `max_duty_w` trabaja al máximo y el
+  resultado dice "duty limited".  Resultados en `SolveResult.heaters`, en
+  el informe, CSV, Excel y en el canvas de la GUI.
+- Tutorial black-oil 16 (estación de calentamiento a mitad de un oleoducto
+  de 50 km) y Parte D del tutorial composicional 11 (precalentador del city
+  gate a 45 °C con 600 kW como máximo).
+- Corregidos por el camino (eran previos):
+  - un calentador de duty fijo en gas no conservaba la energía (salida con
+    cp constante): con 500 kW en la red de prueba, 7.1 % de error en metano
+    y 5.9 % en el condensado (salida de la red 1.06 y 1.67 K demasiado
+    caliente); 0.39 % en el tutorial 11.  Ahora ≤ 4.3·10⁻⁴ %.  Black-oil no
+    cambia.  El tutorial 11 Parte B cambia hasta 0.24 K;
+  - un calentador sin caída de presión bloqueaba una red de agua (246 kg/s
+    por el calentador en una línea de 64);
+  - una red de gas en reposo con un accesorio lanzaba una excepción
+    (−310 °C en un nodo);
+  - los solvers de gas y de líquido térmico no daban diagnóstico al no
+    converger.
+
+**Validado contra fuente.**  Duty del agua frente a entalpías de NIST
+WebBook a 0.5 MPa: +0.048 % (20 → 60 °C) y −0.044 % (80 → 10 °C);
+tolerancia 0.51 %, la dispersión del cp de NIST alrededor del cp constante
+del modelo entre 5 y 80 °C.
+
+**Revisión independiente.**  Encontró una regresión que yo había
+introducido: mi primer arreglo del acoplamiento del calentador (suelo de
+0.01 m/s) impedía converger a un calentador tras un pozo muerto.  Lo cambié
+a 10⁻⁴ m/s y quedó como test.  También corrigió mis cifras: el error del
+calentador en gas era 7.1 %, no solo el 0.39 % del tutorial 11; y la
+cercanía del nodo a la consigna (0.0040 K) es de esta red, no una cota
+general (≈ 10⁻³ × T en °C).
+
+**Validado solo por consistencia (medido).**  En la red de dos lazos con un
+calentador en cada modo: salida exactamente en la consigna; el nodo
+siguiente a ≤ 0.0040 K; duty = ṁ·Δh a ≤ 7.4·10⁻⁶; balance de energía ≤
+1.9·10⁻⁴ %; límite de duty, límite cero y flujo invertido correctos;
+consignas de −60 a 300 °C convergen (salvo black-oil bajo 0 °C).
+
+**No validado.**  El duty en gas, black-oil y composicional frente a un
+calentador publicado: descansa en el modelo de entalpía de cada fluido.
+
+**Medido frente a supuesto.**  Todas las cifras son medidas.  Se supone
+que el calentador entrega todo su duty al fluido (sin rendimiento de
+combustión ni aproximación del lado de proceso).
+
+**Limitaciones registradas (sin decisión necesaria, salvo la última).**
+- Red en reposo con un elemento de ley cuadrática (calentador, accesorio,
+  choke): no se asienta (ruido de presión → caudal); no convergido con
+  diagnóstico, sin excepción.  Remedio posible: ley lineal a muy baja
+  velocidad — sería un cambio de modelo, no lo hice.
+- Black-oil enfriado por debajo de ~0 °C: no converge (viscosidad
+  extrapolada + salto laminar/turbulento), diagnosticado.  Depende de las
+  decisiones 3 y 4 de arriba.
+
 ### v1.28.0 — Parte 1 del objetivo: lo que ya existe, comprobado con números
 
 **Qué cambió.**

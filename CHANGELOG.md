@@ -1,5 +1,92 @@
 # Changelog
 
+## [1.29.0] — 2026-11-27
+
+Roadmap item 5.3: heater/cooler set by its outlet temperature, in every
+thermal mode (water, gas, black-oil, compositional).
+
+### Added
+  - **`HeatSource(outlet_temperature_c=…, max_duty_w=…)`.**  The duty is the
+    enthalpy the stream needs to reach the set outlet temperature,
+    ṁ·(h_out − h_in) with the fluid's enthalpy model (latent heat included
+    for compositional fluids), or ṁ·cp·ΔT for liquids; heating or cooling as
+    needed.  Beyond `max_duty_w` (magnitude, default no limit) the device
+    works at its maximum and the outlet does not reach the set point.
+    Without `outlet_temperature_c` the duty is the fixed `power_w`, as
+    before.  New `SolveResult.heaters` (`HeaterResult`): state ("fixed
+    duty", "at outlet temperature", "duty limited", "no flow"), duty, inlet
+    and outlet temperatures.  Printed with the result, in the CSV export
+    and a "Heaters" sheet of the workbook; the GUI heater has *Outlet T* and
+    *Max duty* fields and the canvas shows the duty (red when limited).
+  - Validation: water heated 20 → 60 °C and cooled 80 → 10 °C, duty against
+    NIST WebBook enthalpies (0.5 MPa): +0.048 % and −0.044 % (tolerance
+    0.51 %, the spread of NIST's cp around the model's constant 4182 J/(kg·K)
+    over 5–80 °C).  Consistency, two-loop network of v1.28.0 with a heater
+    in each thermal mode: outlet at the set point exactly, the node after
+    it within 0.0040 K (in general within about 10⁻³ × its temperature in
+    °C, the hydraulic mass criterion: 0.04 K for a transparent black-oil
+    heater at 40 °C), duty = ṁ·Δh within 7.4·10⁻⁶, energy balance ≤
+    1.9·10⁻⁴ %; duty-limited, zero-limit, reversed-flow and dead-well
+    cases.  Review (off-suite): heaters in series, in a loop, at boundary
+    nodes, into a separator, at a gas-lift wellhead; compositional cooling
+    across the dew point, duty equal to an independent thermo flash Δh
+    within 9·10⁻⁷ (latent heat 1.40 × ṁ·cp·ΔT).
+  - Black-oil tutorial 16: a heater station half-way along a 50 km heavy-
+    crude line, held at 80 °C: duty against ambient temperature (about
+    40 kW/K), and a 2.5 MW station that becomes duty limited below 15 °C.
+    Compositional tutorial 11, Part D: the city-gate preheater set to 45 °C
+    with at most 600 kW, against the supply pressure.
+
+### Fixed
+  - **Fixed-duty heaters in gases did not conserve energy.**  The outlet came
+    from a constant heat capacity (the device's cp at one temperature), not
+    from the enthalpy.  A 500 kW heater in the two-loop test network left
+    the energy balance 7.1 % off in methane (heater outlet 21.65 °C instead
+    of 20.34, network outlet 18.37 instead of 17.30 °C) and 5.9 % in the
+    condensate (outlet 1.67 K too warm); 0.39 % in compositional tutorial
+    11.  Black-oil heaters were already consistent (unchanged).  The outlet
+    now solves h(P_out, T_out) = h_in + Q/ṁ in every fluid with an enthalpy
+    model; the balance closes (≤ 4.3·10⁻⁴ % in those cases, 1.2·10⁻⁴ % in
+    tutorial 11).  Tutorial 11 Part B changes by up to 0.24 K (600 kW:
+    44.18 → 43.98 °C at the heater outlet, 22.65 → 22.41 °C after the
+    regulator; flow 7.004 → 7.007 kg/s).  Its Part A residual (no heater
+    duty) goes from 0.003 to 0.006 kW (3.7 → 8.5·10⁻⁴ %): the 0 W heater's
+    outlet now comes from inverting h, to the inversion's tolerance.
+  - **A heater with no pressure drop stalled a water network.**  Its
+    pressure coupling was capped at 1 in magnitude; at 1.4 m/s it needs
+    6.4, so each pressure correction under-estimated its conductance
+    six-fold: 246 kg/s through the heater of a 64 kg/s line, not
+    converged.  The cap is replaced by a velocity floor of 1e-4 m/s that
+    keeps the coupling finite near rest.  (A first floor of 0.01 m/s
+    under-estimated the coupling between 1e-4 and 1e-2 m/s: a heater after a
+    dead well then carried a phantom 0.025 kg/s and the solve failed —
+    found in review, now a test.)  No tutorial result changed.
+  - **A gas network at rest with a fitting raised an exception.**  Round-off
+    flows (10⁻⁷ kg/s) do not conserve mass; a junction that received 1/47 of
+    what it sent divided the outgoing streams' enthalpy offsets by its
+    outflow, −310 °C, and the Peng-Robinson call raised.  A junction whose
+    mass in and out differ by more than 10 % (a hundred times the hydraulic
+    criterion) now takes the temperature of what arrives, as boundary nodes
+    do.  Never the case in a converged flow field.
+  - **The gas and the thermal-liquid solvers gave no reason when they did not
+    converge** (`diagnosis` was None; found in the v1.28.0 review).  They
+    now name the criteria not met and the worst node, as the black-oil and
+    compositional solvers do.
+  - GUI: a non-numeric optional component field in a scene file (e.g. a
+    heater's outlet temperature "80,5") raised a bare "could not convert
+    string to float"; the message now names the component and the field.
+
+### Known limitations (recorded in the roadmap)
+  - A network at rest with a square-law device (heater, fitting, choke)
+    does not settle: a pressure difference at the stopping tolerance drives
+    flow through it (water, K = 135: 0.2 kg/s).  Converged=False with the
+    criteria named; no exception.
+  - Black-oil cooled below about 0 °C by a cooler: the extrapolated
+    dead-oil viscosity (thousands of mPa·s) turns the line laminar and the
+    outer loop cycles (two-loop network, set points −5 to −20 °C); not
+    converged, diagnosed.  Depends on the two maintainer decisions already
+    pending (laminar-turbulent jump, viscosity below 21.1 °C).
+
 ## [1.28.0] — 2026-11-27
 
 Goal check, part 1: what Angelica already does for gathering networks,

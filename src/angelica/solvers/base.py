@@ -62,7 +62,8 @@ class BaseSolver(ABC):
         for link in network_state.components:
             cid = link.component.component_id
             if isinstance(link, HeatSourceState):
-                if float(getattr(link.component, "power_w", 0.0) or 0.0) != 0.0:
+                if float(getattr(link.component, "power_w", 0.0) or 0.0) != 0.0 \
+                        or link.component.outlet_temperature_c is not None:
                     warnings.append(f"{cid}: heater/cooler duty ignored, {at}")
                 link.temperature_c = T
             elif isinstance(link, PipeState):
@@ -91,6 +92,31 @@ class BaseSolver(ABC):
         from angelica.numerics.energy import solve_energy_system
         return solve_energy_system(network_state, fluid, scheme, T_ref=T_ref,
                                    pipe_enthalpy_terms=pipe_enthalpy_terms)
+
+    @staticmethod
+    def _heater_results(network_state, isothermal: bool = False) -> tuple:
+        """Duty and outlet temperature of every ``HeatSource`` (heater/cooler)."""
+        from angelica.core.results import HeaterResult
+        out = []
+        for link in network_state.components:
+            if not isinstance(link, HeatSourceState):
+                continue
+            comp = link.component
+            m = float(link.mass_flow_kg_per_s)
+            up, down = (link.start_node, link.end_node) if m >= 0.0 else (link.end_node, link.start_node)
+            T_in = up.temperature_c if up.temperature_c is not None else float("nan")
+            T_out = (link.exit_temperature_c if link.exit_temperature_c is not None and not isothermal
+                     else T_in)
+            if isothermal or abs(m) < 1e-30 or link.duty_w is None:
+                duty, state = 0.0, "no flow" if abs(m) < 1e-30 else "isothermal (duty ignored)"
+            else:
+                duty = float(link.duty_w)
+                state = ("fixed duty" if comp.outlet_temperature_c is None
+                         else "duty limited" if link.duty_limited else "at outlet temperature")
+            out.append(HeaterResult(component_id=comp.component_id, state=state, duty_w=duty,
+                                    inlet_temperature_c=float(T_in), outlet_temperature_c=float(T_out),
+                                    outlet_temperature_spec_c=comp.outlet_temperature_c, mass_flow_kg_per_s=m))
+        return tuple(out)
 
     @staticmethod
     def _held_temperatures(network_state, T_default: float):
@@ -159,7 +185,8 @@ class BaseSolver(ABC):
         1. Ė_in / Ė_out: Σ ṁ·cp_link·T_node over the links attached to inlet /
            outlet boundary nodes (cp of a pipe at its mean temperature, of a
            device at its inlet / outlet state — as in the assembly).
-        2. Q_src: Σ power_w of HeatSource links.
+        2. Q_src: Σ duty of HeatSource links (fixed, or from the outlet
+           temperature set point — as set by the energy solve).
         3. Q_wall: Σ U·π·D·L·(T_pipe − T_amb), computed independently of the
            assembly so that discretisation errors in the wall term show up.
         4. W_shaft: Σ ṁ·(cp·T)_out − ṁ·(cp·T)_in over pumps/compressors
@@ -270,7 +297,7 @@ class BaseSolver(ABC):
         e_pot_w = e_pot_well_w
         for link in network_state.components:
             if isinstance(link, HeatSourceState):
-                q_sources_w += link.component.power_w
+                q_sources_w += link.duty_w if link.duty_w is not None else link.component.power_w
             elif isinstance(link, PipeState):
                 e_jt_w += link.jt_source_w
                 e_pot_w += link.gravity_source_w

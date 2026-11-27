@@ -23,6 +23,9 @@ What to look at
      0 °C.
   C. The supply pressure: the regulator holds 20 bar until the supply can
      no longer feed the demand, then it is wide open.
+  D. The heater set by its outlet temperature instead of its duty: the
+     solver finds the duty, for each supply pressure, and reports when the
+     heater's maximum duty is not enough.
 """
 from __future__ import annotations
 
@@ -49,7 +52,8 @@ def pipe(cid, a, b, D, L) -> Pipe:
                 absolute_roughness_m=46e-6, heat_transfer_coefficient_w_per_m2k=2.0, ambient_temperature_c=10.0)
 
 
-def build_case(p_supply: float = 70e5, heater_w: float = 0.0, p_consumers: float = 5e5) -> NetworkCase:
+def build_case(p_supply: float = 70e5, heater_w: float = 0.0, p_consumers: float = 5e5,
+               heater_t_out: float | None = None, heater_max_w: float = float("inf")) -> NetworkCase:
     return NetworkCase(
         name=f"City gate, supply {p_supply / 1e5:.0f} bar, heater {heater_w / 1e3:.0f} kW",
         fluid_model=CompositionalFluid(COMPONENTS, GAS),
@@ -60,7 +64,7 @@ def build_case(p_supply: float = 70e5, heater_w: float = 0.0, p_consumers: float
         components=(
             pipe("transmission", SUPPLY, HEATER_IN, 0.2032, 20000.0),
             HeatSource(component_id="heater", start_node=HEATER_IN, end_node=REG_IN, diameter_m=0.2032,
-                       power_w=heater_w),
+                       power_w=heater_w, outlet_temperature_c=heater_t_out, max_duty_w=heater_max_w),
             PressureRegulator(component_id="regulator", start_node=REG_IN, end_node=REG_OUT, diameter_m=0.2032,
                               set_pressure_pa=P_SET),
             pipe("distribution", REG_OUT, CONSUMERS, 0.1524, 2000.0),
@@ -105,12 +109,24 @@ def run():
         print(f"  {p / 1e5:12.0f} {g.state:>12} {g.inlet_pressure_pa / 1e5:11.2f} {g.outlet_pressure_pa / 1e5:12.2f} "
               f"{g.mass_flow_kg_per_s:12.3f}" + ("" if r.converged else "  (not converged)"))
 
+    print("\nPart D — heater set by its outlet temperature (45 °C, at most 600 kW)")
+    print(f"  {'Supply (bar)':>12} {'State':>22} {'Duty (kW)':>10} {'T heater out':>13} {'T reg. out':>11}")
+    for p in (40e5, 50e5, 60e5, 70e5):
+        r = solve(p_supply=p, heater_t_out=45.0, heater_max_w=600e3)
+        h, Tn = r.heaters[0], r.node_temperatures_c
+        print(f"  {p / 1e5:12.0f} {h.state:>22} {h.duty_w / 1e3:10.1f} {h.outlet_temperature_c:13.2f} "
+              f"{Tn[REG_OUT]:11.2f}" + ("" if r.converged else "  (not converged)"))
+
     print()
     print("  • While the regulator controls, the consumers see 20 bar.  The flow still")
     print("    rises a little with the supply pressure: a larger let-down cools the gas")
     print("    more, and the colder, denser gas passes the distribution line faster.")
     print("  • Below about 36 bar the supply line limits the flow: the regulator is")
     print("    wide open and the consumers get less than 20 bar.")
+    print("  • Set by its outlet temperature, the heater's duty follows the supply")
+    print("    pressure.  At 70 bar the 45 °C set point needs more than 600 kW: the")
+    print("    heater works at 600 kW and the gas leaves it at 43.98 °C — the same as")
+    print("    the 600 kW fixed duty of Part B.")
 
 
 if __name__ == "__main__":

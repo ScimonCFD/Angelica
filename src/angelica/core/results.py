@@ -245,6 +245,24 @@ class SeparatorResult:
 
 
 @dataclass(frozen=True)
+class HeaterResult:
+    """A ``HeatSource`` (heater/cooler) at the solution.
+
+    ``state``: "fixed duty", "at outlet temperature", "duty limited" (the
+    outlet temperature needs more than ``max_duty_w``) or "no flow".
+    ``duty_w`` > 0 heats the fluid, < 0 cools it.
+    """
+
+    component_id: str
+    state: str
+    duty_w: float
+    inlet_temperature_c: float
+    outlet_temperature_c: float
+    outlet_temperature_spec_c: float | None
+    mass_flow_kg_per_s: float
+
+
+@dataclass(frozen=True)
 class RegulatorResult:
     """A ``PressureRegulator`` at the solution.
 
@@ -350,6 +368,7 @@ class SolveResult:
     well_states: tuple[WellOperatingState, ...] = ()
     separators: tuple[SeparatorResult, ...] = ()
     regulators: tuple[RegulatorResult, ...] = ()
+    heaters: tuple[HeaterResult, ...] = ()
     # None when converged (see ConvergenceDiagnosis)
     diagnosis: ConvergenceDiagnosis | None = None
     # Converged or not: correlations used outside their data range, etc.

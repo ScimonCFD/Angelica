@@ -119,11 +119,15 @@ def solve_energy_system(
             ps.mass_flow_kg_per_s = 0.0
     try:
         result = _solve_energy_once(network_state, fluid_model, convection_scheme, T_ref, pipe_enthalpy_terms)
-        has_sources = pipe_enthalpy_terms and any(
+        has_sources = pipe_enthalpy_terms and _has_enthalpy(fluid_model) and any(
             isinstance(ps, PipeState) and (ps.jt_source_w != 0.0 or ps.gravity_source_w != 0.0)
             for ps in network_state.components
         )
-        if not has_sources or not _has_enthalpy(fluid_model):
+        # A heater's duty and exit temperature follow its inlet temperature.
+        has_heaters = any(isinstance(ps, HeatSourceState) and ps.mass_flow_kg_per_s != 0.0
+                          and (ps.component.outlet_temperature_c is not None or _has_enthalpy(fluid_model))
+                          for ps in network_state.components)
+        if not (has_sources or has_heaters):
             return result
         for _ in range(max_source_iterations - 1):
             node_temps, _means = result
@@ -340,9 +344,17 @@ def _solve_energy_once(
         Sc = U * math.pi * D_pipe * dx_wall * T_amb
         Sp = -U * math.pi * D_pipe * dx_wall   # negative → strengthens diagonal
 
-        # Fixed power source (heater/cooler): Sc += Q/n_internal, Sp_extra = 0
-        if isinstance(ps, HeatSourceState) and n_internal > 0:
-            Sc += ps.component.power_w / n_internal
+        # Heater/cooler.  With an exit temperature (an outlet set point, or a
+        # fixed duty in a fluid with an enthalpy model) the exit node is held
+        # at it; otherwise (fixed duty, liquid) the duty is spread as a source.
+        heater_exit: float | None = None
+        exit_row = -1
+        if isinstance(ps, HeatSourceState):
+            heater_exit, ps.duty_w, ps.duty_limited = heater_exit_state(ps, fluid_model, T_ref)
+            if heater_exit is None and n_internal > 0:
+                Sc += ps.duty_w / n_internal
+            elif heater_exit is not None:
+                exit_row = offset + n_internal - 1 if F > 0.0 else offset
         if S_pipe != 0.0 and n_internal > 0:
             Sc += S_pipe / n_internal
 
@@ -359,6 +371,10 @@ def _solve_energy_once(
 
         for j in range(n_internal):
             row = offset + j
+            if row == exit_row:
+                add(row, row, 1.0)
+                rhs[row] = heater_exit
+                continue
 
             # ── west neighbour ──
             if j == 0 and west_neumann is not None:
@@ -526,6 +542,20 @@ def _solve_energy_once(
         return (sum(m * _offset(link, node.pressure_pa, T_star, cp_w) for link, m, cp_w in arriving[row])
                 + source_arriving[row])
 
+    # Mass flows into and out of each node (links and internal sources).
+    node_mass_in: dict[int, float] = {}
+    node_mass_out: dict[int, float] = {}
+    for link in network_state.components:
+        m = float(link.mass_flow_kg_per_s)
+        src, dst = (link.start_node.node_id, link.end_node.node_id) if m >= 0.0 else \
+            (link.end_node.node_id, link.start_node.node_id)
+        node_mass_out[src] = node_mass_out.get(src, 0.0) + abs(m)
+        node_mass_in[dst] = node_mass_in.get(dst, 0.0) + abs(m)
+    for nid_s, node_s in network_state.nodes.items():
+        q = float(getattr(node_s, "source_mass_flow_kg_per_s", 0.0) or 0.0)
+        if q > 0.0:
+            node_mass_in[nid_s] = node_mass_in.get(nid_s, 0.0) + q
+
     def _junction_row(nid: int, row: int, total_in: float, total_out: float) -> None:
         """Mixing equation of a node with inflow.
 
@@ -536,13 +566,21 @@ def _solve_energy_once(
         at the mixing temperature of the arriving streams, which then leave
         through the links and the boundary alike.  Dividing by the outflow
         there gave wrong temperatures (−256 °C in a separator train,
-        v1.26.0)."""
+        v1.26.0).
+
+        An interior node whose mass flows in and out differ by more than
+        10 % — a hundred times the hydraulic solver's criterion, so a flow
+        field that does not conserve mass, e.g. the round-off flows of a
+        network at rest — is treated the same way: dividing by the outflow
+        gave −310 °C in a gas network at rest with a fitting (v1.29.0)."""
         boundary = network_state.nodes[nid].is_boundary
-        denom = total_in if boundary else _mixing_denominator(total_in, total_out)
+        m_in, m_out = node_mass_in.get(nid, 0.0), node_mass_out.get(nid, 0.0)
+        starved = abs(m_in - m_out) > 0.1 * max(m_in, m_out)
+        denom = total_in if (boundary or starved) else _mixing_denominator(total_in, total_out)
         add(row, row, -denom)
         for col, weight in inflow[row]:
             add(row, col, weight)
-        if boundary:
+        if boundary or starved:
             rhs[row] = explicit_rhs[row] - explicit_rhs_up[row] + _sink_offset(nid, row, boundary=True)
         else:
             rhs[row] = explicit_rhs[row] + _sink_offset(nid, row)
@@ -802,6 +840,46 @@ def _well_thermal_state(dev, fluid_model, mdot, up_node, down_node, T_up, cp, P_
                  "lift_h_supply_rel": h_gl(res.injection_pressure_pa, res.injection_temperature_c) - ref_gl}
     return DeviceThermalState(mdot, up_node, down_node, T_up, cp, T_out, cp_out, "well",
                               heat_loss_w=heat_loss_w, potential_w=potential_w, **extra)
+
+
+def heater_exit_state(ps, fluid_model, T_ref: float) -> tuple[float | None, float, bool]:
+    """(exit temperature, duty W, duty limited) of a ``HeatSource`` link.
+
+    Outlet set point: the duty is the stream's enthalpy change to it,
+    ṁ·(h(P_out, T_set) − h(P_in, T_in)) with the fluid's enthalpy model, or
+    ṁ·cp·(T_set − T_in) for a liquid; beyond ``max_duty_w`` the duty is
+    capped and the exit follows from it.  Fixed duty: the exit temperature
+    solves h(P_out, T_out) = h_in + Q/ṁ.  The exit temperature is None when
+    the energy assembly spreads the duty as a source instead (a liquid with a
+    fixed or capped duty, or no flow)."""
+    comp = ps.component
+    mdot = float(ps.mass_flow_kg_per_s)
+    if abs(mdot) < 1e-30:
+        return None, 0.0, False
+    m = abs(mdot)
+    up, down = (ps.start_node, ps.end_node) if mdot > 0.0 else (ps.end_node, ps.start_node)
+    T_in = up.temperature_c if up.temperature_c is not None else T_ref
+    p_ref = getattr(fluid_model, "reference_pressure_pa", 101_325.0)
+    P_in = float(up.pressure_pa) if up.pressure_pa is not None else p_ref
+    P_out = float(down.pressure_pa) if down.pressure_pa is not None else p_ref
+    h_in = fluid_enthalpy(fluid_model, ps, P_in, T_in)
+    spec = comp.outlet_temperature_c
+    limited = False
+    if spec is not None:
+        h_set = fluid_enthalpy(fluid_model, ps, P_out, spec) if h_in is not None else None
+        if h_in is not None and h_set is not None:
+            Q = m * (h_set - h_in)
+        else:
+            T_repr = ps.temperature_c if ps.temperature_c is not None else T_ref
+            Q = m * fluid_model.specific_heat_for_link(_LinkAtTemperature(ps, T_repr)) * (spec - T_in)
+        if abs(Q) <= comp.max_duty_w:
+            return spec, Q, False
+        Q, limited = math.copysign(comp.max_duty_w, Q), True
+    else:
+        Q = float(comp.power_w)
+    if h_in is None:
+        return None, Q, limited
+    return _temperature_from_enthalpy(fluid_model, ps, h_in + Q / m, P_out, T_in), Q, limited
 
 
 def _temperature_from_enthalpy(fluid_model, link, h: float, P: float, T_guess: float) -> float:

@@ -11,6 +11,7 @@ from angelica.core.settings import SolverSettings
 from angelica.core.state import PipeState
 
 from .base import BaseSolver
+from .diagnosis import DiagnosisMixin
 from .steady_isothermal_incompressible import SteadyIsothermalIncompressibleSolver
 
 
@@ -23,7 +24,7 @@ class NonIsothermalSolverSettings:
     temperature_relaxation: float = 1.0
 
 
-class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
+class SteadyNonIsothermalIncompressibleSolver(DiagnosisMixin, BaseSolver):
     """Steady, incompressible, non-isothermal pipe network solver.
 
     Outer loop:
@@ -198,7 +199,9 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         self._set_node_temperatures(network_state, final_node_temps)
         self._update_component_temperatures(network_state, T_init, final_pipe_mean_temps)
 
-        converged = hydraulic_converged and temperature_converged
+        # Named criteria not met (v1.29.0: this solver gave no reason before).
+        failed = self._failed_criteria(hydraulic_converged, temperature_converged, True, True, True)
+        converged = not failed
 
         # ── build results ──────────────────────────────────────────────────
         node_pressures = {
@@ -228,6 +231,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
         return SolveResult(
             case_name=case.name,
             converged=converged,
+            diagnosis=self._diagnose(failed, network_state, {}),
             node_pressures_pa=node_pressures,
             node_temperatures_c=node_temperatures,
             component_flows=component_flows,
@@ -244,6 +248,7 @@ class SteadyNonIsothermalIncompressibleSolver(BaseSolver):
             ),
             mass_balance_history=mass_balance_history,
             energy_balance_history=energy_balance_history,
+            heaters=self._heater_results(network_state),
         )
 
     @staticmethod

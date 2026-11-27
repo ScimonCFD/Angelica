@@ -158,3 +158,20 @@ def single_pipe_case(mode: str, case: NetworkCase, result, cid: str) -> tuple[Ne
         **kw,
     )
     return single, up, down, result.node_pressures_pa[down]
+
+
+def with_heater(mode: str, **heater_kw) -> NetworkCase:
+    """The network with a heater/cooler at the start of the export line
+    (node 5 → heater → node 8 → export → outlet), 0.3 bar at 30 kg/s."""
+    from angelica.core.components import HeatSource
+    case = build_case(mode)
+    comps = []
+    for p in case.components:
+        if p.component_id == "export":
+            comps.append(HeatSource(component_id="heater", start_node=5, end_node=8, diameter_m=p.diameter_m,
+                                    pressure_drop_mode="rated", pressure_drop_pa=0.3e5,
+                                    rated_mass_flow_kg_per_s=30.0, **heater_kw))
+            comps.append(replace(p, start_node=8))
+        else:
+            comps.append(p)
+    return replace(case, components=tuple(comps))

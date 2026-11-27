@@ -227,13 +227,20 @@ class HeatSourceModelTests(unittest.TestCase):
         coupling = corr.calculate_coupling(self._link_rated(velocity=1.0), density=800.0, viscosity=1e-3)
         self.assertLess(coupling, 0.0)
 
-    def test_coupling_bounded_by_max(self) -> None:
-        # At near-zero velocity, coupling should be clamped to -_MAX_COUPLING_ABS
-        from angelica.closures.heat_source import _MAX_COUPLING_ABS
+    def test_coupling_finite_at_rest_and_exact_in_flow(self) -> None:
+        # Near v = 0 the velocity floor keeps the coupling finite; in flow it is
+        # the secant −2A/(K·v), not capped (v1.29.0: a cap of 1 stalled a
+        # transparent heater in a water line).
+        from angelica.closures.heat_source import _V_FLOOR
         corr = HeatSourceModel()
-        link = self._link_rated(velocity=1e-15)
-        coupling = corr.calculate_coupling(link, density=800.0, viscosity=1e-3)
-        self.assertGreaterEqual(coupling, -_MAX_COUPLING_ABS)
+        rest = corr.calculate_coupling(self._link_rated(velocity=1e-15), density=800.0, viscosity=1e-3)
+        floor = corr.calculate_coupling(self._link_rated(velocity=_V_FLOOR), density=800.0, viscosity=1e-3)
+        self.assertTrue(math.isfinite(rest))
+        self.assertEqual(rest, floor)
+        link = self._link_transparent()
+        link.velocity_m_per_s = 1.4
+        coupling = corr.calculate_coupling(link, density=1000.0, viscosity=1e-3)
+        self.assertAlmostEqual(coupling, -2.0 * link.area_m2 / (0.01 * 1.4), places=12)
 
 
 class MinorLossModelTests(unittest.TestCase):

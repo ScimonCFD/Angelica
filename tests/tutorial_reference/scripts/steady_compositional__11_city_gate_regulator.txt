@@ -7,14 +7,14 @@ Part A — the let-down, no preheating
   Regulator controlling: 63.79 → 20.00 bar, 7.589 kg/s
   Temperature 11.44 → -15.79 °C (-0.622 K/bar)
   Consumers receive the gas at -23.58 °C after 2 km of distribution line
-  Energy balance residual +0.003 kW
+  Energy balance residual +0.006 kW
 
 Part B — preheating before the regulator
   Heater (kW)  T in (°C)  T out (°C)  Flow (kg/s)
             0      11.44      -15.79        7.589
-          200      21.59       -3.68        7.386
-          400      32.50        9.14        7.191
-          600      44.18       22.65        7.004
+          200      21.57       -3.70        7.386
+          400      32.42        9.05        7.192
+          600      43.98       22.41        7.007
 
 Part C — supply pressure
   Supply (bar)        State  P in (bar)  P out (bar)  Flow (kg/s)
@@ -25,8 +25,19 @@ Part C — supply pressure
             50  controlling       40.85        20.00        7.371
             70  controlling       63.79        20.00        7.589
 
+Part D — heater set by its outlet temperature (45 °C, at most 600 kW)
+  Supply (bar)                  State  Duty (kW)  T heater out  T reg. out
+            40  at outlet temperature      556.5         45.00       40.42
+            50  at outlet temperature      573.9         45.00       34.35
+            60  at outlet temperature      594.6         45.00       28.82
+            70           duty limited      600.0         43.98       22.41
+
   • While the regulator controls, the consumers see 20 bar.  The flow still
     rises a little with the supply pressure: a larger let-down cools the gas
     more, and the colder, denser gas passes the distribution line faster.
   • Below about 36 bar the supply line limits the flow: the regulator is
     wide open and the consumers get less than 20 bar.
+  • Set by its outlet temperature, the heater's duty follows the supply
+    pressure.  At 70 bar the 45 °C set point needs more than 600 kW: the
+    heater works at 600 kW and the gas leaves it at 43.98 °C — the same as
+    the 600 kW fixed duty of Part B.

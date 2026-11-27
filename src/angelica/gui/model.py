@@ -369,6 +369,8 @@ class CanvasScene:
             return {
                 "diameter_m": "",
                 "power_w": "0.0",
+                "outlet_temperature_c": "",
+                "max_duty_w": "",
                 "pressure_drop_mode": "rated",
                 "pressure_drop_pa": "0.0",
                 "rated_mass_flow_kg_per_s": "1.0",

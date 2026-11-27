@@ -639,8 +639,12 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                 n_segs = max(2, int(_optional_float(
                     component, "n_thermal_segments", default=10.0
                 ))) if (is_non_isothermal or is_compressible or is_black_oil or is_compositional) else 2
+                _t_out = (_optional_float(component, "outlet_temperature_c", default=0.0)
+                          if component.properties.get("outlet_temperature_c", "").strip() else None)
                 components.append(
                     HeatSource(
+                        outlet_temperature_c=_t_out,
+                        max_duty_w=_optional_float(component, "max_duty_w", default=math.inf),
                         start_node=current_start,
                         end_node=current_end,
                         diameter_m=diameter,
@@ -1116,7 +1120,11 @@ def _optional_float(
     value_text = component.properties.get(field_name, "").strip()
     if not value_text:
         return default
-    return _parse_float(value_text)
+    try:
+        return _parse_float(value_text)
+    except ValueError:
+        raise ValueError(f"{component.component_type} #{component.component_id}: {field_name} "
+                         f"'{value_text}' is not a number.") from None
 
 
 def _parse_float(value_text: str) -> float:

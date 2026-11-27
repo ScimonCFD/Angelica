@@ -519,7 +519,19 @@ class Pump(PressureChanger):
 
 @dataclass(frozen=True)
 class HeatSource(PressureChanger):
-    """Inline heater (power_w > 0) or cooler (power_w < 0) with fixed thermal power.
+    """Inline heater or cooler.
+
+    Duty, one of:
+      - ``outlet_temperature_c`` set: the duty that brings the fluid to that
+        outlet temperature (heating or cooling), up to ``max_duty_w`` in
+        magnitude; beyond it the device works at ±``max_duty_w`` and the
+        outlet does not reach the set temperature ("duty limited").
+      - otherwise a fixed duty ``power_w`` (> 0 heats, < 0 cools).
+
+    The duty is the enthalpy change of the stream, ṁ·(h_out − h_in), with
+    the real enthalpy for fluids that have one (gas, black-oil,
+    compositional: latent heat included) and ṁ·cp·ΔT for liquids.  The
+    solution's ``heaters`` give each device's duty and outlet temperature.
 
     Hydraulic pressure drop is controlled by pressure_drop_mode:
       "rated"  — ΔP = ΔP_rated · (ṁ/ṁ_rated)²  (quadratic, derived from K factor)
@@ -534,7 +546,17 @@ class HeatSource(PressureChanger):
     rated_mass_flow_kg_per_s: float = 1.0
     n_thermal_segments: int = 10
     length_m: float = 1.0
+    outlet_temperature_c: float | None = None
+    max_duty_w: float = math.inf
 
     def __post_init__(self) -> None:
         if self.length_m <= 0.0:
             raise ValueError(f"HeatSource length_m must be positive (got {self.length_m})")
+        if not math.isfinite(self.power_w):
+            raise ValueError(f"HeatSource power_w must be finite (got {self.power_w})")
+        if self.outlet_temperature_c is not None and (
+                not math.isfinite(self.outlet_temperature_c) or self.outlet_temperature_c <= -273.15):
+            raise ValueError("HeatSource outlet_temperature_c must be a finite temperature above "
+                             f"−273.15 °C (got {self.outlet_temperature_c})")
+        if not self.max_duty_w >= 0.0:
+            raise ValueError(f"HeatSource max_duty_w must be ≥ 0 (got {self.max_duty_w})")

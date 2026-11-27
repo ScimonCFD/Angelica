@@ -1,0 +1,36 @@
+==============================================================================
+Tutorial 16 — A heater station set by its outlet temperature (black-oil)
+==============================================================================
+
+Part A — the line with and without the station (ambient 10 °C)
+                      Flow  T before  T after  T outlet     Duty
+                    (kg/s)      (°C)     (°C)      (°C)     (MW)
+  no heating         50.45     60.90    60.92     47.35    0.000
+  station 80 °C      51.62     61.32    80.00     61.48    2.668
+  Energy balance with the station: 2667.6 kW in, residual +0.034 kW (+2.9e-04 %)
+
+Part B — ambient temperature (station holds 80 °C)
+   Ambient    Flow  T before     Duty  T outlet
+      (°C)  (kg/s)      (°C)     (MW)      (°C)
+        25   51.81     65.58    2.071     65.73
+        20   51.75     64.16    2.270     64.32
+        15   51.69     62.75    2.469     62.90
+        10   51.62     61.32    2.668     61.48
+         5   51.55     59.90    2.866     60.06
+
+Part C — a station limited to 2.5 MW
+   Ambient                  State    Duty  T after  T outlet
+      (°C)                           (MW)     (°C)      (°C)
+        25  at outlet temperature   2.071    80.00     65.73
+        20  at outlet temperature   2.270    80.00     64.32
+        15  at outlet temperature   2.469    80.00     62.90
+        10           duty limited   2.500    78.84     60.62
+         5           duty limited   2.500    77.45     58.16
+
+  • The station turns the second half into a copy of the first.  The oil in
+    it is about 16 K warmer (mean 70 against 54 °C) and its viscosity about
+    3.5 against 6 mPa·s, so the same pressure drop moves 2.3 % more of it.
+  • The colder the ground, the more the first half loses and the more the
+    station must give back: about 40 kW per kelvin of ambient here.
+  • A station at its limit no longer holds the set point; the solution says
+    so ("duty limited") instead of silently delivering colder oil.

@@ -94,6 +94,8 @@ class HeatSourceState(PressureChangerState):
     reynolds: float = 0.0
     temperature_c: float | None = None
     exit_temperature_c: float | None = None
+    duty_w: float | None = None       # set by the energy solve (fixed or from the outlet temperature)
+    duty_limited: bool = False        # outlet temperature not reached within max_duty_w
 
 
 @dataclass

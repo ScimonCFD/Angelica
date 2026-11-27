@@ -36,6 +36,16 @@ heater = HeatSource(
     diameter_m=0.1, length_m=2.0,
     power_w=50_000.0,
 )
+
+# ... or set by its outlet temperature: the solver finds the duty,
+# ṁ·(h_out − h_in), up to max_duty_w ("duty limited" beyond it)
+preheater = HeatSource(
+    start_node=4, end_node=5,
+    diameter_m=0.1, length_m=2.0,
+    outlet_temperature_c=45.0,
+    max_duty_w=600e3,
+)
+# result.heaters: state, duty_w, inlet/outlet temperatures of each heater
 ```
 
 ## Boundary Conditions

@@ -8,11 +8,16 @@ from .pressure_drop import PressureDropCorrelation
 # Chosen so ΔP ≈ 250 Pa at 7 m/s water flow — negligible vs typical bar-scale systems.
 _K_FLOOR = 0.01
 
-# Maximum coupling magnitude (kg/s/Pa).  Caps the heater coupling when v→0 so the
-# pressure matrix stays well-conditioned despite the small loss coefficient.
-# At 1 kg/s/Pa the condition number vs a typical pipe coupling (≈1e-4) is ~1e4,
-# giving floating-point errors well below the 1e-3 Pa convergence tolerance.
-_MAX_COUPLING_ABS = 1.0
+# Velocity floor of the coupling (m/s): keeps the coupling of a nearly
+# transparent device finite when v → 0 (at most 2A/(K·1e-4)).  Before
+# v1.29.0 the coupling itself was capped at 1 in magnitude; a transparent
+# heater in a water line at 1.4 m/s needs 6.4, so the pressure correction
+# under-estimated its conductance six-fold and the solve did not converge
+# (246 kg/s through the heater of a 64 kg/s line).  A floor of 0.01 m/s
+# fixed that but under-estimated the coupling between 1e-4 and 1e-2 m/s,
+# and a heater after a dead well then carried a phantom 0.025 kg/s and the
+# solve did not converge (found in review); 1e-4 m/s converges both.
+_V_FLOOR = 1e-4
 
 
 class HeatSourceModel(PressureDropCorrelation):
@@ -59,6 +64,4 @@ class HeatSourceModel(PressureDropCorrelation):
 
     def calculate_coupling(self, link_state, density: float, viscosity: float) -> float:
         K = self._effective_k(link_state, density)
-        raw = -2.0 * link_state.area_m2 / (K * max(abs(link_state.velocity_m_per_s), 1e-12))
-        # Clamp to avoid ill-conditioning when v→0 with small K
-        return max(raw, -_MAX_COUPLING_ABS)
+        return -2.0 * link_state.area_m2 / (K * max(abs(link_state.velocity_m_per_s), _V_FLOOR))
