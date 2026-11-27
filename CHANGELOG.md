@@ -1,5 +1,82 @@
 # Changelog
 
+## [1.37.0] — 2026-11-27
+
+Roadmap item 2b.3 (and 2.3): thermodynamic hydrate inhibitors, methanol and MEG.
+
+### Added
+  - **`angelica.properties.inhibitor`**: the water activity of methanol and
+    MEG solutions, R·T·ln γ_w = x²(A + B·x), held independent of T.  A and B
+    are fitted through the vdW-P model to measured methane hydrate
+    depressions (Semenov et al. 2023, Data in Brief 46, 108892, Table 1, read
+    in source): methanol 10–50 mass %, MEG 10/30/50 %.  Valid 0–50 mass %
+    in the free water; the inhibitor is assumed to stay in the water.
+  - **Hydrate functions take `inhibitor=(name, mass fraction)`**:
+    `hydrate_formation_temperature`, `_pressure`, `hydrate_curve`,
+    `hydrate_curve_at_water_content` and `hydrate_partition` (the inhibitor
+    concentrates as water turns to hydrate: C1/C2/C3 + 50 % water at 5 °C,
+    70 bar, 20 % methanol → 0.107 mol hydrate water, methanol 24.1 %).
+    With an inhibitor (any amount) the liquid-water branch extends to
+    −60 °C (no ice phase: below the solution's ice point the water is taken
+    as liquid, which gives a warmer hydrate temperature than ice would — so
+    a trace of inhibitor can turn "no hydrate above 0 °C" into a result
+    below 0 °C).  In `hydrate_partition` the concentrating inhibitor can
+    pass the fitted 50 % (noted in the result, activity extrapolated).
+  - **Fluids**: `BlackOilFluid(..., hydrate_inhibitor=...)` and
+    `CompositionalFluid(..., hydrate_inhibitor=...)`; the per-pipe hydrate
+    margin uses it.  Compositional: the vdW-P curve with the inhibited water.
+    Black-oil (gas-gravity chart, no composition): the chart temperature is
+    lowered by the smaller of two reference depressions, methane (sI) and a
+    C1/C2/C3 gas (sII), at the pipe-end pressure (among those that form
+    hydrate there; 3 MPa values only if neither does):
+    at 70 bar, 30 % methanol, 16.36 and 14.91 K — the gas-dependence this
+    leaves out.
+  - **GUI**: inhibitor and mass % in both fluid dialogs (black-oil and
+    compositional); the phase-envelope hydrate curve uses it (and starts
+    at −40 °C).
+  - Comparison with data (read in source, Europe PMC full texts):
+    - methanol against new samples from the same laboratory, Semenov et
+      al. 2024, Data in Brief 53, 110138, Table 1 (5–50 %, 3–13 MPa; same
+      apparatus and method as the fit data — near 5 MPa its depressions
+      repeat the 2023 ones within 0.02 K — so a check of new concentrations
+      and pressures, not an independent validation): depression error
+      ≤ 0.07 K at 5 %, 0.19 K at 10 %, 0.39 K at 20 %, 0.78 K at 30 %,
+      0.98 K at 40 %, 1.39 K at 50 %.  Sign: under-predicted at 3 MPa (safe
+      side), over-predicted above ~7 MPa (unsafe side, +0.3 to +1.02 K at
+      9.7–12.8 MPa).  The absolute hydrate temperature, which the margin
+      uses, is up to 1.89 K too cold there (50 %, 12.76 MPa: the pure-water
+      offset and the depression error add up);
+    - pressure trend: measured depressions are flat (31.53–31.64 K at 50 %,
+      3–13 MPa), the model's grow (30.2 K at 3 MPa, 32.7 at 13, 34.4 at 30):
+      above 13 MPa unvalidated and likely more on the unsafe side;
+    - MEG: 20 % and 40 % left out of the fit, ≤ 0.13 K and ≤ 0.41 K (same
+      dataset: a check, not independent validation);
+    - other gases: fitted with methane only; at 7 MPa, 30 % methanol the
+      model's depression is 16.4 K (methane), 14.9 K (C1/C2/C3), 20.9 K
+      (CO2) — unvalidated beyond methane;
+    - pure methane, same 2024 table, 274–289 K: the vdW-P model is 0.60–
+      0.91 K too cold (5 of the 12 points are also in the 2023 paper).
+  - Recorded discrepancy: the ice points this activity implies for methanol
+    are 1.0–8.9 K too high at 20–50 % (Semenov 2024, Table 10; within
+    0.07 K up to 10 %), so the ice point is not used as a limit.  Ice-point
+    constants: Δc_p water–ice 38.24 J/(mol·K) from NIST WebBook (liquid,
+    76.014) and IAPWS R10-06 Table 6 (ice, 2096.71 J/(kg·K)).
+  - A first attempt took the activity from the methanol ice points (or from
+    UNIFAC, which gives γ_w > 1 where the ice points imply γ_w < 1): it
+    over-predicted the hydrate depression by up to 6.3 K at 50 % (the unsafe
+    side), and was dropped.
+  - No existing result changes (an inhibitor is opt-in; no tutorial uses
+    one).
+  - Review before the tag: `hydrate_partition` with an inhibitor and no
+    free water (undersaturated gas) gave no hydrate (a_w = 0; now the gas's
+    water sets the activity, as without inhibitor); the black-oil shift
+    below 3 MPa held the 3 MPa value (0.14–0.53 K too much at 1 MPa, now the
+    pipe pressure); the "validated" label for methanol, the unsafe-side
+    sign at high pressure, the pressure trend and the gas dependence were
+    added above; a malformed inhibitor argument and a GUI % out of range
+    now give clear errors; the per-link envelope uses the solved case's
+    inhibitor.
+
 ## [1.36.0] — 2026-11-27
 
 Roadmap item 2b.2: hydrate as a phase — how much hydrate forms.

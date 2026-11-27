@@ -200,3 +200,20 @@ def test_compositional_results_report_hydrate_margin(tmp_path):
     out = tmp_path / "r.csv"
     export_solve_result_csv(res, str(out))
     assert "Hydrate subcooling (K)" in out.read_text(encoding="utf-8")
+
+
+# Semenov et al. (2024), Data in Brief 53, 110138, Table 1, system 1 (pure
+# water) — READ IN SOURCE (Europe PMC full text, PMC10877679): (T K, P MPa).
+SEMENOV_2024_WATER = [(274.25, 2.891), (276.96, 3.785), (279.26, 4.771), (281.11, 5.777), (282.62, 6.77),
+                      (283.87, 7.776), (285.01, 8.839), (286.14, 10.027), (287.03, 11.143), (287.65, 12.009),
+                      (287.85, 12.316), (289.02, 14.222)]
+
+
+def test_methane_against_semenov_2024():
+    """Pure methane, 274–289 K: the model is colder than the measurements by
+    0.60 K at 2.9 MPa growing to 0.91 K at 14.2 MPa (the warm-end deviation
+    of the module docstring).  Guard 1.0 K: set after the results, not an
+    accuracy claim."""
+    errors = [hydrate_formation_temperature(["methane"], [1.0], p * 1e6).temperature_c + 273.15 - t
+              for t, p in SEMENOV_2024_WATER]
+    assert all(-1.0 < e < -0.55 for e in errors), errors

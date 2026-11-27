@@ -28,6 +28,55 @@ maintainer y recoge lo que espera su decisión.
 
 ## Releases
 
+### v1.37.0 — Ítem 2b.3: inhibidores de hidratos, metanol y MEG
+
+**Qué cambió.**  Módulo `inhibitor`: actividad del agua en soluciones de
+metanol y MEG (0–50 % en masa en el agua libre).  Todas las funciones de
+hidratos, `hydrate_partition` (el inhibidor se concentra al formarse
+hidrato), los fluidos black-oil y composicional, el margen de hidratos de
+ambos solvers y la GUI (diálogos de fluido y curva de la envolvente)
+aceptan un inhibidor.  En black-oil, sin composición, la curva de Katz se
+desplaza la menor de dos depresiones de referencia (metano sI y gas
+C1/C2/C3 sII).  Ningún resultado existente cambia (es opcional).
+
+**Comparado con fuente (mismo laboratorio).**  Metanol frente a muestras
+nuevas del mismo laboratorio (Semenov et al. 2024, Data in Brief 53,
+110138, leída en Europe PMC; mismo equipo y método que los datos del
+ajuste, así que no es validación independiente), 5–50 %, 3–13 MPa: error
+en la depresión ≤ 0.07 K al 5 %, 0.19 al 10 %, 0.39 al 20 %, 0.78 al 30 %,
+0.98 al 40 %, 1.39 K al 50 %.  Signo: a 3 MPa la subestima (lado seguro);
+por encima de ~7 MPa la sobrestima (lado inseguro, +0.3 a +1.0 K a
+9.7–12.8 MPa), y la temperatura absoluta de hidrato, la que usa el margen,
+sale hasta 1.89 K fría (50 %, 12.76 MPa).  La depresión medida es plana en
+presión; la del modelo crece (30.2 K a 3 MPa, 32.7 a 13, 34.4 a 30): por
+encima de 13 MPa no validado y probablemente más del lado inseguro.  Metano
+puro 274–289 K: el modelo vdW-P sale 0.60–0.91 K frío.
+
+**Solo consistencia.**  MEG: ajustado al 10/30/50 % y comprobado al 20 y
+40 % del mismo conjunto (≤ 0.13 y ≤ 0.41 K).  No hay datos de MEG de otra
+fuente leídos.
+
+**No validado / supuesto.**  Otros gases: ajustado solo con metano (a
+7 MPa y 30 % de metanol la depresión del modelo es 16.4 K para metano,
+14.9 K para C1/C2/C3 y 20.9 K para CO2, sin datos); el
+inhibidor no pasa al gas ni al aceite; sin sales; sin fase hielo (con
+inhibidor, el agua se trata como líquida hasta −60 °C).  Los puntos de
+hielo que implica la actividad del metanol salen 1.0–8.9 K altos al
+20–50 % (por eso no se usan como límite).  El desplazamiento black-oil
+ignora la dependencia del gas (1.45 K entre los dos gases de referencia al
+30 % de metanol; se toma el menor, del lado seguro).
+
+**Revisión antes del tag.**  `hydrate_partition` con inhibidor y sin agua
+libre no daba hidrato (lado inseguro; corregido); el desplazamiento
+black-oil bajo 3 MPa usaba el valor de 3 MPa (0.14–0.53 K de más; ahora la
+presión del tubo); se corrigieron la etiqueta "validado", el signo del
+error a alta presión, la tendencia con la presión y la dependencia del gas.
+
+**Qué se probó y se descartó.**  Actividad a partir de los puntos de hielo
+o de UNIFAC: sobrestimaba la depresión hasta 6.3 K al 50 % de metanol (lado
+inseguro).  Ng & Robinson (1985), el criterio del ROADMAP, no fue
+accesible; se usaron los datos de Semenov.
+
 ### v1.36.0 — Ítem 2b.2: el hidrato como fase (cantidad formada)
 
 **Qué cambió.**  `hydrate_partition(names, zs, T, P)`: reparte una

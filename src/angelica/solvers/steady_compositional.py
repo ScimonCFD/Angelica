@@ -246,7 +246,8 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
         all-vapour stream with a water component, at its water content
         (no free water: hydrate–vapour equilibrium).  Empty (fields
         stay None) for links that are not pipes, carry no hydrate former, or
-        where no hydrate is stable above 0 °C at either end's pressure."""
+        where no hydrate is stable above 0 °C (−60 °C with an inhibitor) at
+        either end's pressure."""
         from angelica.properties.hydrate import hydrate_formation_temperature
         if not isinstance(link, PipeState) or abs(link.mass_flow_kg_per_s) < 1e-12:
             return {}
@@ -270,9 +271,10 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
                 if T is None or node.pressure_pa is None:
                     continue
                 pt = hydrate_formation_temperature(fluid.component_names, zs, float(node.pressure_pa),
-                                                   fluid.eos_name, water_mole_fraction_gas=y_water)
+                                                   fluid.eos_name, water_mole_fraction_gas=y_water,
+                                                   inhibitor=getattr(fluid, "hydrate_inhibitor", None))
                 if pt is None:
-                    continue                  # no hydrate stable above 0 °C at this end
+                    continue                  # no hydrate in the liquid-water branch at this end
                 sub = pt.temperature_c - T
                 if not worst or sub > worst["hydrate_subcooling_k"]:
                     worst = {"hydrate_subcooling_k": sub, "hydrate_temperature_c": pt.temperature_c,

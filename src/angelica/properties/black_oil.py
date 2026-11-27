@@ -860,6 +860,9 @@ class BlackOilFluid(FluidModel):
         reference_pressure_pa: Fallback pressure (Pa) when node pressures are
             not yet initialised.  Defaults to 101 325 Pa (1 atm).
         reference_temperature_c: Fallback temperature (°C).  Defaults to 20 °C.
+        hydrate_inhibitor: ``(name, mass fraction in the free water)``, e.g.
+            ``("methanol", 0.3)`` or ``("MEG", 0.4)``: lowers the hydrate
+            temperature of the hydrate check (roadmap 2b.3).
     """
 
     api_gravity: float
@@ -871,8 +874,12 @@ class BlackOilFluid(FluidModel):
     correlation: str = "STANDING"
     gas_specific_heat_j_per_kg_k: float = 2_200.0
     gas_thermal_conductivity_w_per_mk: float = 0.035
+    hydrate_inhibitor: tuple[str, float] | None = None   # (name, mass fraction in the free water)
 
     def __post_init__(self) -> None:
+        if self.hydrate_inhibitor is not None:
+            from .inhibitor import check_inhibitor
+            object.__setattr__(self, "hydrate_inhibitor", check_inhibitor(self.hydrate_inhibitor))
         if self.api_gravity <= -131.5:
             raise ValueError(f"api_gravity must be > -131.5; got {self.api_gravity}")
         if self.gas_gravity <= 0.0 and self.gor_sc_m3_per_m3 > 0.0:

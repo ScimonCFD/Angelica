@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from angelica.closures.choke import ChokeFlowModel
 from angelica.closures.convection_scheme import ConvectionScheme, HybridScheme
@@ -264,6 +264,7 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
         base_correlation = getattr(base_fluid, "correlation", "STANDING")
         base_gas_cp = getattr(base_fluid, "gas_specific_heat_j_per_kg_k", 2_200.0)
         base_gas_k = getattr(base_fluid, "gas_thermal_conductivity_w_per_mk", 0.035)
+        base_inhibitor = getattr(base_fluid, "hydrate_inhibitor", None)
 
         # Build a lookup: component_object_id → per-pipe fluid
         id_to_comp: dict[int, BlackOilComposition] = {}
@@ -281,6 +282,7 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
             correlation             = base_correlation,
             gas_specific_heat_j_per_kg_k     = base_gas_cp,
             gas_thermal_conductivity_w_per_mk = base_gas_k,
+            hydrate_inhibitor       = base_inhibitor,
         )
 
         class _PerPipeFluid:
@@ -304,6 +306,7 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
                         correlation             = base_correlation,
                         gas_specific_heat_j_per_kg_k     = base_gas_cp,
                         gas_thermal_conductivity_w_per_mk = base_gas_k,
+                        hydrate_inhibitor       = base_inhibitor,
                     )
                 return self._cache[key]
 
@@ -363,6 +366,11 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
                 pt = katz_hydrate_temperature(f.gas_gravity, float(node.pressure_pa))
                 if pt is None:
                     continue
+                inh = getattr(f, "hydrate_inhibitor", None)
+                if inh is not None:            # roadmap 2b.3: shift by the inhibitor's depression
+                    from angelica.properties.hydrate import inhibitor_depression_k
+                    pt = replace(pt, temperature_c=pt.temperature_c
+                                 - inhibitor_depression_k(float(node.pressure_pa), inh))
                 sub = pt.temperature_c - T
                 if "hydrate_subcooling_k" not in out or sub > out["hydrate_subcooling_k"]:
                     out.update(hydrate_subcooling_k=sub, hydrate_temperature_c=pt.temperature_c,

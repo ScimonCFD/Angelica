@@ -668,6 +668,9 @@ class CompositionalFluid(FluidModel):
             - ``"PRSV"``   — Peng-Robinson-Stryjek-Vera (polar components)
             - ``"SRK"``    — Soave-Redlich-Kwong (1972)
             - ``"APISRK"`` — API-modified SRK (petroleum standard)
+        hydrate_inhibitor: ``(name, mass fraction in the free water)``, e.g.
+            ``("methanol", 0.3)`` or ``("MEG", 0.4)``: used by the hydrate
+            check (roadmap 2b.3).
     """
 
     def __init__(
@@ -675,7 +678,10 @@ class CompositionalFluid(FluidModel):
         components: list[str] | tuple[str, ...],
         default_zs: list[float] | tuple[float, ...],
         eos_name: str = "PR",
+        hydrate_inhibitor: tuple[str, float] | None = None,
     ) -> None:
+        from .inhibitor import check_inhibitor
+        self.hydrate_inhibitor: tuple[str, float] | None = check_inhibitor(hydrate_inhibitor)
         self.component_names: tuple[str, ...] = tuple(components)
         self.default_zs: tuple[float, ...] = tuple(default_zs)
         eos_name = eos_name.upper()

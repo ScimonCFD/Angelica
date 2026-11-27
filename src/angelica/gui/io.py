@@ -808,6 +808,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             correlation      = _bo_corr,
             gas_specific_heat_j_per_kg_k = _bo_cp_gas,
             gas_thermal_conductivity_w_per_mk = _bo_k_gas,
+            hydrate_inhibitor = material_inhibitor(scene.material),
         )
         thermal_inlets = tuple(
             tb
@@ -849,6 +850,7 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
             components=component_names,
             default_zs=default_zs_list,
             eos_name=scene.material.get("eos_name", "PR"),
+            hydrate_inhibitor=material_inhibitor(scene.material),
         )
         inlet_comp_bcs: list[InletCompositionBC] = []
         for node in scene.nodes:
@@ -1139,6 +1141,29 @@ def _required_float(
             f"{component.component_type.capitalize()} in connection #{link_id} is missing '{field_name}'."
         )
     return _parse_float(value_text)
+
+
+def material_inhibitor(material: dict) -> tuple[str, float] | None:
+    """The hydrate inhibitor of a scene's material (roadmap 2b.3):
+    ``hydrate_inhibitor`` ("none", "methanol", "MEG") and
+    ``hydrate_inhibitor_mass_percent`` (in the free water).  ValueError
+    naming the field when it is invalid."""
+    from angelica.properties.inhibitor import check_inhibitor
+    name = str(material.get("hydrate_inhibitor", "") or "").strip()
+    if not name or name.lower() == "none":
+        return None
+    text = str(material.get("hydrate_inhibitor_mass_percent", "") or "").strip()
+    try:
+        pct = float(text)
+    except ValueError:
+        raise ValueError(f"Material: hydrate inhibitor mass % '{text}' is not a number.") from None
+    if not 0.0 <= pct <= 50.0:
+        raise ValueError(f"Material: hydrate inhibitor mass % must be in 0–50 (the range of the data "
+                         f"it is fitted to; got {text}).")
+    try:
+        return check_inhibitor((name, pct / 100.0))
+    except ValueError as exc:
+        raise ValueError(f"Material: hydrate inhibitor: {exc}") from None
 
 
 def _optional_float(

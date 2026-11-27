@@ -44,8 +44,10 @@ Validation status
 - High pressure (Sloan & Koh values quoted by Algaba et al. 2024,
   arXiv:2408.01819, Table III — secondary source): methane at 40 MPa
   295.4 K against 297 K (−1.6 K); CO2 at 10 MPa +0.4 K and at 40 MPa −1.3 K.
-- Pure methane between 285 K and 295 K and natural-gas mixtures are NOT
-  validated (no measured data were accessible).
+- Pure methane, 274–289 K, 2.9–14.2 MPa, against Semenov et al. (2024),
+  Data in Brief 53, 110138, Table 1 (read in source): the model is 0.60 to
+  0.91 K too cold (test_hydrate.py).
+- Natural-gas mixtures and methane above 289 K are NOT validated.
 
 Known deviations
 ----------------
@@ -68,7 +70,8 @@ Scope and limitations
 ---------------------
 - Liquid water–hydrate–gas (Lw-H-V and Lw-H-Lhc) only, T ≥ 273.15 K; the
   ice branch is not implemented.
-- Pure water, no inhibitors.  The hydrate formers dissolved in the water
+- Inhibitors (methanol, MEG) through the water activity of inhibitor.py
+  (roadmap 2b.3); no salts.  The hydrate formers dissolved in the water
   lower its activity (x_w < 1, Henry's law with NIST constants, no Poynting
   correction); this matters most for CO2 (x_CO2 ≈ 0.02–0.03).
 - Structure H and heavy guests (C5+) are not hydrate formers here; they only
@@ -143,7 +146,8 @@ def water_mole_fraction(T: float, fug_atm: dict[str, float]) -> float:
     return (1.0 / _M_WATER) / (1.0 / _M_WATER + m_total)
 
 
-def _water_activity(T: float, P: float, fug: dict[str, float], y_water: float | None) -> float:
+def _water_activity(T: float, P: float, fug: dict[str, float], y_water: float | None,
+                    inhibitor: tuple[str, float] | None = None) -> float:
     """Mole fraction (activity basis) of water for the vdW-P liquid term.
 
     With liquid water present, the aqueous phase with the dissolved formers
@@ -161,6 +165,9 @@ def _water_activity(T: float, P: float, fug: dict[str, float], y_water: float | 
     with dT/d ln a_w ≈ 12 K the undersaturated hydrate temperature is about
     0.6–2 K too warm — on the safe side for a hydrate check."""
     x_w = water_mole_fraction(T, fug)
+    if inhibitor is not None:                 # roadmap 2b.3: inhibitor in the free water
+        from .inhibitor import water_activity
+        x_w *= water_activity(inhibitor[0], inhibitor[1], T)
     if y_water is None:
         return x_w
     from .free_water import water_psat_pa
@@ -250,7 +257,8 @@ def _dry_basis(component_names, zs):
 
 
 def _solve_formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: float, eos_name: str,
-                              p_guess: float | None = None, y_water: float | None = None):
+                              p_guess: float | None = None, y_water: float | None = None,
+                              inhibitor: tuple[str, float] | None = None):
     """(P_eq, structure) with the lowest formation pressure, or None.
 
     With ``p_guess`` (e.g. the previous point of a curve) the root is
@@ -274,7 +282,8 @@ def _solve_formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: 
         def F(lnP: float, st=st, si=si) -> float:
             P = math.exp(lnP)
             fug = _former_fugacities(names, zs, T, P, eos_name)
-            return _dmu_water_liquid(st, T, P, _water_activity(T, P, fug, y_water)) - _dmu_water_hydrate(si, T, fug)
+            return (_dmu_water_liquid(st, T, P, _water_activity(T, P, fug, y_water, inhibitor))
+                    - _dmu_water_hydrate(si, T, fug))
 
         if best is not None and F(math.log(best[0])) > 0.0:
             continue                          # not stable at the other structure's pressure
@@ -336,25 +345,45 @@ def _solve_formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: 
 
 @lru_cache(maxsize=4096)
 def _formation_pressure(names: tuple[str, ...], zs: tuple[float, ...], T: float, eos_name: str,
-                        y_water: float | None = None):
-    return _solve_formation_pressure(names, zs, T, eos_name, y_water=y_water)
+                        y_water: float | None = None, inhibitor: tuple[str, float] | None = None):
+    return _solve_formation_pressure(names, zs, T, eos_name, y_water=y_water, inhibitor=inhibitor)
+
+
+_T_LOW_INHIBITED = 213.15     # K: lower end of the liquid-water branch with an inhibitor
+
+
+def _lowest_temperature(inh: tuple[str, float] | None) -> float:
+    """Lowest T (K) of the liquid-water branch: 0 °C for pure water; with an
+    inhibitor −60 °C.  No ice phase is modelled: below the solution's ice
+    point the water is treated as (metastable) liquid.  The ice point is not
+    used as the limit because the fitted activity puts it too high at high
+    methanol content (8.9 K at 50 %, see inhibitor.py), which would hide
+    hydrate that forms above the real ice point."""
+    return _T0 if inh is None else _T_LOW_INHIBITED
 
 
 def hydrate_formation_pressure(component_names, zs, temperature_c: float, eos_name: str = "PR",
-                               water_mole_fraction_gas: float | None = None) -> HydratePoint | None:
-    """Pressure (Pa) above which hydrate forms at ``temperature_c`` (≥ 0 °C),
-    and the stable structure; None if no former is present or it does not
-    form below 1500 bar.  ``water_mole_fraction_gas``: the water content of
-    an undersaturated gas (None: water in excess, the water-saturated curve)."""
+                               water_mole_fraction_gas: float | None = None,
+                               inhibitor: tuple[str, float] | None = None) -> HydratePoint | None:
+    """Pressure (Pa) above which hydrate forms at ``temperature_c`` (≥ 0 °C,
+    or ≥ −60 °C with an inhibitor), and the stable structure;
+    None if no former is present or it does not form below 1500 bar.
+    ``water_mole_fraction_gas``: the water content of an undersaturated gas
+    (None: water in excess, the water-saturated curve).  ``inhibitor``:
+    ``(name, mass fraction in the free water)``, e.g. ``("methanol", 0.2)``
+    (roadmap 2b.3)."""
+    from .inhibitor import check_inhibitor
+    inh = check_inhibitor(inhibitor)
     names, z = _dry_basis(component_names, zs)
     T = temperature_c + 273.15
-    if T < _T0 - 1e-9:
-        raise ValueError("The ice branch (T < 0 °C) is not implemented.")
+    if T < _lowest_temperature(inh) - 1e-9:
+        raise ValueError("Below the liquid-water branch (0 °C, or −60 °C with an inhibitor): "
+                         "the ice branch is not implemented.")
     z_r = tuple(round(x, 8) for x in z)
     yw = _checked_water_fraction(water_mole_fraction_gas)
     if yw == 0.0:
         return None                           # a gas with no water forms no hydrate
-    res = _formation_pressure(names, z_r, round(T, 4), eos_name.upper(), yw)
+    res = _formation_pressure(names, z_r, round(T, 4), eos_name.upper(), yw, inh)
     if res is None:
         return None
     return HydratePoint(temperature_c, res[0], res[1])
@@ -362,22 +391,24 @@ def hydrate_formation_pressure(component_names, zs, temperature_c: float, eos_na
 
 @lru_cache(maxsize=4096)
 def _formation_temperature(names: tuple[str, ...], zs: tuple[float, ...], P: float, eos_name: str,
-                           y_water: float | None = None):
-    """Highest T (K) at which some structure is stable at pressure P, or None."""
+                           y_water: float | None = None, inhibitor: tuple[str, float] | None = None):
+    """Highest T (K) at which some structure is stable at pressure P, or None
+    (none above the lowest temperature of the liquid-water branch)."""
     from .compositional_fluid import _get_flash_obj
     cas = _get_flash_obj(names, eos_name).constants.CASs
     if not any(c in HYDRATE_FORMER_CAS and z > 0.0 for c, z in zip(cas, zs)):
         return None
     best = None
-    T_lo0, T_hi0 = _T0, _T0 + 45.0
+    T_lo0, T_hi0 = _lowest_temperature(inhibitor), _T0 + 45.0
     for si, st in enumerate(STRUCTURES):
         def G(T: float) -> float:
             fug = _former_fugacities(names, zs, T, P, eos_name)
-            return _dmu_water_liquid(st, T, P, _water_activity(T, P, fug, y_water)) - _dmu_water_hydrate(si, T, fug)
+            return (_dmu_water_liquid(st, T, P, _water_activity(T, P, fug, y_water, inhibitor))
+                    - _dmu_water_hydrate(si, T, fug))
 
         g_lo = G(T_lo0)
         if g_lo > 0.0:
-            continue                          # not stable even at 0 °C
+            continue                          # not stable even at 0 °C (or the ice point)
         g_hi = G(T_hi0)
         if g_hi <= 0.0:
             T_eq = T_hi0                      # still stable at 45 °C: report the cap
@@ -407,17 +438,23 @@ def _formation_temperature(names: tuple[str, ...], zs: tuple[float, ...], P: flo
 
 
 def hydrate_formation_temperature(component_names, zs, pressure_pa: float, eos_name: str = "PR",
-                                  water_mole_fraction_gas: float | None = None) -> HydratePoint | None:
+                                  water_mole_fraction_gas: float | None = None,
+                                  inhibitor: tuple[str, float] | None = None) -> HydratePoint | None:
     """Temperature (°C) below which hydrate forms at ``pressure_pa``, and the
-    stable structure; None when no hydrate is stable above 0 °C at that
+    stable structure; None when no hydrate is stable above 0 °C (−60 °C with
+    an inhibitor) at that
     pressure (45 °C is reported as a cap).  ``water_mole_fraction_gas``: the
-    water content of an undersaturated gas (None: water in excess)."""
+    water content of an undersaturated gas (None: water in excess).
+    ``inhibitor``: ``(name, mass fraction in the free water)``; then None
+    means no hydrate above −60 °C."""
+    from .inhibitor import check_inhibitor
+    inh = check_inhibitor(inhibitor)
     names, z = _dry_basis(component_names, zs)
     z_r = tuple(round(x, 8) for x in z)
     yw = _checked_water_fraction(water_mole_fraction_gas)
     if yw == 0.0:
         return None                           # a gas with no water forms no hydrate
-    res = _formation_temperature(names, z_r, float(round(pressure_pa, -2)), eos_name.upper(), yw)
+    res = _formation_temperature(names, z_r, float(round(pressure_pa, -2)), eos_name.upper(), yw, inh)
     if res is None:
         return None
     return HydratePoint(res[0] - 273.15, pressure_pa, res[1])
@@ -425,12 +462,18 @@ def hydrate_formation_temperature(component_names, zs, pressure_pa: float, eos_n
 
 def hydrate_curve(component_names, zs, t_min_c: float = 0.0, t_max_c: float = 30.0,
                   n: int = 31, eos_name: str = "PR", p_max_pa: float = 1.0e8,
-                  water_mole_fraction_gas: float | None = None) -> list[HydratePoint]:
+                  water_mole_fraction_gas: float | None = None,
+                  inhibitor: tuple[str, float] | None = None) -> list[HydratePoint]:
     """Formation curve: points (T, P_formation, structure) from t_min to t_max,
     stopping after the first point above ``p_max_pa`` (the curve is steep, and
     points far above a plot's range only cost time).  Each point starts its
     search from the previous one (warm start).  ``water_mole_fraction_gas``:
-    the curve of a gas with that water content (None: water in excess)."""
+    the curve of a gas with that water content (None: water in excess).
+    ``inhibitor``: ``(name, mass fraction in the free water)``; points below
+    −60 °C are left out."""
+    from .inhibitor import check_inhibitor
+    inh = check_inhibitor(inhibitor)
+    t_low = _lowest_temperature(inh)
     yw = _checked_water_fraction(water_mole_fraction_gas)
     if yw == 0.0:
         return []                             # a gas with no water forms no hydrate
@@ -440,8 +483,10 @@ def hydrate_curve(component_names, zs, t_min_c: float = 0.0, t_max_c: float = 30
     guess = None
     for i in range(n):
         T = t_min_c + (t_max_c - t_min_c) * i / max(n - 1, 1)
-        res = _solve_formation_pressure(names, z_r, max(T, 0.0) + 273.15, eos_name.upper(), guess,
-                                        y_water=yw)
+        if inh is not None and T + 273.15 < t_low:
+            continue
+        res = _solve_formation_pressure(names, z_r, max(T + 273.15, t_low), eos_name.upper(), guess,
+                                        y_water=yw, inhibitor=inh)
         if res is None:
             continue
         guess = res[0]
@@ -453,7 +498,8 @@ def hydrate_curve(component_names, zs, t_min_c: float = 0.0, t_max_c: float = 30
 
 def hydrate_curve_at_water_content(component_names, zs, t_min_c: float = 0.0, t_max_c: float = 30.0,
                                    n: int = 31, eos_name: str = "PR",
-                                   p_max_pa: float = 1.0e8) -> list[HydratePoint]:
+                                   p_max_pa: float = 1.0e8,
+                                   inhibitor: tuple[str, float] | None = None) -> list[HydratePoint]:
     """Hydrate curve of a feed that may contain water, with the compositional
     solver's rule (roadmap 2b.1): at a point where the hydrocarbons are all
     vapour (HC flash VF ≥ 0.999) the gas carries the feed's water, y_w = z_w,
@@ -471,7 +517,7 @@ def hydrate_curve_at_water_content(component_names, zs, t_min_c: float = 0.0, t_
     names = tuple(component_names)
     w = find_water_index(names)
     total = sum(zs)
-    saturated = hydrate_curve(names, zs, t_min_c, t_max_c, n, eos_name, p_max_pa)
+    saturated = hydrate_curve(names, zs, t_min_c, t_max_c, n, eos_name, p_max_pa, inhibitor=inhibitor)
     if w is None or total <= 0.0 or zs[w] <= 0.0:
         return saturated
     y_w = float(zs[w]) / total
@@ -482,7 +528,9 @@ def hydrate_curve_at_water_content(component_names, zs, t_min_c: float = 0.0, t_
         return saturated
     hc_zs = tuple(round(z / s, 10) for z in hc)
     wet = {round(p.temperature_c, 9): p for p in hydrate_curve(names, zs, t_min_c, t_max_c, n, eos_name,
-                                                               p_max_pa, water_mole_fraction_gas=y_w)}
+                                                               p_max_pa, water_mole_fraction_gas=y_w,
+                                                               inhibitor=inhibitor)}
+
     def all_vapour(pt: HydratePoint) -> bool:
         try:
             return _hc_phase_compositions(hc_names, float(pt.pressure_pa), float(pt.temperature_c), hc_zs,
@@ -500,6 +548,39 @@ def hydrate_curve_at_water_content(component_names, zs, t_min_c: float = 0.0, t_
         else:
             pts.append(sat)
     return pts
+
+
+_DEPRESSION_GASES = ((("methane",), (1.0,)),                                         # sI
+                     (("methane", "ethane", "propane"), (0.90, 0.07, 0.03)))      # sII
+_DEPRESSION_P_MIN = 3e6
+
+
+def inhibitor_depression_k(pressure_pa: float, inhibitor) -> float:
+    """Hydrate temperature depression (K) of an inhibitor, for the black-oil
+    (gas-gravity chart) check, which has no composition to give the vdW-P
+    model: the smaller (conservative) of the depressions of two reference
+    gases at the same pressure, methane (sI) and a C1/C2/C3 gas (sII), among
+    those that form hydrate there; if neither does (very low pressure), the
+    value at 3 MPa.  At 70 bar, 30 % methanol: 16.36 and 14.91 K — the
+    gas-dependence this leaves out (CO2 would be 20.9 K: not covered)."""
+    from .inhibitor import check_inhibitor
+    inh = check_inhibitor(inhibitor)
+    if inh is None:
+        return 0.0
+
+    def drops_at(P: float) -> list[float]:
+        out = []
+        for names, zs in _DEPRESSION_GASES:
+            pure = hydrate_formation_temperature(names, zs, P)
+            if pure is None:
+                continue
+            inhibited = hydrate_formation_temperature(names, zs, P, inhibitor=inh)
+            low = inhibited.temperature_c if inhibited is not None else _T_LOW_INHIBITED - 273.15
+            out.append(pure.temperature_c - low)
+        return out
+
+    drops = drops_at(float(pressure_pa)) or drops_at(_DEPRESSION_P_MIN)
+    return min(drops) if drops else 0.0
 
 
 # ── Gas-gravity method (Katz chart) for black-oil fluids ──────────────────────

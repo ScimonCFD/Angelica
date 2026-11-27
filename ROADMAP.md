@@ -7,7 +7,7 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.36.0, checked against the code)
+## 1. Where Angelica stands (v1.37.0, checked against the code)
 
 | Area | Present today |
 |---|---|
@@ -19,7 +19,7 @@ This file is the working source of truth. Each item is released on its own
 | Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve, gas compressor (ratio, rise or power; isentropic or polytropic efficiency), heater/cooler (fixed duty or outlet temperature, with a duty limit), separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
 | GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI, US and oil-field units (psia, °F, ft, in, lb/s), Excel export; standard-volume rates (Sm³/d, STB/d, MMscf/d) in the exports |
-| Quality | 1012 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
+| Quality | 1042 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
 
 **Validation debt (2026-11-25).**  Most models since v1.19 are validated
 by internal consistency only: of the last ten log summaries, eight say
@@ -118,7 +118,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   experimental data over 273–295 K; larger errors are reported, not tuned away.
 - 2.2 **Done in v1.19.0.** Hydrate curve on the phase-envelope plot; hydrate margin per link in
   the results and on the canvas.
-- 2.3 Inhibitors (methanol, MEG). *Done when:* matches published depression
+- 2.3 **Done in v1.37.0 (as 2b.3).** Inhibitors (methanol, MEG). *Done when:* matches published depression
   data (Ng & Robinson 1985) within the accuracy of the chosen method.
 
 ### Stage 2b — advanced flow assurance (added 2026-11-23, after stage 4)
@@ -132,7 +132,9 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
   (Gibbs minimisation): amount of hydrate formed, water-limited cases,
   composition change. *Done when:* with excess water the incipient boundary
   equals the vdW-P curve; mass balance of water and formers closes.
-- 2b.3 Inhibitors (methanol, MEG) on top of 2b.2 — replaces item 2.3.
+- 2b.3 **Done in v1.37.0.** Inhibitors (methanol, MEG) on top of 2b.2 — replaces item 2.3.
+  Data: Semenov et al. 2023 (fit) and 2024 (comparison, same lab), not Ng & Robinson
+  (not accessible).
 
 ### Stage 3 — well correlations (items 4, 5, 6)
 - 3.1 **Done in v1.21.0.** Hagedorn-Brown (with Griffith bubble-flow correction, no-slip floor).
@@ -1072,3 +1074,28 @@ Summary:
   mass balances to 1e-12; leftover gas at its own hydrate condition.
 - Not done: ice phase; two hydrate structures at once (flagged);
   black-oil (no composition).
+
+### 2026-11-27 — Item 2b.3: hydrate inhibitors, methanol and MEG (v1.37.0)
+
+- `inhibitor` module: water activity R·T·ln γ_w = x²(A + B·x) fitted
+  through vdW-P to the methane hydrate depressions of Semenov et al. 2023;
+  every hydrate function, `hydrate_partition`, both fluids, both solvers'
+  hydrate margins and the GUI take an inhibitor.  Black-oil: the smaller of
+  the methane and C1/C2/C3 depressions shifts the Katz chart.
+
+Summary:
+- Compared with data read in a source (same laboratory as the fit data,
+  so not independent): methanol, Semenov et al. 2024 (5–50 %, 3–13 MPa),
+  depression error ≤ 0.07–1.39 K growing with concentration; over-predicted
+  (unsafe side) above ~7 MPa, absolute hydrate T up to 1.89 K cold; the
+  model's depression grows with pressure where the data are flat (above
+  13 MPa unvalidated).  Pure methane 274–289 K, model 0.60–0.91 K cold.
+- Review before the tag: no-free-water partition with inhibitor fixed
+  (gave no hydrate); black-oil shift below 3 MPa now at the pipe pressure.
+- Consistency only: MEG (fitted and checked within one dataset).
+- Not validated / recorded: ice points implied by the activity 1.0–8.9 K
+  high at 20–50 % methanol (not used as a limit); natural-gas mixtures with
+  inhibitor; the black-oil shift's gas dependence (1.45 K between the two
+  reference gases at 30 % methanol, the smaller taken).
+- Tried and dropped: activity from the ice points / UNIFAC (over-predicted
+  the depression by up to 6.3 K at 50 % methanol, unsafe side).

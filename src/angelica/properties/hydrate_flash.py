@@ -47,7 +47,9 @@ import math
 from dataclasses import dataclass, field
 
 from .hydrate import (
+    _M_WATER,
     _T0,
+    _T_LOW_INHIBITED,
     HYDRATE_FORMER_CAS,
     STRUCTURES,
     _dmu_water_hydrate,
@@ -77,6 +79,7 @@ class HydratePartition:
     other_structure_stable: bool = False
     hydration_number: float | None = None  # water molecules per guest in the hydrate
     notes: tuple[str, ...] = field(default_factory=tuple)
+    inhibitor_mass_fraction: float | None = None   # in the free water left (None: no inhibitor)
 
     @property
     def hydrate_mol(self) -> float:
@@ -116,11 +119,19 @@ def _solve(A: list[list[float]], b: list[float]) -> list[float] | None:
 
 
 def hydrate_partition(component_names, zs, temperature_c: float, pressure_pa: float,
-                      eos_name: str = "PR") -> HydratePartition:
+                      eos_name: str = "PR", inhibitor=None) -> HydratePartition:
     """Equilibrium amount of hydrate formed by 1 mol of feed ``zs`` (with a
-    water component) at ``temperature_c`` and ``pressure_pa``."""
+    water component) at ``temperature_c`` and ``pressure_pa``.
+
+    ``inhibitor``: ``(name, mass fraction in the feed's water)`` (roadmap
+    2b.3).  The inhibitor stays in the free water: as water goes into the
+    hydrate the solution concentrates, lowering the water activity, until
+    the hydrate stops growing.  Its final mass fraction is reported; above
+    the fitted range (50 %) the activity is extrapolated (noted)."""
     from .compositional_fluid import _get_flash_obj, _hc_phase_compositions
     from .free_water import find_water_index, free_water_split, water_psat_pa
+    from .inhibitor import check_inhibitor
+    from .inhibitor import water_activity as inhibited_activity
 
     names = tuple(component_names)
     w = find_water_index(names)
@@ -129,8 +140,10 @@ def hydrate_partition(component_names, zs, temperature_c: float, pressure_pa: fl
     if not (math.isfinite(temperature_c) and math.isfinite(pressure_pa) and pressure_pa > 0.0):
         raise ValueError(f"need a finite temperature and a pressure > 0 (got {temperature_c} °C, {pressure_pa} Pa)")
     T = temperature_c + 273.15
-    if T < _T0 - 1e-9:
-        raise ValueError("The ice branch (T < 0 °C) is not implemented.")
+    inh = check_inhibitor(inhibitor)
+    if T < (_T0 if inh is None else _T_LOW_INHIBITED) - 1e-9:
+        raise ValueError("Below the liquid-water branch (0 °C, or −60 °C with an inhibitor): "
+                         "the ice branch is not implemented.")
     z = [float(x) for x in zs]
     if len(z) != len(names) or any(not math.isfinite(x) or x < 0.0 for x in z) or sum(z) <= 0.0:
         raise ValueError("zs must be finite, ≥ 0 and as long as component_names")
@@ -144,6 +157,17 @@ def hydrate_partition(component_names, zs, temperature_c: float, pressure_pa: fl
     z_w = z[w]
     P = float(pressure_pa)
     psat = water_psat_pa(T)
+    # Inhibitor mass per mol of feed, from its mass fraction in the feed water.
+    m_inh = 0.0 if inh is None else inh[1] / (1.0 - inh[1]) * z_w * _M_WATER
+
+    def inhibitor_fraction(n_wl: float) -> float:
+        return m_inh / (m_inh + n_wl * _M_WATER) if m_inh > 0.0 else 0.0
+
+    def aqueous_activity(fug, n_wl: float) -> float:
+        x_w = water_mole_fraction(T, fug)
+        if inh is None:
+            return x_w
+        return x_w * inhibited_activity(inh[0], inhibitor_fraction(n_wl), T)
 
     def fluid_state(n_hc: list[float], n_w: float):
         """Fugacities, water activity, (free, vapour) water of the fluid."""
@@ -154,8 +178,10 @@ def hydrate_partition(component_names, zs, temperature_c: float, pressure_pa: fl
         n_wl, n_wv = free_water_split(n_w, vf, tot, T, P)
         v_hc = vf * tot
         if n_wl > 1e-15 or v_hc <= 0.0:
-            a_w = water_mole_fraction(T, fug)
+            a_w = aqueous_activity(fug, n_wl)
         else:
+            # No free water: the gas's water sets the activity (the inhibitor
+            # has no solvent to act in; v1.37.0 review: it gave a_w = 0).
             y_w = n_wv / (n_wv + v_hc)
             a_w = min(water_mole_fraction(T, fug), y_w * P / psat)
         return fug, a_w, n_wl, n_wv
@@ -168,7 +194,9 @@ def hydrate_partition(component_names, zs, temperature_c: float, pressure_pa: fl
     fug0, a0, wl0, wv0 = fluid_state(z_hc, z_w)
     g0 = [g_value(si, fug0, a0) for si in range(len(STRUCTURES))]
     no_hydrate = HydratePartition(temperature_c, P, "none", None, 0.0, {},
-                                  dict(zip(names, z)), wl0, wv0, min(g0))
+                                  dict(zip(names, z)), wl0, wv0, min(g0),
+                                  inhibitor_mass_fraction=None if inh is None or wl0 <= 1e-15
+                                  else inhibitor_fraction(wl0))
     if not any(c in HYDRATE_FORMER_CAS and x > 0.0 for c, x in zip(cas, z_hc)) or z_w <= 0.0 or min(g0) >= 0.0:
         return no_hydrate
     si = min(range(len(STRUCTURES)), key=lambda i: g0[i])
@@ -283,6 +311,11 @@ def hydrate_partition(component_names, zs, temperature_c: float, pressure_pa: fl
     else:
         limited = "equilibrium"
     other = [i for i in range(len(STRUCTURES)) if i != si and g_value(i, fug, a_w) < 0.0]
+    w_final = None if inh is None or n_wl <= 1e-15 else inhibitor_fraction(n_wl)
+    notes: tuple[str, ...] = ()
+    if w_final is not None and w_final > 0.5:
+        notes = (f"inhibitor concentrated to {w_final:.1%} in the free water: above the fitted range (50 %), "
+                 "activity extrapolated",)
     fluid = {name_of[c]: x for c, x in zip(cas, n)}
     fluid[names[w]] = z_w - xi
     return HydratePartition(
@@ -292,4 +325,6 @@ def hydrate_partition(component_names, zs, temperature_c: float, pressure_pa: fl
         fluid_mol=fluid, free_water_mol=n_wl, vapour_water_mol=n_wv, driving_force=g,
         other_structure_stable=bool(other),
         hydration_number=1.0 / guests_total if guests_total > 0.0 else None,
+        inhibitor_mass_fraction=w_final,
+        notes=notes,
     )

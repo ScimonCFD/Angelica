@@ -843,9 +843,15 @@ class NetSimGui:
             row=9, column=1, sticky="ew", pady=4
         )
 
+        inh_name_var, inh_pct_var = self._inhibitor_fields(frame, 10, mat)
+
         def _save() -> None:
+            inh = self._checked_inhibitor(inh_name_var, inh_pct_var, dialog)
+            if inh is False:
+                return
             new_mat = {
                 **dict(self.scene.material),
+                **inh,
                 "api_gravity": api_var.get().strip(),
                 "gas_gravity": gg_var.get().strip(),
                 "correlation": corr_var.get().strip(),
@@ -857,13 +863,51 @@ class NetSimGui:
             dialog.destroy()
 
         btn_row = ttk.Frame(frame)
-        btn_row.grid(row=10, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        btn_row.grid(row=14, column=0, columnspan=2, sticky="e", pady=(10, 0))
         ttk.Button(btn_row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
         ttk.Button(btn_row, text="Save", command=_save).pack(side="right")
 
         dialog.update_idletasks()
         dialog.grab_set()
         dialog.focus_set()
+
+    def _inhibitor_fields(self, frame, row: int, mat: dict):
+        """Hydrate inhibitor widgets of the fluid dialogs (roadmap 2b.3)."""
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=row, column=0, columnspan=2, sticky="ew", pady=(6, 2))
+        ttk.Label(frame, text="— Hydrate inhibitor (in the free water) —", foreground="gray").grid(
+            row=row + 1, column=0, columnspan=2, pady=(0, 4))
+        name_var = tk.StringVar(value=mat.get("hydrate_inhibitor", "none") or "none")
+        pct_var = tk.StringVar(value=mat.get("hydrate_inhibitor_mass_percent", ""))
+        ttk.Label(frame, text="Inhibitor").grid(row=row + 2, column=0, sticky="w", pady=4, padx=(0, 8))
+        ttk.Combobox(frame, textvariable=name_var, values=["none", "methanol", "MEG"],
+                     state="readonly", width=16).grid(row=row + 2, column=1, sticky="ew", pady=4)
+        ttk.Label(frame, text="Mass % (0–50)").grid(row=row + 3, column=0, sticky="w", pady=4, padx=(0, 8))
+        ttk.Entry(frame, textvariable=pct_var, width=18).grid(row=row + 3, column=1, sticky="ew", pady=4)
+        return name_var, pct_var
+
+    @staticmethod
+    def _inhibitor_material(name_var, pct_var) -> dict:
+        return {"hydrate_inhibitor": name_var.get().strip() or "none",
+                "hydrate_inhibitor_mass_percent": pct_var.get().strip()}
+
+    def _checked_inhibitor(self, name_var, pct_var, dialog):
+        """Material entries of the inhibitor, or False after an error box."""
+        from angelica.gui.io import material_inhibitor
+        entries = self._inhibitor_material(name_var, pct_var)
+        try:
+            material_inhibitor(entries)
+        except ValueError as exc:
+            messagebox.showerror("Invalid fluid", str(exc), parent=dialog)
+            return False
+        return entries
+
+    def _dialog_inhibitor(self, name_var, pct_var):
+        from angelica.gui.io import material_inhibitor
+        try:
+            return material_inhibitor(self._inhibitor_material(name_var, pct_var))
+        except ValueError:
+            return None
 
     def _open_compositional_fluid_dialog(self) -> None:
         dialog = tk.Toplevel(self.root)
@@ -932,7 +976,12 @@ class NetSimGui:
             justify="left",
         ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(0, 4))
 
+        inh_name_var, inh_pct_var = self._inhibitor_fields(frame, 7, mat)
+
         def _save() -> None:
+            inh = self._checked_inhibitor(inh_name_var, inh_pct_var, dialog)
+            if inh is False:
+                return
             names_text = names_var.get().strip()
             zs_text = zs_var.get().strip()
             if not names_text:
@@ -965,6 +1014,7 @@ class NetSimGui:
                 "default_zs": ", ".join(f"{z:.6g}" for z in zs_list),
                 "eos_name": eos_var.get().upper(),
                 "name": " + ".join(names_list),
+                **inh,
             }
             self.scene.update_material(new_mat)
             self._refresh_global_summaries()
@@ -1011,10 +1061,11 @@ class NetSimGui:
                 component_names=tuple(names_list),
                 zs=tuple(zs_list),
                 eos_name=eos_var.get().upper(),
+                inhibitor=self._dialog_inhibitor(inh_name_var, inh_pct_var),
             )
 
         btn_row = ttk.Frame(frame)
-        btn_row.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        btn_row.grid(row=11, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         ttk.Button(btn_row, text="Phase Envelope…", command=_preview_envelope).pack(side="left")
         ttk.Button(btn_row, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
         ttk.Button(btn_row, text="Save", command=_save).pack(side="right")
@@ -4210,7 +4261,20 @@ class NetSimGui:
             op_points=op_pts,
             eos_name=eos_name,
             free_water=free_water,
+            inhibitor=self._scene_inhibitor(),
         )
+
+    def _scene_inhibitor(self):
+        """The hydrate inhibitor of the last solve (the results being shown),
+        else the material's; None when invalid (the solve reports that)."""
+        run_case = getattr(self, "_run_case", None)
+        if run_case is not None:
+            return getattr(run_case.fluid_model, "hydrate_inhibitor", None)
+        from angelica.gui.io import material_inhibitor
+        try:
+            return material_inhibitor(self.scene.material or {})
+        except ValueError:
+            return None
 
     def _open_phase_envelope_dialog(
         self,
@@ -4220,6 +4284,7 @@ class NetSimGui:
         op_points: "list[tuple[float, float]] | None" = None,
         eos_name: str = "PR",
         free_water: "bool | None" = None,
+        inhibitor: "tuple[str, float] | None" = None,
     ) -> None:
         win = tk.Toplevel(self.root)
         win.title(title)
@@ -4409,8 +4474,10 @@ class NetSimGui:
                     p_top = 1.3 * max(env_p + op_p + [1.0e6])      # just above the plot's range
                     from angelica.properties.hydrate import hydrate_curve_at_water_content
                     pts = [(pt.temperature_c + 273.15, pt.pressure_pa)
-                           for pt in hydrate_curve_at_water_content(component_names, zs, 0.0, 40.0, 21,
-                                                                    eos_name=eos_name, p_max_pa=p_top)]
+                           for pt in hydrate_curve_at_water_content(
+                               component_names, zs, -40.0 if inhibitor else 0.0, 40.0,
+                               33 if inhibitor else 21, eos_name=eos_name, p_max_pa=p_top,
+                               inhibitor=inhibitor)]
                 except Exception:
                     pts = []
                 result_holder["hydrate"] = pts

@@ -198,7 +198,8 @@ def _well_inputs(case: NetworkCase, well, isothermal_c):
     if cbc is not None:
         from angelica.properties.compositional_fluid import CompositionalFluid
         fluid = CompositionalFluid(list(getattr(case.fluid_model, "component_names")), list(cbc.zs),
-                                   eos_name=getattr(case.fluid_model, "eos_name", "PR"))
+                                   eos_name=getattr(case.fluid_model, "eos_name", "PR"),
+                                   hydrate_inhibitor=getattr(case.fluid_model, "hydrate_inhibitor", None))
     return float(p_res), float(t_res), fluid, bc, cbc
 
 
