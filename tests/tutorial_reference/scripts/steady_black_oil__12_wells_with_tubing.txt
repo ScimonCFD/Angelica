@@ -64,6 +64,18 @@ Part F — separator pressure (back-pressure on the wells)
   Well 3    6.177       —   0.000     0.0      —  dead: column heavier than P_r
   Manifold 6.177 MPa  ·  oil 415.1 m³/d  ·  converged True
 
+Part G — nodal analysis of Well 1 at its wellhead (angelica.studies)
+   ṁ (kg/s)  inflow P_wh  outflow P_wh
+                   (MPa)         (MPa)
+      0.927       11.040         1.795
+      2.094       10.060         2.133
+      3.261        8.769         2.550
+      4.428        7.461         3.024
+      5.595        5.884         3.537
+      6.762        3.916         4.078
+      7.929        0.586         4.638
+  Crossing: 6.6931 kg/s at 4.0457 MPa;  network solve: 6.6932 kg/s at 4.0455 MPa
+
   • Well 3's static oil-and-water column (25 °API, WOR 0.8, 2 000 m) weighs
     more than its reservoir pressure: it cannot flow without artificial lift.
   • Larger tubing reduces friction in the high-rate wells; the Well model
@@ -84,3 +96,6 @@ Part F — separator pressure (back-pressure on the wells)
     above the peak, the well stays dead — shut in, it cannot start against
     the manifold (it would need unloading or gas lift).  result.well_states
     gives each well's state and the reason.
+  • The nodal analysis cuts the network at Well 1's wellhead: the well's own
+    curve (inflow) against the pressure the rest of the network needs to take
+    each rate (outflow).  They cross where the network solve puts the well.

@@ -70,6 +70,8 @@ class Pipe(PressureChanger):
     def __post_init__(self) -> None:
         if self.length_m <= 0.0:
             raise ValueError(f"Pipe length_m must be positive (got {self.length_m})")
+        if not (math.isfinite(self.diameter_m) and self.diameter_m > 0.0):
+            raise ValueError(f"Pipe diameter_m must be positive (got {self.diameter_m})")
         if abs(self.height_change_m) > self.length_m:
             raise ValueError(
                 f"abs(height_change_m)={abs(self.height_change_m):.4f} exceeds "

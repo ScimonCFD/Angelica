@@ -395,6 +395,11 @@ class NetSimGui:
         view_menu.add_command(label="Convergence Window", command=self._open_convergence_window)
         menu_bar.add_cascade(label="View", menu=view_menu)
 
+        studies_menu = tk.Menu(menu_bar, tearoff=False)
+        studies_menu.add_command(label="Sensitivity…", command=self._open_sensitivity_dialog)
+        studies_menu.add_command(label="Nodal Analysis…", command=self._open_nodal_dialog)
+        menu_bar.add_cascade(label="Studies", menu=studies_menu)
+
         settings_menu = tk.Menu(menu_bar, tearoff=False)
         settings_menu.add_command(label="Unit System…", command=self._open_unit_system_dialog)
         menu_bar.add_cascade(label="Settings", menu=settings_menu)
@@ -1327,6 +1332,14 @@ class NetSimGui:
         dialog.grab_set()
         dialog.focus_set()
         library_box.focus_set()
+
+    def _open_sensitivity_dialog(self) -> None:
+        from angelica.gui.studies import open_sensitivity_dialog
+        open_sensitivity_dialog(self)
+
+    def _open_nodal_dialog(self) -> None:
+        from angelica.gui.studies import open_nodal_dialog
+        open_nodal_dialog(self)
 
     def _open_numerics_dialog(self) -> None:
         dialog = tk.Toplevel(self.root)

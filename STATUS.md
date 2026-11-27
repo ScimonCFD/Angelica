@@ -28,6 +28,35 @@ maintainer y recoge lo que espera su decisión.
 
 ## Releases
 
+### v1.32.0 — Ítem 7.2: estudios de sensibilidad y análisis nodal
+
+**Qué cambió.**  `angelica.studies`: variar uno o dos parámetros del caso
+(presión o caudal de un contorno, temperatura, cualquier campo numérico de
+un componente) y resolver cada punto; análisis nodal de un pozo (curva del
+pozo frente a la presión que la red necesita en su cabeza, cruce en la rama
+estable).  En la GUI, menú *Studies* con *Sensitivity…* y *Nodal
+Analysis…* (gráficas).  Tutorial black-oil 12, Parte G.
+
+**Validado contra fuente.**  Nada.
+
+**Validado por consistencia (medido).**  El punto de operación del análisis
+nodal es el de la red completa: tutorial 12, pozo 1 6.6933 frente a 6.6932
+kg/s y 4.04543 frente a 4.04548 MPa, pozo 2 2.2189 frente a 2.2190; tutorial
+composicional 09, 6.2268 = 6.2268 kg/s.  Un pozo muerto no tiene cruce.
+
+**Revisión independiente.**  Encontró que mi primera versión del análisis
+nodal daba puntos de operación equivocados sin avisar en cinco casos
+(correlación PVT del caso sustituida por Standing, yacimiento compartido,
+solver isotérmico, yacimiento sin condición térmica, cabeza de pozo
+compartida: errores del 2 % al 127 %) y uno con solo una nota.  Corregido:
+los cuatro primeros coinciden con la red a ≤ 3.8·10⁻⁵; la cabeza compartida
+y la bisección sin terminar ya no dan punto.  También: un tubo de diámetro
+negativo se aceptaba (corregido).
+
+**No validado.**  Frente a un ejemplo publicado de análisis nodal.
+**Supuesto / limitaciones.**  Pozos con gas lift no soportados en el
+análisis nodal; la GUI de estudios trabaja en SI.
+
 ### v1.31.0 — Ítem 7.1: unidades de campo y caudales estándar
 
 **Qué cambió.**  Caudales estándar por tubo (petróleo, gas, agua; Sm³/d a

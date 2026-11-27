@@ -1,5 +1,61 @@
 # Changelog
 
+## [1.32.0] — 2026-11-27
+
+Roadmap item 7.2: sensitivity studies and nodal analysis, from the API and
+the GUI.
+
+### Added
+  - **`angelica.studies`.**  `set_parameter(case, target, value)` with
+    targets "pressure:<node>", "flow:<node>", "temperature:<node>" and
+    "component:<id>.<field>" (any numeric field of a component);
+    `sensitivity` (one parameter) and `sensitivity_2d` (a grid), one solve
+    per point, each keeping its `SolveResult` (converged or not, with its
+    diagnosis).
+  - **Nodal analysis** (`nodal_analysis(case, solver_factory, well_id)`):
+    the network split at a well's wellhead — inflow, the well's own
+    deliverability curve (IPR and tubing, the one the network solver
+    uses); outflow, the wellhead pressure the rest of the network needs to
+    take each rate (the network solved with that rate entering at the
+    wellhead, with the well's fluid at the tubing's wellhead temperature);
+    the operating point where they cross on the stable branch, refined by
+    bisection.  It reproduces the full network solve: black-oil tutorial
+    12, well 1 6.6933 against 6.6932 kg/s and 4.04543 against 4.04548 MPa,
+    well 2 2.2189 against 2.2190 kg/s; compositional tutorial 09, the
+    condensate well 6.2268 = 6.2268 kg/s and 6.97104 against 6.97114 MPa.
+    A dead well has no crossing (said so).  The well's fluid is the case
+    fluid with its correlation and gas properties, at the reservoir
+    temperature the solver uses (its isothermal temperature, or its
+    initial temperature without a boundary).  Not supported (ValueError):
+    gas-lifted wells, a wellhead that is a boundary node or also receives
+    other links.  A crossing the bisection cannot refine gives no operating
+    point, only a note.
+  - **GUI: Studies menu** — *Sensitivity…* (vary a boundary or component
+    parameter over a range, plot a flow or a pressure; non-converged
+    points leave gaps and are listed) and *Nodal Analysis…* (inflow and
+    outflow curves of a chosen well, operating point marked).  Values in
+    SI (the solver's units).
+  - Black-oil tutorial 12, Part G: the nodal analysis of Well 1.
+  - A study point whose value a component rejects, or whose solve raises,
+    is kept with its error (`StudyPoint.error`) instead of stopping the
+    study; an unknown or non-numeric target raises ValueError.
+
+### Fixed
+  - `Pipe` accepted a zero, negative or NaN diameter (a −0.1 m pipe solved
+    as "converged"); it now raises ValueError.
+
+### Review before the tag
+  - The first version returned wrong operating points without a word in
+    five cases (checked against the full solve): the case's PVT
+    correlation replaced by Standing (+3.9 % with Vasquez-Beggs), a
+    reservoir node shared with another well losing its fluid (+2.7 %), an
+    isothermal solver (+2.2 %), no reservoir thermal boundary (−14 %), and
+    a wellhead shared with another well (+127 %); and one with only a note
+    (an unrefined bisection, −11 %).  After the fixes the first four agree
+    within 3.8·10⁻⁵ and the last two are refused or give no point.
+  - Validation by consistency only (no published nodal-analysis example
+    was read).
+
 ## [1.31.0] — 2026-11-27
 
 Roadmap item 7.1: oil-field units and standard-volume rates.

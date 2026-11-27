@@ -237,6 +237,25 @@ def run():
     print("  At 6 MPa:")
     well_table(last, 0.0762)
 
+    print("\nPart G — nodal analysis of Well 1 at its wellhead (angelica.studies)")
+    from angelica.studies import nodal_analysis
+    case = build_case()
+    na = nodal_analysis(case, lambda: SteadyBlackOilSolver(turbulent_pipe_correlation=BeggsBrillCorrelation()),
+                        "well_Well1", n_rates=7)
+    print(f"  {'ṁ (kg/s)':>9} {'inflow P_wh':>12} {'outflow P_wh':>13}")
+    print(f"  {'':>9} {'(MPa)':>12} {'(MPa)':>13}")
+    peak = max(range(len(na.inflow)), key=lambda k: na.inflow[k][1])
+    stable = na.inflow[peak:]
+    for m, p_out in na.outflow:
+        p_in = next((p0 + (p1 - p0) * (m - m0) / (m1 - m0) for (m0, p0), (m1, p1) in zip(stable, stable[1:])
+                     if m0 <= m <= m1 and m1 > m0), float("nan"))
+        print(f"  {m:9.3f} {p_in / 1e6:12.3f} {p_out / 1e6 if p_out is not None else float('nan'):13.3f}")
+    m_op, p_op = na.operating_point
+    net = SteadyBlackOilSolver(turbulent_pipe_correlation=BeggsBrillCorrelation()).solve(case)
+    ws = next(w for w in net.well_states if w.component_id == "well_Well1")
+    print(f"  Crossing: {m_op:.4f} kg/s at {p_op / 1e6:.4f} MPa;  network solve: "
+          f"{ws.mass_flow_kg_per_s:.4f} kg/s at {ws.wellhead_pressure_pa / 1e6:.4f} MPa")
+
     print()
     print("  • Well 3's static oil-and-water column (25 °API, WOR 0.8, 2 000 m) weighs")
     print("    more than its reservoir pressure: it cannot flow without artificial lift.")
@@ -258,6 +277,9 @@ def run():
     print("    above the peak, the well stays dead — shut in, it cannot start against")
     print("    the manifold (it would need unloading or gas lift).  result.well_states")
     print("    gives each well's state and the reason.")
+    print("  • The nodal analysis cuts the network at Well 1's wellhead: the well's own")
+    print("    curve (inflow) against the pressure the rest of the network needs to take")
+    print("    each rate (outflow).  They cross where the network solve puts the well.")
 
 
 if __name__ == "__main__":

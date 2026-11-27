@@ -7,7 +7,7 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.31.0, checked against the code)
+## 1. Where Angelica stands (v1.32.0, checked against the code)
 
 | Area | Present today |
 |---|---|
@@ -19,7 +19,7 @@ This file is the working source of truth. Each item is released on its own
 | Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve, gas compressor (ratio, rise or power; isentropic or polytropic efficiency), heater/cooler (fixed duty or outlet temperature, with a duty limit), separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
 | GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI, US and oil-field units (psia, °F, ft, in, lb/s), Excel export; standard-volume rates (Sm³/d, STB/d, MMscf/d) in the exports |
-| Quality | 932 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
+| Quality | 946 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
 
 **Validation debt (2026-11-25).**  Most models since v1.19 are validated
 by internal consistency only: of the last ten log summaries, eight say
@@ -65,7 +65,7 @@ or more (human-equivalent).
 | 15 | Pressure regulator / back-pressure controller | Done in v1.27.0 (`PressureRegulator`) | B | M | Analytical: set-point held when feasible, open or closed otherwise |
 | 16 | Heater/cooler with outlet-temperature spec | Done in v1.29.0 (`HeatSource(outlet_temperature_c=…)`) | B | S | Energy balance; water duty against NIST enthalpies |
 | 17 | Buried pipe, cylindrical layers, computed inner film coefficient, water/air surroundings | Flat-wall layers, user film coefficients | B | M | Conduction shape factor (Incropera); GPSA / Gnielinski; cylindrical-wall analytic solution |
-| 18 | Sensitivity / case-study runner (nodal analysis plots) | Scripts only | A | M | Reproduces tutorial 12 part C and tutorial sweeps from the GUI |
+| 18 | Sensitivity / case-study runner (nodal analysis plots) | Done in v1.32.0 (`angelica.studies`, GUI Studies menu) | A | M | Nodal operating point = the network solve |
 | 19 | Line sizing | None | C | S | Inverse of a solved case |
 | 20 | Calibration factors (friction and holdup multipliers) | None | B | S | Factor 1 reproduces current results; monotonic response |
 | 21 | Erosional velocity check (API RP 14E) | None | A | S | API RP 14E formula, hand calculation |
@@ -246,7 +246,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 
 ### Stage 7 — engineering tools (items 18, 19, 20, 22, 26)
 - 7.1 **Done in v1.31.0.** Oil-field unit system in the GUI; standard-volume rates in results.
-- 7.2 Sensitivity runner (API and GUI): vary one or two parameters, plot.
+- 7.2 **Done in v1.32.0.** Sensitivity runner (API and GUI): vary one or two parameters, plot; nodal analysis of a well.
 - 7.3 Calibration factors; line sizing.
 - 7.4 Per-link profile report export.
 
@@ -997,4 +997,18 @@ Summary:
   (oil ≤ 1e-6, water 1.6e-6; gas 0.11 %, the gas-only representation).
 - Not validated: compositional standard rates against a published flash
   (single-stage flash to 60 °F, 1 atm; not a plant's multi-stage path).
+
+### 2026-11-27 — Item 7.2: sensitivity and nodal analysis (v1.32.0)
+
+- `angelica.studies` (set_parameter, sensitivity, sensitivity_2d,
+  nodal_analysis); GUI Studies menu; tutorial 12 Part G.
+- Review before the tag: five silent wrong operating points (PVT
+  correlation, shared reservoir, isothermal solver, no reservoir thermal
+  boundary, shared wellhead) fixed or refused; Pipe diameter validated.
+
+Summary:
+- Validated against data read in a source: none.
+- Validated by consistency: nodal operating point = the full network solve
+  (black-oil tutorial 12 wells 1 and 2, compositional tutorial 09: ≤ 1.5e-5).
+- Not validated: against a published nodal-analysis example.
 
