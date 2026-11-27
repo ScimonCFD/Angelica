@@ -1,5 +1,55 @@
 # Changelog
 
+## [1.31.0] — 2026-11-27
+
+Roadmap item 7.1: oil-field units and standard-volume rates.
+
+### Added
+  - **Standard-volume rates per link** (black-oil and compositional runs):
+    `ComponentFlowResult.std_oil_sm3_per_day`, `std_gas_sm3_per_day`,
+    `std_water_sm3_per_day` at 60 °F and 1 atm.  Black-oil: by definition,
+    q_o = ṁ/(ρ_o,sc + GOR·ρ_g,sc + WOR·ρ_w,sc), q_g = GOR·q_o, q_w = WOR·q_o
+    (checked link by link against that formula written independently).
+    Compositional: the stream flashed at standard conditions, single stage,
+    gas on a dry basis as the EOS's real-gas (Peneloux) volume — a lean gas
+    within 2.2·10⁻⁴ of an independent thermo PR flash — and water as all
+    the stream's water, liquid at standard conditions.  Printed with the result and exported (CSV section and a
+    "Standard rates" workbook sheet) in Sm³/d and in STB/d, MMscf/d, bbl/d.
+    In black-oil the stock-tank volumes do not depend on the separation
+    path, so the stream feeding a separator carries the separator's own
+    rates: tutorial 14, oil 705.49 Sm³/d both, water within 1.6·10⁻⁶; the
+    gas leaving it conserves the feed's within 0.11 % (the gas outlet's
+    black-oil representation, GOR 10⁶, carries 10⁻⁶ Sm³ of oil per Sm³).
+    Rates are of |ṁ|: a reversed link shows positive rates.
+    In compositional a single-stage flash to standard conditions is not
+    the separator train's multi-stage path, and the two differ — the link
+    rates are the stream's own, not a forecast of a plant's.
+  - **`angelica.units`**: the exact definitions (foot, inch, pound,
+    pound-force, psi, U.S. gallon, oil barrel, cubic foot, centipoise),
+    °F ↔ °C, psia ↔ psig, Sm³ → STB and MMscf.  Checked against NIST SP 811
+    Appendix B.8 (read in source): every factor within half a unit of its
+    7th printed digit.  Angelica's Sm³ is at 60 °F and 1 atm, the
+    conditions of the standard cubic foot, so scf = Sm³/0.3048³ with no
+    correction.
+  - **GUI unit system "Oil field (psia · °F · ft · in · lb/s)"**: pressures
+    in psia (the solver's pressures are absolute), temperatures in °F —
+    boundary temperatures, pipe ambient temperature, heater outlet set
+    point and the temperatures shown on the canvas.  The SI and US systems
+    are unchanged (US keeps °C).  Still in °C (labelled so) in every system: the node thermal
+    gradient (°C/m), the Numerics isothermal temperature, the crude-oil
+    material temperature, and the temperature-profile and phase-envelope
+    plots.
+
+### Review before the tag
+  - The first version took black-oil standard gas from the separator split
+    at standard conditions, where Standing's correlation still dissolves
+    Rs ≈ 0.4–1.3 Sm³/Sm³: gas 0.7 % low in tutorial 14, 13 % low at GOR 10,
+    and not conserved at junctions.  Now by definition (above).
+  - It dropped the water the standard-condition flash leaves in the gas
+    (24 % of the water of a condensate with 7 % water).  Now all the water.
+  - Canvas temperatures kept their one-decimal format in SI (the first
+    version showed six significant figures).
+
 ## [1.30.0] — 2026-11-27
 
 Roadmap item 5.2: gas compressor, in the gas, black-oil and compositional

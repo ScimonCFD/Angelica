@@ -43,6 +43,12 @@ class ComponentFlowResult:
     gas_phase_zs: tuple[float, ...] = ()    # gas phase mole fractions per HC component
     liquid_phase_zs: tuple[float, ...] = () # liquid HC phase mole fractions per HC component
     multiphase: MultiphaseFlowResult | None = None  # pipes in black-oil / compositional runs
+    # Standard-volume rates (Sm³/d at 60 °F, 1 atm) of the stream, black-oil and
+    # compositional runs: the stream flashed to standard conditions (single
+    # stage).  ``angelica.units`` converts to bbl/d and MMscf/d.
+    std_oil_sm3_per_day: float | None = None
+    std_gas_sm3_per_day: float | None = None
+    std_water_sm3_per_day: float | None = None
     # Hydrate check (compositional pipes with hydrate formers), at the pipe end
     # where the fluid is coldest relative to the formation curve:
     hydrate_temperature_c: float | None = None   # formation temperature at that end's pressure

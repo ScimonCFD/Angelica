@@ -226,6 +226,7 @@ class NetSimGui:
                 "diameter":      ("m",    1.0),
                 "roughness":     ("m",    1.0),
                 "height_change": ("m",    1.0),
+                "temperature":   ("°C",   1.0),
             },
         },
         "us": {
@@ -237,6 +238,22 @@ class NetSimGui:
                 "diameter":      ("in",   1.0 / 0.0254),
                 "roughness":     ("in",   1.0 / 0.0254),
                 "height_change": ("ft",   1.0 / 0.3048),
+                "temperature":   ("°C",   1.0),
+            },
+        },
+        # Oil field: absolute pressures in psia (the solver's pressures are
+        # absolute), temperatures in °F; standard-volume rates of the results
+        # are exported in STB/d, MMscf/d and bbl/d (angelica.units).
+        "field": {
+            "name": "Oil field  (psia · °F · ft · in · lb/s)",
+            "quantities": {
+                "pressure":      ("psia", 1.0 / 6894.757293168361),
+                "flow":          ("lb/s", 1.0 / 0.45359237),
+                "length":        ("ft",   1.0 / 0.3048),
+                "diameter":      ("in",   1.0 / 0.0254),
+                "roughness":     ("in",   1.0 / 0.0254),
+                "height_change": ("ft",   1.0 / 0.3048),
+                "temperature":   ("°F",   1.8, 32.0),
             },
         },
     }
@@ -247,6 +264,9 @@ class NetSimGui:
         "set_pressure_pa": "pressure",
         "roughness_m":     "roughness",
         "height_change_m": "height_change",
+        "ambient_temperature_c": "temperature",
+        "outlet_temperature_c": "temperature",
+        "inlet_temperature_c": "temperature",
     }
 
     def __init__(self) -> None:
@@ -2511,8 +2531,8 @@ class NetSimGui:
             si_val = float(si_str)
         except ValueError:
             return si_str
-        _unit, factor = self._unit_quantities()[quantity]
-        return f"{si_val * factor:.6g}"
+        _unit, factor, *offset = self._unit_quantities()[quantity]
+        return f"{si_val * factor + (offset[0] if offset else 0.0):.6g}"
 
     def _display_to_si(self, display_str: str, quantity: str) -> str:
         if not display_str.strip():
@@ -2521,8 +2541,8 @@ class NetSimGui:
             display_val = float(display_str)
         except ValueError:
             return display_str
-        _unit, factor = self._unit_quantities()[quantity]
-        return repr(display_val / factor)
+        _unit, factor, *offset = self._unit_quantities()[quantity]
+        return repr((display_val - (offset[0] if offset else 0.0)) / factor)
 
     def _field_from_si(self, field_name: str, si_str: str) -> str:
         quantity = self._FIELD_QUANTITY.get(field_name)
@@ -3437,9 +3457,10 @@ class NetSimGui:
                                 value="fixed_gradient", variable=thermal_bc_var).pack(anchor="w")
 
                 # Temperature entry (row 6)
-                t_label = ttk.Label(pf, text="Temperature (°C)")
+                t_label = ttk.Label(pf, text=f"Temperature ({self._unit_label('temperature')})")
                 t_label.grid(row=6, column=0, sticky="w", pady=4)
-                t_in_var = tk.StringVar(value=node.properties.get("inlet_temperature_c", ""))
+                t_in_var = tk.StringVar(value=self._si_to_display(node.properties.get("inlet_temperature_c", ""),
+                                                                  "temperature"))
                 t_entry = ttk.Entry(pf, textvariable=t_in_var, width=20)
                 t_entry.grid(row=6, column=1, sticky="ew", pady=4)
                 entries["inlet_temperature_c"] = t_in_var
@@ -5088,7 +5109,7 @@ class NetSimGui:
             row += 1
             thermal_fields = [
                 ("heat_transfer_coefficient_w_per_m2k", "U — Overall coeff. (W/m²K)"),
-                ("ambient_temperature_c", "T_amb — Ambient temperature (°C)"),
+                ("ambient_temperature_c", f"T_amb — Ambient temperature ({self._unit_label('temperature')})"),
             ]
             defaults = {
                 "heat_transfer_coefficient_w_per_m2k": "0.0",
@@ -5099,7 +5120,7 @@ class NetSimGui:
                     row=row, column=0, sticky="w", pady=4
                 )
                 var = tk.StringVar(
-                    value=component.properties.get(key, defaults[key])
+                    value=self._field_from_si(key, component.properties.get(key, defaults[key]))
                 )
                 ttk.Entry(properties_frame, textvariable=var, width=18).grid(
                     row=row, column=1, sticky="ew", pady=4
@@ -5463,7 +5484,8 @@ class NetSimGui:
         dp_var = tk.StringVar(value=component.properties.get("pressure_drop_pa", "0.0"))
         rated_mdot_var = tk.StringVar(value=component.properties.get("rated_mass_flow_kg_per_s", "1.0"))
         n_segs_var = tk.StringVar(value=component.properties.get("n_thermal_segments", "10"))
-        outlet_t_var = tk.StringVar(value=component.properties.get("outlet_temperature_c", ""))
+        outlet_t_var = tk.StringVar(value=self._field_from_si("outlet_temperature_c",
+                                                              component.properties.get("outlet_temperature_c", "")))
         max_duty_var = tk.StringVar(value=component.properties.get("max_duty_w", ""))
 
         row = 1
@@ -5481,7 +5503,7 @@ class NetSimGui:
         )
         row += 1
 
-        ttk.Label(properties_frame, text="Outlet T (°C, blank = use power)").grid(
+        ttk.Label(properties_frame, text=f"Outlet T ({self._unit_label('temperature')}, blank = use power)").grid(
             row=row, column=0, sticky="w", pady=4)
         ttk.Entry(properties_frame, textvariable=outlet_t_var, width=18).grid(
             row=row, column=1, sticky="ew", pady=4
@@ -5582,7 +5604,8 @@ class NetSimGui:
         outlet_t_var: tk.StringVar | None = None,
         max_duty_var: tk.StringVar | None = None,
     ) -> None:
-        outlet_t = outlet_t_var.get().strip() if outlet_t_var is not None else ""
+        outlet_t = self._field_to_si("outlet_temperature_c",
+                                     outlet_t_var.get().strip()) if outlet_t_var is not None else ""
         max_duty = max_duty_var.get().strip() if max_duty_var is not None else ""
         try:
             if outlet_t:
@@ -5650,6 +5673,8 @@ class NetSimGui:
                 properties[key] = self._display_to_si(val, "pressure")
             elif key == "flow":
                 properties[key] = self._display_to_si(val, "flow")
+            elif key == "inlet_temperature_c":
+                properties[key] = self._display_to_si(val, "temperature")
             else:
                 properties[key] = val
         updated_node = self.scene.update_node_properties(node_id, properties)
@@ -5746,7 +5771,8 @@ class NetSimGui:
                 elif condition_type == "flow" and "pressure_pa" in result_data:
                     lines.append(f"P={self._fmt(result_data['pressure_pa'] * p_factor)} {p_unit}")
                 if "temperature_c" in result_data:
-                    lines.append(f"T={result_data['temperature_c']:.1f} °C")
+                    lines.append(f"T={float(self._si_to_display(str(result_data['temperature_c']), 'temperature')):.1f} "
+                                 f"{self._unit_label('temperature')}")
             return "\n".join(lines)
 
         result_data = self.latest_boundary_results.get(node.node_id)
@@ -5757,7 +5783,8 @@ class NetSimGui:
             if "pressure_pa" in result_data:
                 summary_lines.append(f"P={self._fmt(result_data['pressure_pa'] * p_factor)} {p_unit}")
             if "temperature_c" in result_data:
-                summary_lines.append(f"T={result_data['temperature_c']:.1f} °C")
+                summary_lines.append(f"T={float(self._si_to_display(str(result_data['temperature_c']), 'temperature')):.1f} "
+                                 f"{self._unit_label('temperature')}")
             return "\n".join(summary_lines)
         return ""
 

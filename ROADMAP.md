@@ -7,7 +7,7 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.30.0, checked against the code)
+## 1. Where Angelica stands (v1.31.0, checked against the code)
 
 | Area | Present today |
 |---|---|
@@ -18,8 +18,8 @@ This file is the working source of truth. Each item is released on its own
 | Wells | `WellInflow` and `Well`: IPR linear, Vogel, Fetkovich, gas back-pressure; tubing Beggs-Brill, Hagedorn-Brown or Gray; Ramey temperature profile; black-oil and compositional fluids; gas lift; dead / bistable well states |
 | Equipment | Pipe, K-fitting, choke (Sachdeva), check valve, pump by head curve, gas compressor (ratio, rise or power; isentropic or polytropic efficiency), heater/cooler (fixed duty or outlet temperature, with a duty limit), separator (two-phase, three-phase, free-water knockout), pressure regulator (reducing and back-pressure) |
 | Boundaries | Pressure, mass flow, temperature, per-inlet black-oil fluid or composition |
-| GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI and US units (ft, psi, lb/s), Excel export |
-| Quality | 917 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
+| GUI | Canvas editor, all five physics modes, wells and separators, profiles, phase envelope with hydrate curve, SI, US and oil-field units (psia, °F, ft, in, lb/s), Excel export; standard-volume rates (Sm³/d, STB/d, MMscf/d) in the exports |
+| Quality | 932 tests, 51 tutorials under golden-output regression (scripts and GUI files), energy balance < 0.01 %; a non-converged solve names its stuck node and alternating flow patterns or laminar/turbulent regimes; correlations used outside their data range are reported as warnings |
 
 **Validation debt (2026-11-25).**  Most models since v1.19 are validated
 by internal consistency only: of the last ten log summaries, eight say
@@ -69,7 +69,7 @@ or more (human-equivalent).
 | 19 | Line sizing | None | C | S | Inverse of a solved case |
 | 20 | Calibration factors (friction and holdup multipliers) | None | B | S | Factor 1 reproduces current results; monotonic response |
 | 21 | Erosional velocity check (API RP 14E) | None | A | S | API RP 14E formula, hand calculation |
-| 22 | Oil-field units (bbl/d, MMscf/d, psig, °F, in, ft, cP) and standard-volume rates in results | SI and partial US | A | M | Round-trip conversion tests |
+| 22 | Oil-field units (bbl/d, MMscf/d, psig, °F, in, ft, cP) and standard-volume rates in results | Done in v1.31.0 (`angelica.units`, per-link standard rates, GUI "Oil field") | A | M | Round-trip conversion tests; factors against NIST SP 811 |
 | 23 | Liquid viscosity with dissolved gas (compositional) | Low with dissolved methane | B | M | Pedersen et al. (1984, 1987) corresponding-states method; Lee, Gonzalez & Eakin (1966) methane–n-decane data |
 | 24 | Slug and pigging liquid volumes | None | C | M | Brill et al. (1981) Prudhoe Bay slug correlation |
 | 25 | Completion pressure drops (perforations, gravel pack) | None | C | S | McLeod (1983); Jones et al. (1976) |
@@ -245,7 +245,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - 6.1 Cylindrical layers, buried pipe, computed inner film coefficient.
 
 ### Stage 7 — engineering tools (items 18, 19, 20, 22, 26)
-- 7.1 Oil-field unit system in the GUI; standard-volume rates in results.
+- 7.1 **Done in v1.31.0.** Oil-field unit system in the GUI; standard-volume rates in results.
 - 7.2 Sensitivity runner (API and GUI): vary one or two parameters, plot.
 - 7.3 Calibration factors; line sizing.
 - 7.4 Per-link profile report export.
@@ -983,4 +983,18 @@ Summary:
   energy balance ≤ 1.5e-3 %.
 - Not validated: against a published compressor case (GPSA examples not
   available); black-oil compression (no entropy function).
+
+### 2026-11-27 — Item 7.1: oil-field units and standard rates (v1.31.0)
+
+- `angelica.units` (exact definitions); per-link standard-volume rates in
+  black-oil and compositional results and exports (Sm³/d, STB/d, MMscf/d,
+  bbl/d); GUI "Oil field" unit system with °F and psia.
+
+Summary:
+- Validated against data read in a source: conversion factors against
+  NIST SP 811 Appendix B.8 (7 significant figures).
+- Validated by consistency: black-oil standard rates equal the separator's
+  (oil ≤ 1e-6, water 1.6e-6; gas 0.11 %, the gas-only representation).
+- Not validated: compositional standard rates against a published flash
+  (single-stage flash to 60 °F, 1 atm; not a plant's multi-stage path).
 

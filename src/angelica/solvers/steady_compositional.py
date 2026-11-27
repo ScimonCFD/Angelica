@@ -519,6 +519,7 @@ class SteadyCompositionalSolver(WellNetworkMixin, SeparatorNetworkMixin, Regulat
                     liquid_phase_zs=liquid_zs,
                     multiphase=self._multiphase_report(link, fluid),
                     **self._hydrate_report(link, fluid, node_temperatures),
+                    **self._standard_rates(link, fluid),
                 )
             )
 

@@ -644,6 +644,7 @@ class SteadyBlackOilSolver(WellNetworkMixin, SeparatorNetworkMixin, RegulatorNet
                     temperature_out_c=t_out,
                     multiphase=self._multiphase_report(link, effective_fluid),
                     **self._hydrate_report(link, effective_fluid, node_temperatures),
+                    **self._standard_rates(link, effective_fluid),
                 )
             )
 

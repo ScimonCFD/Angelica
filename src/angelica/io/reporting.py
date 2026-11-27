@@ -88,6 +88,12 @@ def export_solve_result_csv(result, output_path: str) -> None:
             writer.writerow(["Heaters / coolers"])
             for row in heaters:
                 writer.writerow(row)
+        std = _standard_rate_rows(result)
+        if std:
+            writer.writerow([])
+            writer.writerow(["Standard-volume rates (60 °F, 1 atm; single-stage flash)"])
+            for row in std:
+                writer.writerow(row)
         compressors = _compressor_rows(result)
         if compressors:
             writer.writerow([])
@@ -108,6 +114,22 @@ def _heater_rows(result) -> list[list]:
                      round(h.outlet_temperature_c, 4),
                      "" if h.outlet_temperature_spec_c is None else h.outlet_temperature_spec_c,
                      round(h.mass_flow_kg_per_s, 4)])
+    return rows
+
+
+def _standard_rate_rows(result) -> list[list]:
+    """Standard-volume rates per link (black-oil and compositional runs), in
+    Sm³/d (60 °F, 1 atm) and oil-field units; empty when there are none."""
+    from angelica.units import sm3_to_bbl, sm3_to_mmscf
+    flows = [cf for cf in result.component_flows if getattr(cf, "std_oil_sm3_per_day", None) is not None]
+    if not flows:
+        return []
+    rows: list[list] = [["Component", "Oil (Sm3/d)", "Gas (Sm3/d)", "Water (Sm3/d)",
+                         "Oil (STB/d)", "Gas (MMscf/d)", "Water (bbl/d)"]]
+    for cf in flows:
+        o, g, w = cf.std_oil_sm3_per_day, cf.std_gas_sm3_per_day, cf.std_water_sm3_per_day
+        rows.append([cf.label, round(o, 4), round(g, 3), round(w, 4),
+                     round(sm3_to_bbl(o), 3), round(sm3_to_mmscf(g), 9), round(sm3_to_bbl(w), 3)])
     return rows
 
 
@@ -228,6 +250,11 @@ def export_solve_result_workbook(result, output_path: str) -> None:
     if heaters:
         sheet = workbook.create_sheet("Heaters")
         for row in heaters:
+            sheet.append(row)
+    std = _standard_rate_rows(result)
+    if std:
+        sheet = workbook.create_sheet("Standard rates")
+        for row in std:
             sheet.append(row)
     compressors = _compressor_rows(result)
     if compressors:
@@ -423,6 +450,13 @@ def print_solve_result(result, detailed: bool = False) -> None:
     if getattr(result, "separators", ()):
         print("")
         _print_separator_table(result.separators)
+    std = _standard_rate_rows(result)
+    if std:
+        print("")
+        print("Standard-volume rates (60 °F, 1 atm)")
+        for row in std[1:]:
+            print(f"  {row[0]}: oil {row[1]:.2f} Sm³/d ({row[4]:.1f} STB/d), gas {row[2]:.1f} Sm³/d "
+                  f"({row[5]:.4f} MMscf/d), water {row[3]:.2f} Sm³/d ({row[6]:.1f} bbl/d)")
     if getattr(result, "compressors", ()):
         print("")
         print("Compressors")

@@ -28,6 +28,35 @@ maintainer y recoge lo que espera su decisión.
 
 ## Releases
 
+### v1.31.0 — Ítem 7.1: unidades de campo y caudales estándar
+
+**Qué cambió.**  Caudales estándar por tubo (petróleo, gas, agua; Sm³/d a
+60 °F y 1 atm, flash de una etapa) en black-oil y composicional, impresos y
+exportados también en STB/d, MMscf/d y bbl/d; módulo `angelica.units` con
+las definiciones exactas; sistema de unidades "Oil field" en la GUI (psia,
+°F, ft, in, lb/s; las temperaturas de contorno, ambiente, consigna del
+calentador y del canvas en °F).
+
+**Validado contra fuente.**  Factores de conversión frente a NIST SP 811,
+Apéndice B.8 (leído): todos dentro de media unidad de su 7.ª cifra.
+
+**Validado por consistencia (medido).**  En black-oil los caudales estándar
+del flujo que entra al separador del tutorial 14 son los del separador:
+petróleo 705.49 Sm³/d en ambos, agua a 1.6·10⁻⁶; el gas que sale conserva el
+de entrada a 0.11 % (la corriente de solo gas en black-oil lleva GOR 10⁶,
+un poco de petróleo).
+
+**Revisión independiente.**  Encontró dos errores físicos míos, corregidos:
+el gas estándar de black-oil restaba el Rs que Standing aún da a 60 °F y
+1 atm (−0.7 % en el tutorial 14, −13 % con GOR 10); ahora va por
+definición, q_g = GOR·q_o, comprobado con la fórmula escrita aparte.  Y en
+composicional faltaba el agua que el flash deja en el gas (24 % del agua
+de un condensado); ahora cuenta toda el agua como líquido.
+
+**No validado.**  Caudales estándar composicionales frente a un flash
+publicado.  Supuesto: flash de una sola etapa a condiciones estándar, que no
+es el camino de varias etapas de una planta (da otra cifra de líquido).
+
 ### v1.30.0 — Ítem 5.2: compresor
 
 **Qué cambió.**

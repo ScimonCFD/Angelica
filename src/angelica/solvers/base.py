@@ -239,6 +239,58 @@ class BaseSolver(ABC):
         return tuple(out)
 
     @staticmethod
+    def _standard_rates(link, fluid) -> dict:
+        """Standard-volume rates (Sm³/d at 60 °F, 1 atm) of the stream in a
+        link.  Empty for fluids without phases (gas, liquid) or when the
+        flash fails (a report must never break a solve).
+
+        Black-oil: by definition of GOR and WOR (standard volumes per stock-
+        tank volume of oil), q_o = ṁ/(ρ_o,sc + GOR·ρ_g,sc + WOR·ρ_w,sc),
+        q_g = GOR·q_o, q_w = WOR·q_o — the densities of the black-oil model.
+        (Taking the separator split at standard conditions instead lost the
+        gas Standing's correlation still dissolves there, Rs ≈ 0.4–1.3:
+        −0.7 % of gas in tutorial 14, −13 % at GOR 10; found in review.)
+
+        Compositional: the stream flashed at standard conditions (single
+        stage, Peneloux-corrected volumes of the EOS — a real-gas volume,
+        not the ideal-gas one); gas on a dry basis; water: all the water of
+        the stream, as liquid at standard conditions (the produced-water
+        rate), including what the flash leaves in the gas."""
+        from angelica.closures.choke import resolve_link_fluid
+        from angelica.closures.separator import compositional_split
+        from angelica.closures.well_fluid import P_SC_PA, T_SC_C
+        m = abs(float(link.mass_flow_kg_per_s)) * 86_400.0
+        try:
+            f = resolve_link_fluid(fluid, link)
+            if hasattr(f, "component_names"):
+                from angelica.closures.well_fluid import _molar_masses
+                from angelica.properties.free_water import find_water_index, water_liquid_density_kg_m3
+                zs = tuple(getattr(link, "zs", ()) or f.default_zs)
+                split = compositional_split(f, zs, P_SC_PA, T_SC_C)
+                k = split.std_per_kg
+                w = find_water_index(f.component_names)
+                water = 0.0
+                if w is not None:
+                    mws = _molar_masses(tuple(f.component_names))
+                    x_w = zs[w] * mws[w] / sum(z * mw for z, mw in zip(zs, mws))
+                    water = m * x_w / water_liquid_density_kg_m3(T_SC_C + 273.15)
+                return {"std_oil_sm3_per_day": m * k.get("oil", 0.0), "std_gas_sm3_per_day": m * k.get("gas", 0.0),
+                        "std_water_sm3_per_day": water}
+            if hasattr(f, "gor_sc_m3_per_m3"):
+                from angelica.properties.black_oil import _AIR_DENSITY_SC_KG_M3
+                from angelica.properties.dead_oil import dead_oil_density_kg_per_m3
+                rho_w = 1_025.0                    # as in the black-oil PVT and its mixing rule
+                per_oil = (dead_oil_density_kg_per_m3(f.api_gravity)
+                           + f.gor_sc_m3_per_m3 * f.gas_gravity * _AIR_DENSITY_SC_KG_M3
+                           + f.wor_sc_m3_per_m3 * rho_w)
+                q_o = m / per_oil
+                return {"std_oil_sm3_per_day": q_o, "std_gas_sm3_per_day": q_o * f.gor_sc_m3_per_m3,
+                        "std_water_sm3_per_day": q_o * f.wor_sc_m3_per_m3}
+        except Exception:
+            return {}
+        return {}
+
+    @staticmethod
     def _heater_results(network_state, isothermal: bool = False) -> tuple:
         """Duty and outlet temperature of every ``HeatSource`` (heater/cooler)."""
         from angelica.core.results import HeaterResult
