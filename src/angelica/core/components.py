@@ -66,8 +66,18 @@ class Pipe(PressureChanger):
     insulation_thickness_m: float = 0.0
     insulation_thermal_conductivity_w_per_mk: float = 0.0
     outer_film_coefficient_w_per_m2k: float = 0.0
+    # Calibration (roadmap 7.3): the friction factor of every correlation and
+    # Beggs-Brill's liquid holdup are multiplied by these (1 = the correlation
+    # as published).  The holdup factor acts only where there is slip
+    # (Beggs-Brill); the result is kept within [0, 1].
+    friction_factor_multiplier: float = 1.0
+    holdup_multiplier: float = 1.0
 
     def __post_init__(self) -> None:
+        for name in ("friction_factor_multiplier", "holdup_multiplier"):
+            v = getattr(self, name)
+            if not (math.isfinite(v) and v > 0.0):
+                raise ValueError(f"Pipe {name} must be positive (got {v})")
         if self.length_m <= 0.0:
             raise ValueError(f"Pipe length_m must be positive (got {self.length_m})")
         if not (math.isfinite(self.diameter_m) and self.diameter_m > 0.0):

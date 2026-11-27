@@ -476,6 +476,9 @@ def build_network_case_from_scene(scene: CanvasScene) -> NetworkCase:
                             insulation_thickness_m=t_ins,
                             insulation_thermal_conductivity_w_per_mk=k_ins,
                             outer_film_coefficient_w_per_m2k=outer_h,
+                            friction_factor_multiplier=_optional_float(component, "friction_factor_multiplier",
+                                                                       default=1.0),
+                            holdup_multiplier=_optional_float(component, "holdup_multiplier", default=1.0),
                             component_id=f"link_{link.link_id}_pipe_{component.component_id}_seg{seg_idx}",
                         )
                     )

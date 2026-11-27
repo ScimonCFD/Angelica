@@ -55,6 +55,14 @@ booster = Compressor(
     pressure_ratio=2.0, efficiency=0.75, efficiency_type="isentropic",
 )
 # result.compressors: power, ratio, discharge (and isentropic discharge) temperature
+
+# Calibration: multiply a pipe's friction factor (any correlation) and its
+# Beggs-Brill liquid holdup
+calibrated = Pipe(start_node=1, end_node=2, diameter_m=0.2, length_m=5000.0,
+                  friction_factor_multiplier=1.15, holdup_multiplier=0.9)
+
+# Line sizing: angelica.studies.size_line(case, solver_factory, "pipe_id",
+#     [0.15, 0.2, 0.25], max_pressure_drop_pa=3e5).selected
 ```
 
 ## Boundary Conditions

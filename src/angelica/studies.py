@@ -327,3 +327,99 @@ def nodal_analysis(case: NetworkCase, solver_factory: SolverFactory, well_id: st
                 if pts and all(p_in(m) < q for m, q in pts) else "no crossing in the rates studied")
     return NodalAnalysis(well_id, wh, inflow, outflow, op, note)
 
+
+
+@dataclass(frozen=True)
+class SizingCandidate:
+    diameter_m: float
+    point: StudyPoint
+    pressure_drop_pa: float | None        # start node − end node pressure of the pipe
+    velocity_m_per_s: float | None        # mixture velocity (|volumetric flow| / area)
+    erosional_ratio: float | None         # API RP 14E, two-phase pipes only
+    passes: bool
+    reasons: tuple[str, ...]              # why it fails (empty when it passes)
+
+
+@dataclass(frozen=True)
+class LineSizing:
+    pipe_id: str
+    candidates: tuple[SizingCandidate, ...]
+
+    @property
+    def selected(self) -> SizingCandidate | None:
+        """The smallest candidate diameter that meets every criterion."""
+        ok = [c for c in self.candidates if c.passes]
+        return min(ok, key=lambda c: c.diameter_m) if ok else None
+
+
+def size_line(case: NetworkCase, solver_factory: SolverFactory, pipe_id: str, diameters_m: Sequence[float],
+              max_pressure_drop_pa: float | None = None, max_velocity_m_per_s: float | None = None,
+              max_erosional_ratio: float | None = None,
+              min_node_pressure: tuple[int, float] | None = None) -> LineSizing:
+    """Line sizing: the network solved with each candidate diameter of one
+    pipe line, checked against the criteria given; ``selected`` is the
+    smallest diameter that meets them all.  A candidate whose solve does not
+    converge fails ("not converged").
+
+    ``pipe_id`` names a Pipe, or a line the GUI split into segments
+    ("<id>_seg0", "<id>_seg1", …): every segment gets the diameter, and the
+    pressure drop is from the first segment's start to the last one's end.
+    The velocity is the mixture velocity at the pipe's mean conditions (the
+    largest over the segments); in a gas line the outlet velocity is higher
+    (15–30 % in the tests' 70 → 40 bar line).  The erosional-velocity ratio
+    (API RP 14E) exists only for two-phase pipes: asked of a single-phase
+    line, a candidate fails with "not applicable"."""
+    from angelica.core.components import Pipe
+    segs = [c for c in case.components if isinstance(c, Pipe)
+            and (c.component_id == pipe_id or c.component_id.startswith(pipe_id + "_seg"))]
+    if not segs:
+        raise ValueError(f"{pipe_id!r} is not a pipe (or pipe line) of the case")
+    if all(v is None for v in (max_pressure_drop_pa, max_velocity_m_per_s, max_erosional_ratio, min_node_pressure)):
+        raise ValueError("give at least one sizing criterion")
+    for name, v in (("max_pressure_drop_pa", max_pressure_drop_pa), ("max_velocity_m_per_s", max_velocity_m_per_s),
+                    ("max_erosional_ratio", max_erosional_ratio)):
+        if v is not None and not v > 0.0:
+            raise ValueError(f"{name} must be positive (got {v})")
+    nodes = {n for c in case.components for n in (c.start_node, c.end_node)}
+    if min_node_pressure is not None and min_node_pressure[0] not in nodes:
+        raise ValueError(f"node {min_node_pressure[0]} is not in the network")
+    ids = [c.component_id for c in segs]
+    first_start = segs[0].start_node
+    last_end = segs[-1].end_node
+    out = []
+    for D in sorted(float(d) for d in diameters_m):
+        pt = _solve_point(case, solver_factory, [(f"component:{i}.diameter_m", D) for i in ids], (D,))
+        reasons: list[str] = []
+        dp = vel = ero = None
+        if not pt.converged:
+            reasons.append("not converged" if pt.result is not None else f"error: {pt.error}")
+        else:
+            res = pt.result
+            dp = pt.pressure(first_start) - pt.pressure(last_end)
+            area = 3.141592653589793 * D * D / 4.0
+            vels, eros = [], []
+            for f in res.component_flows:
+                if f.label.split(":")[-1] not in ids:
+                    continue
+                if f.multiphase is not None:
+                    vels.append(abs(f.multiphase.mixture_velocity_m_per_s))
+                    eros.append(f.multiphase.erosional_velocity_ratio)
+                else:
+                    vels.append(abs(f.volumetric_flow_m3_per_h) / 3600.0 / area)
+            vel = max(vels) if vels else None
+            ero = max(eros) if eros else None
+            if max_pressure_drop_pa is not None and abs(dp) > max_pressure_drop_pa:
+                reasons.append(f"pressure drop {abs(dp):.4g} Pa > {max_pressure_drop_pa:.4g}")
+            if max_velocity_m_per_s is not None and vel is not None and vel > max_velocity_m_per_s:
+                reasons.append(f"mean velocity {vel:.4g} m/s > {max_velocity_m_per_s:.4g}")
+            if max_erosional_ratio is not None:
+                if ero is None:
+                    reasons.append("erosional ratio not applicable (single-phase pipe)")
+                elif ero > max_erosional_ratio:
+                    reasons.append(f"erosional ratio {ero:.3g} > {max_erosional_ratio:.3g}")
+            if min_node_pressure is not None:
+                node, p_min = min_node_pressure
+                if pt.pressure(node) < p_min:
+                    reasons.append(f"pressure at node {node} {pt.pressure(node):.4g} Pa < {p_min:.4g}")
+        out.append(SizingCandidate(D, pt, dp, vel, ero, not reasons, tuple(reasons)))
+    return LineSizing(pipe_id, tuple(out))

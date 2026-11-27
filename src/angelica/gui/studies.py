@@ -205,3 +205,65 @@ def open_nodal_dialog(app) -> None:
         status.set(na.note or "Operating point marked in red (where the network solve puts the well).")
 
     ttk.Button(frm, text="Run", command=run).grid(row=0, column=2, sticky="e")
+
+
+def open_line_sizing_dialog(app) -> None:
+    """Studies → Line sizing: candidate diameters of one pipe against criteria."""
+    from angelica.core.components import Pipe
+    from angelica.gui.io import build_network_case_from_scene, build_solver_from_scene
+    from angelica.studies import size_line
+    try:
+        case = build_network_case_from_scene(app.scene)
+    except Exception as exc:
+        messagebox.showerror("Line sizing", str(exc))
+        return
+    import re
+    pipes = list(dict.fromkeys(re.sub(r"_seg\d+$", "", c.component_id)       # a split line is one line
+                               for c in case.components if isinstance(c, Pipe)))
+    if not pipes:
+        messagebox.showinfo("Line sizing", "The network has no pipe.")
+        return
+    win = tk.Toplevel(app.root)
+    win.title("Line sizing")
+    frm = ttk.Frame(win, padding=10)
+    frm.pack(fill="both", expand=True)
+    p_var = tk.StringVar(value=pipes[0])
+    d_var = tk.StringVar(value="0.1016, 0.1524, 0.2032, 0.254, 0.3048")
+    dp_var, v_var, e_var = tk.StringVar(), tk.StringVar(), tk.StringVar()
+    rows = (("Pipe", ttk.Combobox(frm, textvariable=p_var, values=pipes, state="readonly", width=40)),
+            ("Candidate diameters (m, comma-separated)", ttk.Entry(frm, textvariable=d_var, width=42)),
+            ("Max pressure drop (Pa, blank = none)", ttk.Entry(frm, textvariable=dp_var, width=42)),
+            ("Max mean velocity (m/s, blank = none)", ttk.Entry(frm, textvariable=v_var, width=42)),
+            ("Max erosional ratio v/Ve, two-phase (blank = none)", ttk.Entry(frm, textvariable=e_var, width=42)))
+    for i, (label, widget) in enumerate(rows):
+        ttk.Label(frm, text=label).grid(row=i, column=0, sticky="w", pady=2)
+        widget.grid(row=i, column=1, sticky="w", pady=2)
+    out = tk.Text(frm, width=90, height=12)
+    out.grid(row=len(rows) + 1, column=0, columnspan=2, pady=(8, 0))
+
+    def num(var):
+        t = var.get().strip()
+        return float(t) if t else None
+
+    def run() -> None:
+        try:
+            diameters = [float(x) for x in d_var.get().replace(";", ",").split(",") if x.strip()]
+            case_now = build_network_case_from_scene(app.scene)        # the scene as it is now
+            sizing = size_line(case_now, lambda: build_solver_from_scene(app.scene), p_var.get(), diameters,
+                               max_pressure_drop_pa=num(dp_var), max_velocity_m_per_s=num(v_var),
+                               max_erosional_ratio=num(e_var))
+        except ValueError as exc:
+            messagebox.showerror("Line sizing", str(exc), parent=win)
+            return
+        out.delete("1.0", "end")
+        out.insert("end", f"{'D (m)':>8} {'ΔP (Pa)':>12} {'v (m/s)':>9} {'v/Ve':>6}  Result\n")
+        for c in sizing.candidates:
+            dp = f"{c.pressure_drop_pa:12.4g}" if c.pressure_drop_pa is not None else f"{'—':>12}"
+            v = f"{c.velocity_m_per_s:9.3g}" if c.velocity_m_per_s is not None else f"{'—':>9}"
+            e = f"{c.erosional_ratio:6.2f}" if c.erosional_ratio is not None else f"{'—':>6}"
+            out.insert("end", f"{c.diameter_m:8.4f} {dp} {v} {e}  {'meets all' if c.passes else '; '.join(c.reasons)}\n")
+        sel = sizing.selected
+        out.insert("end", "\nSelected: " + (f"{sel.diameter_m:.4f} m (the smallest meeting every criterion)"
+                                            if sel else "none of the candidates meets every criterion") + "\n")
+
+    ttk.Button(frm, text="Run", command=run).grid(row=len(rows), column=1, sticky="e", pady=4)

@@ -257,6 +257,13 @@ class BeggsBrillState:
     dP_dz_total: float     # Pa/m
 
 
+def _calibration(link_state) -> tuple[float, float]:
+    """(friction, holdup) calibration multipliers of a pipe (1, 1 by default)."""
+    comp = getattr(link_state, "component", None)
+    return (float(getattr(comp, "friction_factor_multiplier", 1.0)),
+            float(getattr(comp, "holdup_multiplier", 1.0)))
+
+
 def beggs_brill_gradient(
     v_m: float,
     C_L: float,
@@ -269,6 +276,8 @@ def beggs_brill_gradient(
     theta_rad: float,
     sigma_l: float = 0.030,
     payne_correction: bool = False,
+    friction_multiplier: float = 1.0,
+    holdup_multiplier: float = 1.0,
 ) -> BeggsBrillState:
     """Compute the Beggs-Brill pressure gradient at a given mixture velocity.
 
@@ -300,6 +309,11 @@ def beggs_brill_gradient(
     N_Fr = v_m ** 2 / (_G * max(D, 1e-6))
     N_LV = liquid_velocity_number(C_L * v_m, rho_l, sigma_l)
     HL   = liquid_holdup(C_L, N_Fr, N_LV, theta_rad, payne_correction)
+    # Calibration (Pipe.holdup_multiplier), kept within [0, 1] — not within
+    # [C_L, 1]: a factor below 1 may put H_L below the no-slip fraction (the
+    # gas slower than the liquid, as downhill), which the user asked for.
+    if holdup_multiplier != 1.0:
+        HL = min(max(HL * holdup_multiplier, 0.0), 1.0)
 
     regime, _ = flow_regime(C_L, N_Fr)
 
@@ -311,7 +325,7 @@ def beggs_brill_gradient(
     f_n   = _darcy_friction_factor(Re_ns, roughness / max(D, 1e-6))
 
     # ── Two-phase friction factor ──────────────────────────────────────────
-    f_tp  = two_phase_friction_factor(f_n, C_L, HL)
+    f_tp  = two_phase_friction_factor(f_n, C_L, HL) * friction_multiplier   # calibration
 
     # ── Pressure gradients ─────────────────────────────────────────────────
     dP_f = f_tp * rho_ns * v_m ** 2 / (2.0 * D)
@@ -429,7 +443,7 @@ def multiphase_flow_report(link_state, fluid, correlation=None):
         p_up, p_down = p_down, p_up
     if isinstance(correlation, BeggsBrillCorrelation):
         st = beggs_brill_gradient(v_m, C_L, rho_l, rho_g, mu_l, mu_g, D, comp.absolute_roughness_m,
-                                  theta, sigma_l, correlation.payne_correction)
+                                  theta, sigma_l, correlation.payne_correction, *_calibration(link_state))
         pattern, H_L = st.regime, st.holdup
         elev, fric = st.dP_dz_gravity, st.dP_dz_friction
     else:
@@ -533,6 +547,7 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
         theta_rad: float,
         v0: float,
         sigma_l: float = 0.030,
+        calibration: tuple[float, float] = (1.0, 1.0),
     ) -> tuple[float, float, float]:
         """Fixed-point iteration to find v_m such that ΔP_friction = net_driving.
 
@@ -547,7 +562,8 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
 
         for _ in range(60):
             st = beggs_brill_gradient(v_m, C_L, rho_l, rho_g, mu_l, mu_g,
-                                      D, roughness, theta_rad, sigma_l, self.payne_correction)
+                                      D, roughness, theta_rad, sigma_l, self.payne_correction,
+                                      *calibration)
             f_tp_last = st.f_tp
             HL_last   = st.holdup
             self._last_regime = st.regime
@@ -597,7 +613,7 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
             (+1: start → end).  Gravity uses the holdup of that flow direction."""
             st = beggs_brill_gradient(v0, C_L, rho_l, rho_g, mu_l, mu_g,
                                       D, roughness, direction * theta_rad,
-                                      sigma_l, self.payne_correction)
+                                      sigma_l, self.payne_correction, *_calibration(pipe_state))
             return direction * delta_p - st.dP_dz_gravity * L, st
 
         # Try the direction the pressure difference points to first.  If it
@@ -615,7 +631,7 @@ class BeggsBrillCorrelation(PressureDropCorrelation):
 
         v_m, f_tp, _HL = self._solve_vm(
             net_driving, C_L, rho_l, rho_g, mu_l, mu_g,
-            D, L, roughness, sign * theta_rad, v0, sigma_l,
+            D, L, roughness, sign * theta_rad, v0, sigma_l, _calibration(pipe_state),
         )
 
         pipe_state.velocity_m_per_s = sign * v_m

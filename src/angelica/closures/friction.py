@@ -97,6 +97,13 @@ def build_colebrook_friction_factor_strategy(
     return _STRATEGY_SINGLETONS[strategy_name]
 
 
+def _friction_length(pipe_state) -> float:
+    """Length the friction acts on: the pipe's length times its calibration
+    ``friction_factor_multiplier`` (ΔP_f ∝ f·L, so scaling L scales f)."""
+    comp = pipe_state.component
+    return comp.length_m * float(getattr(comp, "friction_factor_multiplier", 1.0))
+
+
 class LaminarPipeCorrelation(PressureDropCorrelation):
     def calculate_velocity(
         self,
@@ -110,12 +117,12 @@ class LaminarPipeCorrelation(PressureDropCorrelation):
         return (
             pipe_state.component.diameter_m**2
             * driving_term
-            / (32.0 * viscosity * pipe_state.component.length_m)
+            / (32.0 * viscosity * _friction_length(pipe_state))
         )
 
     def calculate_coupling(self, pipe_state, density: float, viscosity: float) -> float:
         return (-density / (32.0 * viscosity)) * (
-            pipe_state.area_m2 * pipe_state.component.diameter_m**2 / pipe_state.component.length_m
+            pipe_state.area_m2 * pipe_state.component.diameter_m**2 / _friction_length(pipe_state)
         )
 
 
@@ -234,7 +241,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
             / (
                 density
                 * friction_factor
-                * pipe_state.component.length_m
+                * _friction_length(pipe_state)
                 * max(abs(safe_velocity), 1e-12)
             )
         )
@@ -272,7 +279,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
         friction_term = (
             density
             * friction_factor
-            * pipe_state.component.length_m
+            * _friction_length(pipe_state)
             * safe_velocity
             * abs(safe_velocity)
             / (2.0 * pipe_state.component.diameter_m)
@@ -355,7 +362,7 @@ class ColebrookPipeCorrelation(PressureDropCorrelation):
             / (
                 pipe_state.friction_factor
                 * max(abs(pipe_state.velocity_m_per_s), 1e-12)
-                * pipe_state.component.length_m
+                * _friction_length(pipe_state)
             )
         )
 
@@ -469,7 +476,7 @@ class HazenWilliamsPipeCorrelation(PressureDropCorrelation):
         c_factor = max(pipe_state.component.hazen_williams_c, 1e-12)
         return (
             self.HAZEN_WILLIAMS_COEFFICIENT
-            * pipe_state.component.length_m
+            * _friction_length(pipe_state)
             / (
                 c_factor ** self.HAZEN_WILLIAMS_EXPONENT
                 * pipe_state.component.diameter_m ** self.HAZEN_WILLIAMS_DIAMETER_EXPONENT

@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.33.0] — 2026-11-27
+
+Roadmap item 7.3: calibration factors and line sizing.
+
+### Added
+  - **Calibration factors per pipe**: `Pipe.friction_factor_multiplier`
+    and `Pipe.holdup_multiplier` (default 1).  The friction factor of every
+    correlation (Colebrook, laminar, Hazen-Williams, Weymouth, Panhandle,
+    Beggs-Brill's two-phase factor) is multiplied by the first; Beggs-Brill's
+    liquid holdup by the second, kept within [0, 1] (no effect in the
+    homogeneous model, which has no slip).  The friction multiplier is the
+    same as a friction length L·c (elevation and heat-transfer area keep
+    the real length): checked at a fixed flow in every correlation and
+    fluid mode (liquid Colebrook, laminar, Hazen-Williams; gas Colebrook,
+    Weymouth, Panhandle A/B; black-oil Beggs-Brill; compositional
+    homogeneous).  For an incompressible fluid in a horizontal pipe the
+    pressure drop therefore scales exactly with c (obtained ≤ 5.9·10⁻⁹,
+    turbulent and laminar); for gas and multiphase it does not (1.22–1.29
+    at c = 1.3).  For Hazen-Williams the factor scales the resistance, as
+    C_HW/c^(1/1.852) would.  Note: in a
+    horizontal Beggs-Brill pipe a larger holdup *lowers* the friction
+    (f_tp = f_n·e^S with S a function of C_L/H_L²) — +21 % flow at 1.3 in
+    the test network; in an uphill pipe it adds gravity.  Factor 1 leaves
+    every existing result unchanged.  GUI: pipe properties.
+  - **Line sizing** (`angelica.studies.size_line`): the network solved
+    with each candidate diameter of a pipe, checked against a maximum
+    pressure drop, velocity, erosional-velocity ratio (API RP 14E) or a
+    minimum node pressure; `selected` is the smallest diameter that meets
+    them all.  A line the GUI split into segments is sized as a whole.  The
+    velocity is the mixture velocity at the pipe's mean conditions — in a
+    gas line the outlet velocity is 15–30 % higher; the erosional ratio
+    applies to two-phase pipes only (asked of a single-phase line, the
+    candidates fail as "not applicable").  GUI: *Studies → Line Sizing…*.
+  - Validation: analytical (friction scaling) and consistency only.
+
+### Review before the tag
+  - The first version skipped an erosional-ratio criterion silently on
+    single-phase lines while the dialog pre-filled it, so every candidate
+    "met all" (now "not applicable", the field starts blank); sized one
+    segment of a split line; showed no multiplier fields on pipes of older
+    scenes; accepted negative limits and unknown nodes.  All fixed.  The
+    holdup factor is kept within [0, 1], not [C_L, 1] (documented).
+
 ## [1.32.0] — 2026-11-27
 
 Roadmap item 7.2: sensitivity studies and nodal analysis, from the API and

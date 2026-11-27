@@ -304,6 +304,8 @@ class CanvasScene:
                 "roughness_m": "0.000045",
                 "hazen_williams_c": "130.0",
                 "num_segments": "1",
+                "friction_factor_multiplier": "1.0",
+                "holdup_multiplier": "1.0",
             }
         if component_type == "pump":
             return {

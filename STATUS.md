@@ -28,6 +28,34 @@ maintainer y recoge lo que espera su decisión.
 
 ## Releases
 
+### v1.33.0 — Ítem 7.3: factores de calibración y dimensionamiento de línea
+
+**Qué cambió.**  Multiplicadores por tubo del factor de fricción (todas las
+correlaciones) y del holdup de Beggs-Brill; `size_line` prueba diámetros
+candidatos de un tubo contra caída de presión, velocidad, velocidad
+erosional o presión mínima y elige el menor que cumple.  GUI: campos del
+tubo y *Studies → Line Sizing…*.
+
+**Validado analíticamente (medido).**  A caudal fijo en un tubo horizontal
+la caída de presión escala exactamente con el multiplicador (≤ 5.9·10⁻⁹,
+turbulento y laminar).
+
+**Validado por consistencia.**  Factor 1: todos los tutoriales idénticos.
+En red, más fricción da menos caudal, de forma monótona.  Observación
+física: en un tubo horizontal con Beggs-Brill, más holdup baja la fricción
+bifásica y da más caudal (+21 % con 1.3 en la red de prueba); en subida
+añade gravedad.
+
+**Revisión independiente.**  Física correcta: el multiplicador equivale a
+escalar la longitud de fricción en todas las correlaciones y modos.  Fallos
+de uso corregidos: el criterio erosional se saltaba en silencio en tubos
+monofásicos (y el diálogo lo rellenaba), una línea segmentada se
+dimensionaba por un solo tramo, los campos no aparecían en escenas
+antiguas.  Matiz: ΔP ∝ c solo en incompresible; en gas y multifásico no.
+
+**No validado.**  Frente a datos de campo (los factores son para ajustar a
+ellos).
+
 ### v1.32.0 — Ítem 7.2: estudios de sensibilidad y análisis nodal
 
 **Qué cambió.**  `angelica.studies`: variar uno o dos parámetros del caso

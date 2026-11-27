@@ -398,6 +398,7 @@ class NetSimGui:
         studies_menu = tk.Menu(menu_bar, tearoff=False)
         studies_menu.add_command(label="Sensitivity…", command=self._open_sensitivity_dialog)
         studies_menu.add_command(label="Nodal Analysis…", command=self._open_nodal_dialog)
+        studies_menu.add_command(label="Line Sizing…", command=self._open_line_sizing_dialog)
         menu_bar.add_cascade(label="Studies", menu=studies_menu)
 
         settings_menu = tk.Menu(menu_bar, tearoff=False)
@@ -1336,6 +1337,10 @@ class NetSimGui:
     def _open_sensitivity_dialog(self) -> None:
         from angelica.gui.studies import open_sensitivity_dialog
         open_sensitivity_dialog(self)
+
+    def _open_line_sizing_dialog(self) -> None:
+        from angelica.gui.studies import open_line_sizing_dialog
+        open_line_sizing_dialog(self)
 
     def _open_nodal_dialog(self) -> None:
         from angelica.gui.studies import open_nodal_dialog
@@ -5100,7 +5105,12 @@ class NetSimGui:
             return
 
         row = 1
-        for key, value in component.properties.items():
+        shown = dict(component.properties)
+        if component.component_type == "pipe":
+            # Calibration factors (v1.33.0): shown on pipes of older scenes too.
+            shown.setdefault("friction_factor_multiplier", "1.0")
+            shown.setdefault("holdup_multiplier", "1.0")
+        for key, value in shown.items():
             ttk.Label(properties_frame, text=self._pretty_field_name(key)).grid(
                 row=row, column=0, sticky="w", pady=4
             )
