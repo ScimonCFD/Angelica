@@ -7,7 +7,7 @@ networks with wells. Out of scope for now: transients, optimisation
 This file is the working source of truth. Each item is released on its own
 (minor version), validated against published data, and logged at the bottom.
 
-## 1. Where Angelica stands (v1.38.0, checked against the code)
+## 1. Where Angelica stands (v1.39.0, checked against the code)
 
 | Area | Present today |
 |---|---|
@@ -256,7 +256,7 @@ GUI, released (version, CHANGELOG, tag, website) and CI green.
 - 8.1 Pedersen corresponding-states viscosity.
 - 8.2 Taitel-Dukler flow-regime map; one mechanistic model (Ansari, vertical).
 - 8.3 ESP; completion pressure drops; slug volumes.
-- 8.4 Validation manual in the docs.
+- 8.4 **Done in v1.39.0.** Validation manual in the docs (`docs/validation.md`) and on the website.
 
 ### Order of work (maintainer review, 2026-11-22)
 
@@ -1116,3 +1116,18 @@ Summary:
 - Review before the tag: film at the inlet temperature, under-relaxed (it
   flipped laminar/turbulent with viscous oil at the mean temperature); the
   film alone goes in series with a given U; range flag and warning.
+
+### 2026-11-28 — Item 8.4: validation manual (v1.39.0)
+
+- `docs/validation.md` (193 checks, 29 areas, labelled) and the website's
+  `validation.html`.  Writing it found labels that overstated the evidence
+  (Hanoi called "the EPANET reference" though Angelica produced its values;
+  CRC surface tensions from memory called a validation): corrected, no
+  result changes.  The EPANET pump case was confirmed against EPANET 2.2
+  Appendix C (within 0.21 psi).
+
+Summary of the whole manual: 100 checks by consistency, 33 analytical,
+15 against data read in a source, 12 secondary sources, 6 regression,
+6 not validated, 19 citing a value without saying whether it was read,
+2 from memory.  The worked examples that would validate the multiphase,
+well and equipment models are still not in the repository (`refs/`).

@@ -53,4 +53,5 @@ nav:
     - Fluid Properties: api/properties.md
     - Results: api/results.md
     - Numerics: api/numerics.md
+  - Validation manual: validation.md
   - Internals: WORKFLOW_AND_EQUATIONS.md

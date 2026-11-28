@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.39.0] — 2026-11-28
+
+Roadmap item 8.4: validation manual.
+
+### Added
+  - **`docs/validation.md`** (in the docs navigation): every validation or
+    verification check in the repository — 193 rows in 29 areas — with the
+    reference as written, its kind of evidence (read in source, secondary
+    source, analytical, consistency, regression, not validated), the error
+    obtained, the tolerance and its source, and the test that reproduces
+    it; a section of everything not validated and every recorded
+    discrepancy.  Collected from the test and module docstrings, tutorial
+    READMEs, ROADMAP, STATUS and this file; nothing from outside.
+  - **Website: `validation.html`**, a summary (labels, the data read in a
+    source, the strongest evidence per area, what is not validated) linked
+    from every page.
+
+### Fixed (labels — no result changes)
+  - **Hanoi network**: its expected heads and flows were produced by Angelica
+    itself (Hazen-Williams, C = 130), as the tutorial README says — a
+    regression baseline, not "the EPANET reference" that the test, README
+    table, website and earlier CHANGELOG/ROADMAP/STATUS entries called it.
+    Test renamed `test_hanoi_benchmark_matches_regression_baseline`.
+  - **EPANET pump benchmark**: its reference values are those of the EPANET
+    2.2 manual, Appendix C, Listing 2 (report of the tutorial input of
+    Listing 1, same 1000 gpm / 200 ft pump), read on 2026-11-28 — now
+    labelled "read in source" (another solver's published output); obtained
+    within 0.212 psi, 0.022 ft and 0.075 gpm.  The website's "within
+    0.15 psi" was wrong (node 2: 0.212 psi) and is corrected.
+  - n-alkane surface tension (CRC values from memory: a regression guard,
+    not "within 1–5 % of CRC values"); the z-factor test (a Papay formula
+    cross-check, not Standing-Katz chart values); the isothermal tutorial
+    suite README (no longer "validated" as a whole); the website's "every
+    result is benchmarked against published EPANET reference solutions" and
+    README's "every model has a test" (now "most models").
+
 ## [1.38.0] — 2026-11-27
 
 Roadmap item 6.1: cylindrical layers, buried pipe, computed inner film.

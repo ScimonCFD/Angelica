@@ -1,3 +1,16 @@
+"""
+EPANET-style pump network (tutorial 08).
+
+Reference values — READ IN SOURCE: EPANET 2.2 user manual, Appendix C
+(usepa.github.io/EPANET2.2/back_matter.html, read 2026-11-28): Listing 1 is
+the tutorial input (pump curve "1 1000 200", 1000 gpm / 200 ft, Hazen-
+Williams) and Listing 2 its report at 0:00, whose heads, pressures and flows
+are the values below.  A comparison with another solver's published output,
+not with measurements.  Obtained: pressures within 0.212 psi (node 2; the
+others within 0.047), heads within 0.022 ft, flows within 0.075 gpm.  The
+tolerances (0.25 psi, 0.2 ft, 1.5 gpm) have no stated source.  (The Quick
+Start chapter uses a 600 gpm / 150 ft pump: a different case.)
+"""
 from __future__ import annotations
 
 import sys

@@ -4,7 +4,7 @@ This folder contains an `Angelica` benchmark case for the classical Hanoi water
 distribution network.
 
 The goal of this case is not only to provide a large `Open -> Run` GUI example,
-but also to serve as a reproducible validation case for the current
+but also to serve as a reproducible regression case (reference values produced by Angelica, see below) for the current
 steady, incompressible, isothermal, single-component solver.
 
 ## What the Hanoi Case Is
@@ -94,7 +94,7 @@ This is important:
 
 - the lateral `sink` nodes are part of the `Angelica` adaptation
 - they are not benchmark nodes from the published Hanoi reference
-- their displayed pressures are therefore not the validation target
+- their displayed pressures are therefore not the regression target
 
 ## Expected vs Calculated Tables
 
@@ -120,7 +120,7 @@ For this benchmark, a good result means:
 - trunk-node heads match the reference within a few hundredths of a meter
 - trunk-link flows match the reference within a fraction of `m^3/h`
 
-In the current validated setup, `Angelica` reproduces the reference solution
+In the current setup, `Angelica` reproduces its stored regression baseline
 very closely:
 
 - trunk heads differ by less than `0.01 m`

@@ -1,7 +1,11 @@
 # steady_isothermal_incompressible
 
-This folder contains the validated tutorial suite for the current
-steady, incompressible, isothermal, single-component solver.
+This folder contains the tutorial suite for the steady, incompressible,
+isothermal, single-component solver.  What each case is checked against —
+an analytical solution (10 Poiseuille, 09 three reservoirs), a published
+benchmark (08 EPANET pump), or only Angelica's own stored output (the
+rest, including the Hanoi network) — is listed in the validation manual,
+`docs/validation.md`.
 
 The available cases are:
 

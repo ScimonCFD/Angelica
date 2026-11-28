@@ -26,7 +26,72 @@ maintainer y recoge lo que espera su decisión.
    21.1 °C; (c) otra correlación con datos a baja temperatura; (d) rechazar
    el caso.  Impacto ≤ 1.4 % en los tutoriales salvo el 07 (31.8 % → 11.2 %).
 
+5. **Deuda de validación** (no es una decisión, pero solo el maintainer
+   puede cerrarla): los ejemplos resueltos de Brill & Mukherjee, Economides
+   et al., GPSA y Ng & Robinson no están en el repositorio (`refs/` no
+   existe).  Con ellos se validarían Beggs-Brill, los pozos, el compresor,
+   el separador y los hidratos de mezclas, hoy solo por consistencia.
+
+## Cuadro final frente a PIPEPHASE (2026-11-28, v1.39.0)
+
+Prestaciones básicas de PIPEPHASE para redes de recolección en régimen
+permanente.  "Hecho" = implementado, probado y comparado con datos leídos
+en una fuente (o con una solución analítica exacta).  "Hecho sin validar
+contra fuente" = implementado y probado por consistencia interna, sin
+datos externos.  Detalle de cada comprobación: `docs/validation.md`.
+
+| Prestación | Estado | Evidencia más fuerte |
+|---|---|---|
+| Redes malladas (lazos) en los cuatro modos de fluido | Hecho sin validar contra fuente | Balance por nodo ≤ 1.07·10⁻⁵; cada tubo solo reproduce la presión de la red; analítico en líquido (tubos en paralelo, Poiseuille); red EPANET 2.2 con bomba frente a su informe publicado (≤ 0.21 psi). No hay red mallada de gas o multifásica publicada |
+| Líquido / gas (ideal, PR) | Hecho (ecuaciones de flujo) / sin validar contra fuente (propiedades) | Analítico (Poiseuille, ley P², punto medio en serie); las correlaciones de propiedades (agua, Lee-Gonzalez-Eakin, PR a presión) sin datos leídos |
+| Black-oil (Standing, Beggs-Robinson, Hall-Yarborough…) | Hecho sin validar contra fuente | Reproducción de fórmulas; entalpía (∂h/∂P)_T frente a NIST (−2 a −6 %) |
+| Composicional (EOS, flash, agua libre) | Hecho sin validar contra fuente | Valores NIST de metano puro citados en un test (lectura no indicada); mezclas sin datos |
+| Térmico e isotérmico, balance de energía | Hecho | Balance global < 0.01 % en todos los tutoriales; NTU exacto; calentador en agua frente a NIST (±0.05 %) |
+| Transferencia de calor: capas, enterrada, película interior | Hecho (capas, enterrada) / sin validar (película) | Conducción radial exacta, método de imágenes, ejemplo EES +0.15 % |
+| Flujo multifásico (Beggs-Brill) | Hecho sin validar contra fuente | Consistencia; el ejemplo de Brill & Mukherjee solo de memoria |
+| Pozos (Hagedorn-Brown, Gray, Ramey, IPR, gas lift) | Hecho sin validar contra fuente | Cálculos a mano con fuentes secundarias |
+| Equipos: bombas, compresores, calentadores/enfriadores, chokes, separadores, reguladores, válvulas de retención | Hecho sin validar contra fuente (salvo compresor ideal: analítico) | Compresor: isentropa exacta y entropía de la EOS; resto por límites y balances |
+| Envolvente de fases | Hecho sin validar contra fuente | Metano puro con valores NIST citados (lectura no indicada); mezclas sin datos |
+| Hidratos: curva, margen por tubo (black-oil y composicional) | Hecho (metano, composicional) / sin validar (mezclas; black-oil por el gráfico de Katz, fuente secundaria) | Metano frente a Semenov 2024 (0.6–0.9 K frío); puntos cuádruples (fuente secundaria) |
+| Contenido de agua, hidrato como fase | Hecho sin validar contra fuente | P_sat del agua frente a NIST; balances a 10⁻¹² |
+| Inhibidores (metanol, MEG) | Hecho (metanol, 3–13 MPa, datos del mismo laboratorio) / sin validar (MEG; metanol sobre 13 MPa) | Semenov 2023/2024: ≤ 0.07–1.39 K en la depresión; lado inseguro sobre ~7 MPa (temperatura absoluta hasta 1.89 K fría) |
+| Unidades de campo | Hecho | Factores frente a NIST SP 811 |
+| Caudales estándar | Hecho sin validar contra fuente | Consistencia con el separador; el flash composicional a condiciones estándar sin datos |
+| Sensibilidad y análisis nodal (API y GUI) | Hecho sin validar contra fuente | Consistencia (el punto nodal es la red resuelta) |
+| Calibración y dimensionamiento de línea | Hecho sin validar contra fuente | Factor de fricción ≡ longitud de fricción (exacto) |
+| Informe de perfiles por tubo | Hecho sin validar contra fuente | Consistencia: reordena la solución (sumas exactas) |
+| Modelos mecanicistas, ESP, slug, Duns-Ros/Mukherjee-Brill (3.4), viscosidad de Pedersen (8.1) | Fuera de alcance | — |
+| Optimización de redes, régimen transitorio | No incluido en el objetivo | — |
+
+La Parte 1 del objetivo (lazos en todos los modos, térmico e isotérmico,
+envolvente e hidratos) quedó demostrada en v1.28.0; los nueve ítems de la
+Parte 2 (11 entradas del ROADMAP: 5.3, 5.2, 7.1–7.4, 2b.1–2b.3, 6.1 y
+8.4) se cerraron en v1.29.0–v1.39.0, una release por entrada.
+
 ## Releases
+
+### v1.39.0 — Ítem 8.4: manual de validación
+
+**Qué cambió.**  `docs/validation.md` (en la navegación de la
+documentación): 193 comprobaciones en 29 áreas, cada una con su
+referencia tal como está escrita, el tipo de evidencia, el error obtenido,
+la tolerancia y su origen, y el test que la reproduce; más una sección de
+todo lo no validado.  En la web, `validation.html` (resumen) enlazada
+desde todas las páginas.  Ningún resultado cambia.
+
+**Qué se corrigió al escribirlo.**  Etiquetas que exageraban la
+evidencia: la red de Hanoi figuraba como "referencia EPANET", pero sus
+valores los produjo el propio Angelica; ahora es línea base de regresión,
+también en el README y la web.  La web decía "todo resultado comparado con
+EPANET" y "dentro de 0.15 psi" para la bomba: la bomba sí se compara con el
+informe publicado de EPANET 2.2 (Apéndice C, misma bomba), pero el error en
+el nodo 2 es 0.212 psi.  Las tensiones superficiales del CRC eran de
+memoria; el test de z era una comprobación con la fórmula de Papay, no con
+el gráfico de Standing-Katz.
+
+**Recuento.**  100 por consistencia, 33 analíticas, 15 con datos leídos en
+una fuente, 12 con fuentes secundarias, 6 de regresión, 6 no validadas, 19
+que citan un valor sin decir si se leyó, 2 de memoria.
 
 ### v1.38.0 — Ítem 6.1: capas cilíndricas, tubería enterrada, coeficiente interior calculado
 

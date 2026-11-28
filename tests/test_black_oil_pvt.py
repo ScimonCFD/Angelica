@@ -26,7 +26,9 @@ from angelica.properties.black_oil import (
 
 
 class TestZFactorHallYarborough(unittest.TestCase):
-    """Validate z-factor against published Standing-Katz chart values."""
+    """Hall-Yarborough z-factor: ideal-gas limit and a cross-check with the
+    Papay (1968) formula (a formula, not Standing-Katz chart readings: no chart
+    values were read)."""
 
     def test_z_near_unity_at_low_pressure(self):
         # At near-atmospheric conditions ideal gas behaviour: z ≈ 1

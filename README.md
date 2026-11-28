@@ -24,7 +24,7 @@ Angelica solves **steady pipe networks** — computing nodal pressures, flow rat
 | **Non-isothermal** | Outer temperature loop with NTU-based pipe heat loss, source-term linearisation (Moukalled), and temperature-dependent fluid properties. |
 | **Compressible** | Ideal-gas and Peng-Robinson EOS. Outer density loop with average-pressure density. Validated against P²-law and NTU analytical solutions. |
 | **GUI** | Graphical network editor with convergence monitor and spreadsheet report export. |
-| **Validation** | Results benchmarked against published EPANET reference solutions and NTU/P²-law analytical solutions. |
+| **Validation** | Most models have a test stating their reference and the error obtained: analytical solutions (Poiseuille, NTU, P²-law, radial conduction), data read in NIST and journal tables, or internal consistency — see the [validation manual](docs/validation.md), which also lists what is not validated. |
 
 ## Installation
 
@@ -85,8 +85,8 @@ plus additional automated validation benchmarks in the test suite.
 | 04 | Inlet mass-flow boundary | Tutorial |
 | 05 | Outlet mass-flow boundary | Tutorial |
 | 06 | Combined inlet and outlet mass-flow boundaries | Tutorial |
-| 07 | Hanoi network — 32 nodes, 34 pipes | Benchmark (EPANET reference) |
-| 08 | EPANET pump network | Benchmark (EPANET reference) |
+| 07 | Hanoi network — 32 nodes, 34 pipes | Regression baseline (reference values produced by Angelica) |
+| 08 | EPANET pump network | Benchmark (EPANET 2.2 Appendix C report, within 0.21 psi) |
 | 09 | Three-reservoir junction | Benchmark (analytical Colebrook-White) |
 | 10 | Laminar Poiseuille parallel pipes | Benchmark (exact closed-form) |
 | 11 | Crude oil gathering pipeline — 32°API, 65°C | Demo (Beggs & Robinson properties) |
